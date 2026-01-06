@@ -1,0 +1,9 @@
+version: "1"
+packages:
+  - name: "sqlc"
+    path: "internal/infrastructure/postgres/sqlc"
+    engine: "postgresql"
+    schema: "internal/infrastructure/postgres/migrations"
+    queries: "internal/infrastructure/postgres/queries"
+    sql_package: "pgx/v5"
+

@@ -1,0 +1,14 @@
+# Environment files
+.env
+.env.local
+
+# Go build outputs
+/bin/
+/pkg/
+*.exe
+*.test
+
+# IDE files
+.vscode/
+.idea/
+*.swp
