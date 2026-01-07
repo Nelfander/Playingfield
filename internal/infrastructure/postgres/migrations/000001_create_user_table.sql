@@ -1,7 +1,8 @@
 -- name: create_user_table
 CREATE TABLE users (
-    id SERIAL PRIMARY KEY,
+    id BIGSERIAL PRIMARY KEY,
     email TEXT NOT NULL UNIQUE,
-    hashed_password TEXT NOT NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT now()
+    password_hash TEXT NOT NULL,
+    role TEXT NOT NULL DEFAULT 'user',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );

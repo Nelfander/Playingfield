@@ -9,8 +9,9 @@ import (
 )
 
 type User struct {
-	ID             int32
-	Email          string
-	HashedPassword string
-	CreatedAt      pgtype.Timestamp
+	ID           int64
+	Email        string
+	PasswordHash string
+	Role         string
+	CreatedAt    pgtype.Timestamptz
 }

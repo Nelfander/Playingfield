@@ -11,39 +11,37 @@ type UserRepository struct {
 	queries *sqlc.Queries
 }
 
-func NewUserRepository(queries *sqlc.Queries) *UserRepository {
-	return &UserRepository{
-		queries: queries,
-	}
+func NewUserRepository(q *sqlc.Queries) *UserRepository {
+	return &UserRepository{queries: q}
 }
 
-func (r *UserRepository) Create(ctx context.Context, u user.User) (user.User, error) {
-	created, err := r.queries.CreateUser(ctx, sqlc.CreateUserParams{
-		Email:          u.Email,
-		HashedPassword: u.Password,
-	})
+// GetByEmail returns a domain User
+func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*user.User, error) {
+	row, err := r.queries.GetUserByEmail(ctx, email)
 	if err != nil {
-		return user.User{}, err
+		return nil, err
 	}
 
-	return user.User{
-		ID:        int64(created.ID),
-		Email:     created.Email,
-		Password:  created.HashedPassword,
-		CreatedAt: created.CreatedAt.Time,
+	return &user.User{
+		ID:           row.ID,
+		Email:        row.Email,
+		PasswordHash: row.PasswordHash,   // SQLC field
+		Role:         row.Role,           // optional, adjust migration
+		CreatedAt:    row.CreatedAt.Time, // pgtype → time.Time
 	}, nil
 }
 
-func (r *UserRepository) GetByEmail(ctx context.Context, email string) (user.User, error) {
-	found, err := r.queries.GetUserByEmail(ctx, email)
+// Create inserts a new user and returns a domain User
+func (r *UserRepository) Create(ctx context.Context, u user.User) (*user.User, error) {
+	row, err := r.queries.CreateUser(ctx, u.Email, u.PasswordHash)
 	if err != nil {
-		return user.User{}, err
+		return nil, err
 	}
 
-	return user.User{
-		ID:        int64(found.ID),
-		Email:     found.Email,
-		Password:  found.HashedPassword,
-		CreatedAt: found.CreatedAt.Time,
+	return &user.User{
+		ID:           row.ID,
+		Email:        row.Email,
+		PasswordHash: row.PasswordHash,
+		CreatedAt:    row.CreatedAt.Time,
 	}, nil
 }

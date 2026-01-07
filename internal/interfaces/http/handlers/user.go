@@ -12,10 +12,14 @@ import (
 
 type UserHandler struct {
 	service *user.Service
+	auth    *auth.JWTManager
 }
-
-func NewUserHandler(service *user.Service) *UserHandler {
-	return &UserHandler{service: service}
+userHandler := handlers.NewUserHandler(userService, jwtManager)
+func NewUserHandler(s *user.Service, a *auth.JWTManager) *UserHandler {
+	return &UserHandler{
+		service: s,
+		auth:    a,
+	}
 }
 
 func (h *UserHandler) Register(c echo.Context) error {
@@ -33,12 +37,11 @@ func (h *UserHandler) Register(c echo.Context) error {
 		})
 	}
 
-	_, err = h.service.RegisterUser(
+	createdUser, err := h.service.RegisterUser(
 		c.Request().Context(),
 		req.Email,
 		hash,
 	)
-
 	if err != nil {
 		switch err {
 		case user.ErrUserAlreadyExists:
@@ -52,7 +55,39 @@ func (h *UserHandler) Register(c echo.Context) error {
 		}
 	}
 
-	return c.JSON(http.StatusCreated, echo.Map{
-		"status": "ok",
-	})
+	resp := dto.UserResponse{
+		ID:        createdUser.ID,
+		Email:     createdUser.Email,
+		CreatedAt: createdUser.CreatedAt,
+	}
+
+	return c.JSON(http.StatusCreated, resp)
+}
+
+func (h *UserHandler) Login(c echo.Context) error {
+	var req dto.LoginRequest
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"error": "invalid request"})
+	}
+
+	user, err := h.service.Login(c.Request().Context(), req.Email, req.Password)
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, echo.Map{"error": "invalid credentials"})
+	}
+
+	token, err := h.auth.GenerateJWT(user.ID, user.Role)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, echo.Map{"error": "failed to generate token"})
+	}
+
+	resp := dto.LoginResponse{
+		Token: token,
+		User: dto.UserResponse{
+			ID:        user.ID,
+			Email:     user.Email,
+			CreatedAt: user.CreatedAt,
+		},
+	}
+
+	return c.JSON(http.StatusOK, resp)
 }
