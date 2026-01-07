@@ -2,10 +2,12 @@ package app
 
 import (
 	"log"
+	"time"
 
 	"github.com/labstack/echo/v4"
 
 	"github.com/nelfander/Playingfield/internal/domain/user"
+	"github.com/nelfander/Playingfield/internal/infrastructure/auth"
 	"github.com/nelfander/Playingfield/internal/infrastructure/postgres"
 	"github.com/nelfander/Playingfield/internal/infrastructure/postgres/sqlc"
 	"github.com/nelfander/Playingfield/internal/interfaces/http"
@@ -15,6 +17,9 @@ import (
 
 func Run() {
 	// --- Load config ---
+
+	jwtManager := auth.NewJWTManager("your-secret-key", time.Hour*24)
+
 	cfg, err := config.Load()
 	if err != nil {
 		log.Fatal("failed to load config:", err)
@@ -43,12 +48,12 @@ func Run() {
 	userService := user.NewService(userRepo)
 
 	// --- Handler ---
-	userHandler := handlers.NewUserHandler(userService)
+	userHandler := handlers.NewUserHandler(userService, jwtManager)
 
 	// --- Echo server ---
 	e := echo.New()
 
-	http.RegisterRoutes(e)
+	http.RegisterRoutes(e, userHandler)
 
 	// --- Routes ---
 	e.POST("/users", userHandler.Register)

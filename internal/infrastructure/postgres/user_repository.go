@@ -15,7 +15,7 @@ func NewUserRepository(q *sqlc.Queries) *UserRepository {
 	return &UserRepository{queries: q}
 }
 
-// GetByEmail returns a domain User
+// GetByEmail returns a domain User pointer
 func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*user.User, error) {
 	row, err := r.queries.GetUserByEmail(ctx, email)
 	if err != nil {
@@ -25,15 +25,20 @@ func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*user.Us
 	return &user.User{
 		ID:           row.ID,
 		Email:        row.Email,
-		PasswordHash: row.PasswordHash,   // SQLC field
-		Role:         row.Role,           // optional, adjust migration
-		CreatedAt:    row.CreatedAt.Time, // pgtype → time.Time
+		PasswordHash: row.PasswordHash,
+		Role:         row.Role,
+		CreatedAt:    row.CreatedAt.Time,
 	}, nil
 }
 
-// Create inserts a new user and returns a domain User
+// Create inserts a new user and returns a pointer to domain User
 func (r *UserRepository) Create(ctx context.Context, u user.User) (*user.User, error) {
-	row, err := r.queries.CreateUser(ctx, u.Email, u.PasswordHash)
+	params := sqlc.CreateUserParams{
+		Email:        u.Email,
+		PasswordHash: u.PasswordHash,
+	}
+
+	row, err := r.queries.CreateUser(ctx, params)
 	if err != nil {
 		return nil, err
 	}
@@ -42,6 +47,7 @@ func (r *UserRepository) Create(ctx context.Context, u user.User) (*user.User, e
 		ID:           row.ID,
 		Email:        row.Email,
 		PasswordHash: row.PasswordHash,
+		Role:         row.Role,
 		CreatedAt:    row.CreatedAt.Time,
 	}, nil
 }

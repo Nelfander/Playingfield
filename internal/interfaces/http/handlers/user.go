@@ -12,9 +12,9 @@ import (
 
 type UserHandler struct {
 	service *user.Service
-	auth    *auth.JWTManager
+	auth    *auth.JWTManager // for future login
 }
-userHandler := handlers.NewUserHandler(userService, jwtManager)
+
 func NewUserHandler(s *user.Service, a *auth.JWTManager) *UserHandler {
 	return &UserHandler{
 		service: s,
@@ -22,71 +22,59 @@ func NewUserHandler(s *user.Service, a *auth.JWTManager) *UserHandler {
 	}
 }
 
+// Register handles POST /users
 func (h *UserHandler) Register(c echo.Context) error {
 	var req dto.RegisterUserRequest
 	if err := c.Bind(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, echo.Map{
-			"error": "invalid request",
-		})
+		return c.JSON(http.StatusBadRequest, echo.Map{"error": "invalid request"})
 	}
 
 	hash, err := auth.HashPassword(req.Password)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, echo.Map{
-			"error": "failed to process password",
-		})
+		return c.JSON(http.StatusInternalServerError, echo.Map{"error": "failed to hash password"})
 	}
 
-	createdUser, err := h.service.RegisterUser(
-		c.Request().Context(),
-		req.Email,
-		hash,
-	)
+	u, err := h.service.RegisterUser(c.Request().Context(), req.Email, hash)
 	if err != nil {
-		switch err {
-		case user.ErrUserAlreadyExists:
-			return c.JSON(http.StatusConflict, echo.Map{
-				"error": "user already exists",
-			})
-		default:
-			return c.JSON(http.StatusInternalServerError, echo.Map{
-				"error": "internal error",
-			})
+		if err == user.ErrUserAlreadyExists {
+			return c.JSON(http.StatusConflict, echo.Map{"error": "user already exists"})
 		}
+		return c.JSON(http.StatusInternalServerError, echo.Map{"error": "internal error"})
 	}
 
+	// Respond with safe JSON
 	resp := dto.UserResponse{
-		ID:        createdUser.ID,
-		Email:     createdUser.Email,
-		CreatedAt: createdUser.CreatedAt,
+		ID:        u.ID,
+		Email:     u.Email,
+		CreatedAt: u.CreatedAt,
 	}
 
 	return c.JSON(http.StatusCreated, resp)
 }
 
+// Login handles POST /login
 func (h *UserHandler) Login(c echo.Context) error {
 	var req dto.LoginRequest
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, echo.Map{"error": "invalid request"})
 	}
 
-	user, err := h.service.Login(c.Request().Context(), req.Email, req.Password)
+	// Call domain service
+	u, err := h.service.Login(c.Request().Context(), req.Email, req.Password)
 	if err != nil {
 		return c.JSON(http.StatusUnauthorized, echo.Map{"error": "invalid credentials"})
 	}
 
-	token, err := h.auth.GenerateJWT(user.ID, user.Role)
+	// Generate JWT
+	token, err := h.auth.GenerateToken(u.ID, u.Email, u.Role)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, echo.Map{"error": "failed to generate token"})
 	}
 
+	// Map domain User -> DTO
 	resp := dto.LoginResponse{
 		Token: token,
-		User: dto.UserResponse{
-			ID:        user.ID,
-			Email:     user.Email,
-			CreatedAt: user.CreatedAt,
-		},
+		User:  dto.MapUser(u), // MapUser converts *user.User -> UserResponse
 	}
 
 	return c.JSON(http.StatusOK, resp)

@@ -11,31 +11,25 @@ type Service struct {
 }
 
 func NewService(repo Repository) *Service {
-	return &Service{
-		repo: repo,
-	}
+	return &Service{repo: repo}
 }
 
-func (s *Service) RegisterUser(
-	ctx context.Context,
-	email string,
-	hashedPassword string,
-) (User, error) {
-
+// RegisterUser creates a new user
+func (s *Service) RegisterUser(ctx context.Context, email, hashedPassword string) (*User, error) {
 	existing, err := s.repo.GetByEmail(ctx, email)
 	if err == nil && existing.ID != 0 {
-		return User{}, ErrUserAlreadyExists
+		return nil, ErrUserAlreadyExists
 	}
 
 	u := User{
 		Email:        email,
 		PasswordHash: hashedPassword,
+		Role:         "user",
 	}
 
 	return s.repo.Create(ctx, u)
 }
 
-// Login verifies credentials and returns a domain User
 func (s *Service) Login(ctx context.Context, email, password string) (*User, error) {
 	u, err := s.repo.GetByEmail(ctx, email)
 	if err != nil {
