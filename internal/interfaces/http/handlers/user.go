@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/labstack/echo/v4"
 
@@ -74,8 +75,39 @@ func (h *UserHandler) Login(c echo.Context) error {
 	// Map domain User -> DTO
 	resp := dto.LoginResponse{
 		Token: token,
-		User:  dto.MapUser(u), // MapUser converts *user.User -> UserResponse
+		User: dto.UserResponse{
+			ID:        u.ID,
+			Email:     u.Email,
+			Role:      u.Role,
+			CreatedAt: u.CreatedAt,
+		},
 	}
 
 	return c.JSON(http.StatusOK, resp)
+}
+
+func (h *UserHandler) Me(c echo.Context) error {
+	claims, ok := c.Get("user").(*auth.Claims)
+	if !ok || claims == nil {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"message": "invalid token"})
+	}
+
+	resp := dto.UserResponse{
+		ID:        claims.UserID,
+		Email:     claims.Email,
+		CreatedAt: time.Now(), // or fetch from DB if i want an actual creation time for later
+	}
+
+	return c.JSON(http.StatusOK, resp)
+}
+
+func (h *UserHandler) Admin(c echo.Context) error {
+	claims, ok := c.Get("user").(*auth.Claims)
+	if !ok || claims == nil {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"message": "invalid token"})
+	}
+
+	return c.JSON(http.StatusOK, map[string]string{
+		"message": "Welcome, admin " + claims.Email,
+	})
 }
