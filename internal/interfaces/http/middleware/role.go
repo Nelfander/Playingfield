@@ -8,41 +8,29 @@ import (
 	"github.com/nelfander/Playingfield/internal/infrastructure/auth"
 )
 
+// RequireRole checks if the user has one of the allowed roles
 func RequireRole(jwtManager *auth.JWTManager, allowedRoles ...string) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			authHeader := c.Request().Header.Get("Authorization")
-			if authHeader == "" {
-				return c.JSON(http.StatusUnauthorized, map[string]string{"message": "missing authorization header"})
+			if !strings.HasPrefix(authHeader, "Bearer ") {
+				return c.JSON(http.StatusUnauthorized, map[string]string{"message": "invalid or missing authorization header"})
 			}
 
-			parts := strings.Split(authHeader, " ")
-			if len(parts) != 2 || parts[0] != "Bearer" {
-				return c.JSON(http.StatusUnauthorized, map[string]string{"message": "invalid authorization header"})
-			}
-
-			claims, err := jwtManager.VerifyToken(parts[1])
+			tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
+			claims, err := jwtManager.VerifyToken(tokenStr)
 			if err != nil {
 				return c.JSON(http.StatusUnauthorized, map[string]string{"message": "invalid or expired token"})
 			}
 
-			// Check if user's role is allowed
-			allowed := false
 			for _, role := range allowedRoles {
 				if claims.Role == role {
-					allowed = true
-					break
+					c.Set("user", claims) // store claims for handler
+					return next(c)
 				}
 			}
 
-			if !allowed {
-				return c.JSON(http.StatusForbidden, map[string]string{"message": "forbidden: insufficient role"})
-			}
-
-			// Store claims in context for handler use
-			c.Set("user", claims)
-
-			return next(c)
+			return c.JSON(http.StatusForbidden, map[string]string{"message": "forbidden: insufficient role"})
 		}
 	}
 }

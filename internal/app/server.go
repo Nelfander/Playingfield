@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"log"
+	stdhttp "net/http"
 
 	"github.com/labstack/echo/v4"
 	"github.com/nelfander/Playingfield/internal/domain/user"
@@ -60,18 +61,19 @@ func Run() {
 	e := echo.New()
 
 	authGroup := e.Group("")
-	authGroup.Use(httpMiddleware.JWTAuth(jwtManager))
-	authGroup.GET("/me", handlers.Me)
+	authGroup.Use(httpMiddleware.JWTMiddleware(jwtManager))
+	authGroup.GET("/me", userHandler.Me)
 
 	http.RegisterRoutes(e, userHandler)
 
 	// --- Routes with role-based middleware ---
+
 	e.GET("/me", userHandler.Me, middleware.RequireRole(jwtManager, "user", "admin"))
 	e.GET("/admin", userHandler.Admin, middleware.RequireRole(jwtManager, "admin"))
 	e.POST("/users", userHandler.Register)
 	e.POST("/login", userHandler.Login)
 	e.GET("/health", func(c echo.Context) error {
-		return c.JSON(200, map[string]string{"status": "ok"})
+		return c.JSON(stdhttp.StatusOK, map[string]string{"status": "ok"})
 	})
 
 	// --- Start server ---
