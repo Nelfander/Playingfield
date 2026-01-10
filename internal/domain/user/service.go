@@ -6,16 +6,16 @@ import (
 	"github.com/nelfander/Playingfield/internal/infrastructure/auth"
 )
 
-type Service struct {
+type service struct {
 	repo Repository
 }
 
-func NewService(repo Repository) *Service {
-	return &Service{repo: repo}
+func NewService(repo Repository) Service {
+	return &service{repo: repo}
 }
 
 // RegisterUser creates a new user
-func (s *Service) RegisterUser(ctx context.Context, email, hashedPassword string) (*User, error) {
+func (s *service) RegisterUser(ctx context.Context, email, hashedPassword string) (*User, error) {
 	existing, err := s.repo.GetByEmail(ctx, email)
 	if err == nil && existing.ID != 0 {
 		return nil, ErrUserAlreadyExists
@@ -27,10 +27,20 @@ func (s *Service) RegisterUser(ctx context.Context, email, hashedPassword string
 		Role:         "user",
 	}
 
-	return s.repo.Create(ctx, u)
+	createdUser, err := s.repo.Create(ctx, u)
+	if err != nil {
+		return nil, err
+	}
+
+	// Ensure role is set correctly (in case the repository/fake repo didn't preserve it)
+	if createdUser.Role == "" {
+		createdUser.Role = "user"
+	}
+
+	return createdUser, nil
 }
 
-func (s *Service) Login(ctx context.Context, email, password string) (*User, error) {
+func (s *service) Login(ctx context.Context, email, password string) (*User, error) {
 	u, err := s.repo.GetByEmail(ctx, email)
 	if err != nil {
 		return nil, ErrInvalidCredentials

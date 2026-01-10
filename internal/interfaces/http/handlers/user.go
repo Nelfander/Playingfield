@@ -11,15 +11,12 @@ import (
 )
 
 type UserHandler struct {
-	service *user.Service
-	auth    *auth.JWTManager // for future login
+	service user.Service
+	auth    *auth.JWTManager
 }
 
-func NewUserHandler(s *user.Service, a *auth.JWTManager) *UserHandler {
-	return &UserHandler{
-		service: s,
-		auth:    a,
-	}
+func NewUserHandler(service user.Service, auth *auth.JWTManager) *UserHandler {
+	return &UserHandler{service: service, auth: auth}
 }
 
 // Register handles POST /users
@@ -46,6 +43,7 @@ func (h *UserHandler) Register(c echo.Context) error {
 	resp := dto.UserResponse{
 		ID:        u.ID,
 		Email:     u.Email,
+		Role:      u.Role,
 		CreatedAt: u.CreatedAt,
 	}
 
