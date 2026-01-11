@@ -1,187 +1,186 @@
-📌 Playingfield Backend
+# Playingfield
 
-A production‑grade Go backend for user authentication and project management, built with:
+A lightweight backend and frontend project management platform.
+This project is built with **Go (Echo framework)**, **PostgreSQL/Neon**, and eventually a React frontend.
 
-✅ Echo HTTP framework
-✅ PostgreSQL (Neon) backend (planned)
-✅ sqlc for type‑safe database access (in progress)
-✅ JWT authentication
-✅ Clean / hexagonal‑inspired architecture
-✅ Focus on tests and correctness
+---
 
-🧠 Features Implemented
-User System
+## Current Features (Achieved So Far)
 
-Register new users with hashed passwords
+### Authentication
 
-Login with email/password and return JWT
+* User registration and login with **JWT-based authentication**.
+* Passwords securely hashed.
+* Role and status fields enforced (`role = "user"`, `status = "active"`).
+* Handlers never rely on client-sent `owner_id`; identity always comes from JWT claims.
 
-Me endpoint (GET /me) returns authenticated user info
+### Projects
 
-JWT middleware and role support
+* Users can create projects with a **name and description**.
+* Enforces **per-user uniqueness**: a user cannot have two projects with the same name, but different users can have projects with the same name.
+* Users can list only their own projects; JWT required.
+* Backend correctly returns HTTP 409 for duplicate project names.
 
-Tests covering:
+### Database
 
-Registration
+* PostgreSQL/Neon schema enforces defaults (`role`, `status`) and per-user uniqueness.
+* SQLC is used to generate type-safe queries.
+* Clean separation between **repository**, **service**, and **handler** layers.
 
-Login
+---
 
-Invalid credentials
+## Future Goals
 
-Inactive account
+* Implement a **minimal React frontend**:
 
-JWT validation
+  * Login page with JWT integration.
+  * Projects list for the logged-in user.
+  * Create new projects with real-time validation for duplicates.
+* Add **tasks under projects**.
+* Improve **error handling and logging** further.
+* Implement **user role management** (admin vs regular users).
+* Add **unit and integration tests** for the project domain.
 
-📦 Projects Domain (Work‑in‑Progress)
+---
 
-Projects domain created with a fake repository for fast iteration
+## Quick Start
 
-Projects can be created and listed via API
+1. Clone the repository:
 
-Projects are linked to authenticated users (JWT)
-— no more anonymous owner_id = 0
-
-🚀 Getting Started
-
-1. Clone the repo
-
+```bash
 git clone https://github.com/Nelfander/Playingfield.git
 cd Playingfield
+```
 
+2. Set up Neon/PostgreSQL database and update `.env` with the connection string.
 
-2. Install dependencies
+3. Generate SQLC queries (if changed):
 
-go mod tidy
+```bash
+sqlc generate
+```
 
+4. Run the server:
 
-3. Run the server
+```bash
+go run ./cmd/server
+```
 
-go run cmd/api/server.go
+5. Use PowerShell or Postman to test:
 
+```powershell
+# Login
+$login = Invoke-RestMethod -Method POST -Uri http://localhost:880/login -ContentType "application/json" -Body '{"email":"me@example.com","password":"supersecret"}'
+$token = $login.token
 
-The server will start on port :880.
+# Create project
+Invoke-RestMethod -Method POST -Uri http://localhost:880/projects -Headers @{ Authorization = "Bearer $token" } -ContentType "application/json" -Body '{"name":"Ball","description":"First Ball project"}'
 
-📡 API Endpoints (Current)
-Health Check
-GET /health
+# List projects
+Invoke-RestMethod -Method GET -Uri http://localhost:880/projects -Headers @{ Authorization = "Bearer $token" }
+```
 
+---
 
-Check if server is running.
+## Code Structure
 
-User Endpoints
-Register
-curl -X POST http://localhost:880/users \
-  -H "Content-Type: application/json" \
-  -d '{"email":"me@example.com","password":"supersecret"}'
+* `internal/domain/user` – domain model, repository interfaces.
+* `internal/domain/projects` – project domain, service, repository interface.
+* `internal/infrastructure/postgres` – SQLC-based repository implementation, DB adapter.
+* `cmd/server` – Echo server initialization and routing.
 
-Login
-curl -X POST http://localhost:880/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"me@example.com","password":"supersecret"}'
+---
 
+## Known Issues & How I Solved Them
 
-Expected JSON response contains:
+### 1. Users created with empty role/status
 
-{
-  "token": "JWT_TOKEN_HERE",
-  "user": {
-    "id": 1,
-    "email": "me@example.com",
-    "role": "user",
-    "created_at": "2026-01-11T..."
-  }
-}
+* Issue: Old rows in Neon/PostgreSQL had `role=""` and `status=NULL`, breaking login and JWT logic.
+* Solution:
 
-Get current user
-curl http://localhost:880/me \
-  -H "Authorization: Bearer <your_jwt_token>"
+  * Set **default values in DB**: `role TEXT NOT NULL DEFAULT 'user'`, `status TEXT NOT NULL DEFAULT 'active'`.
+  * Updated **SQLC `CreateUser` query** to include `role` and `status`.
+  * Updated Go repository to explicitly set `Role` and `Status` during user creation.
+  * Re-registered users to clean the broken rows.
 
-Projects Endpoints (Auth Required)
-Create a project
-curl -X POST http://localhost:880/projects \
-  -H "Authorization: Bearer <your_jwt_token>" \
-  -H "Content-Type: application/json" \
-  -d '{"name":"First Project","description":"This is mine"}'
+### 2. Project creation owned by the wrong user
 
-List projects (for authenticated user)
-curl http://localhost:880/projects \
-  -H "Authorization: Bearer <your_jwt_token>"
+* Issue: `owner_id` was sometimes taken from request instead of JWT, causing `0` or incorrect IDs.
+* Solution:
 
-🧱 Architecture Overview
-cmd/api
-    └── main.go                      // Entry point, server start
-internal/
-    ├── app/
-    │    └── server.go               // HTTP server setup
-    │    └── routes.go
-    ├── domain/
-    │    ├── user/                   // User entity, service, repository interface
-    │    └── projects/               // Projects domain
-    ├── interfaces/http/
-    │    ├── handlers/               // HTTP handlers
-    │    ├── middleware/             // JWT and role validation
-    │    └── dto/                    // HTTP request/response structs
-    ├── infrastructure/
-    │    ├── auth/                   // JWT manager, password utils
-    │    └── postgres/               // Postgres integration (in progress)
-pkg/
-    ├── config/                      // Env config loader
-    └── logger/                      // Logger setup
+  * Handlers now derive `owner_id` **exclusively from JWT claims**.
+  * Both **CreateProject** and **ListProjects** enforce this invariant.
+  * Removed `OwnerID` from client request structs.
 
-🧪 Testing
+### 3. Duplicate project names
 
-All tests pass. Run them with:
+* Issue: Initially, there was no constraint enforcing per-user uniqueness. Users could create multiple projects with the same name.
+* Solution:
 
-go test ./...
+  * Added **database unique constraint** on `(owner_id, name)`.
+  * Handled `duplicate key` errors in the `CreateProject` handler, returning `409 Conflict` with JSON error.
+  * PowerShell commands now show a friendly error message instead of a generic 500.
 
-You’ll see tests for:
+### 4. Generic Internal Server Errors in PowerShell
 
-User registration and login
+* Issue: PowerShell throws `Invoke-RestMethod : 500 Internal Server Error` for any failed request.
+* Solution:
 
-JWT middleware
+  * Added **debug logging** in handlers to print real errors to server console.
+  * Ensured handler returns **specific HTTP status codes** (`400`, `401`, `409`) with JSON error bodies.
 
-Inactive account handling
+---
 
-Me endpoint
+## Architecture & Flow Diagram
 
-Projects domain (fake repo)
+```text
+                        ┌───────────────┐
+                        │    Client     │
+                        │ (React / PS)  │
+                        └───────┬───────┘
+                                │
+                                │ POST /users (register)
+                                │ POST /login (login)
+                                ▼
+                        ┌───────────────┐
+                        │   HTTP Server │
+                        │   (Echo / Go) │
+                        └───────┬───────┘
+                                │
+                                │ JWT Middleware
+                                │ Extract user ID
+                                ▼
+                 ┌─────────────────────────┐
+                 │ ProjectHandler / UserHandler │
+                 │  - Validate requests        │
+                 │  - Bind JSON               │
+                 │  - Pass data to Service    │
+                 └─────────┬───────────────┘
+                           │
+                           ▼
+                   ┌───────────────┐
+                   │   Service     │
+                   │  - Business   │
+                   │    logic      │
+                   │  - Enforce    │
+                   │    per-user   │
+                   │    uniqueness │
+                   └───────┬───────┘
+                           │
+                           ▼
+                    ┌─────────────┐
+                    │ Repository  │
+                    │  (SQLC)     │
+                    │ - SQL queries│
+                    │ - Insert /   │
+                    │   Fetch      │
+                    └───────┬─────┘
+                            │
+                            ▼
+                     ┌──────────────┐
+                     │   PostgreSQL │
+                     │   / Neon DB  │
+                     │ - users      │
+                     │ - projects   │
+                     └──────────────┘
 
-🛠 Next Steps
-
-✅ Enforce JWT for all protected endpoints
-✅ Wire projects domain with real PostgreSQL via sqlc
-✅ Add tasks under projects
-✅ Add activities under tasks
-✅ Build minimal React frontend (login + projects list)
-✅ Add authorization rules (roles, permissions)
-✅ Add unit + integration tests for new domains
-
-🗂 Future Frontend MVP
-
-The frontend will let an authenticated user:
-
-Login
-
-See account info
-
-Create / view projects
-
-Navigate to projects → tasks → activity log
-
-React recommended (Vite + TS + Tailwind CSS) for a modern corporate‑style stack.
-
-🙌 Contributing
-
-This project is meant for real learning, real feedback loops, and real standards.
-Feel free to open issues or PRs. All code must include tests.
-
-📜 License
-
-MIT License (same as code in this repo)
-
-NEXT STEPS
-1. implement projects, tasks, and activities domain logic
-2. apply role-based permissions for projects/tasks/activities
-3. add unit and integration tests for all layers   ✅
-4. dockerize backend for deployment
-5. add frontend (HTML/JS) to interact with backend

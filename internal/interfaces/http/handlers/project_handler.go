@@ -1,8 +1,9 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
-	"strconv"
+	"strings"
 
 	"github.com/labstack/echo/v4"
 	"github.com/nelfander/Playingfield/internal/domain/projects"
@@ -22,7 +23,6 @@ func (h *ProjectHandler) Create(c echo.Context) error {
 	var req struct {
 		Name        string `json:"name"`
 		Description string `json:"description"`
-		OwnerID     int64  `json:"owner_id"` // for now, pass manually
 	}
 
 	if err := c.Bind(&req); err != nil {
@@ -34,14 +34,19 @@ func (h *ProjectHandler) Create(c echo.Context) error {
 	if !ok || claims == nil {
 		return c.JSON(http.StatusUnauthorized, echo.Map{"error": "unauthorized"})
 	}
+	ownerID := claims.UserID
 
-	project, err := h.service.CreateProject(
-		c.Request().Context(),
-		req.Name,
-		req.Description,
-		claims.UserID,
-	)
+	project, err := h.service.CreateProject(c.Request().Context(), req.Name, req.Description, ownerID)
 	if err != nil {
+		fmt.Println("DEBUG: create project error:", err) // Keep this for logging
+
+		// Properly handle the duplicate-name error
+		if strings.Contains(err.Error(), "already have a project with the name") {
+			return c.JSON(http.StatusConflict, echo.Map{
+				"error": err.Error(),
+			})
+		}
+
 		return c.JSON(http.StatusInternalServerError, echo.Map{"error": "failed to create project"})
 	}
 
@@ -50,15 +55,16 @@ func (h *ProjectHandler) Create(c echo.Context) error {
 
 // GET /projects?owner_id=123
 func (h *ProjectHandler) List(c echo.Context) error {
-	ownerIDStr := c.QueryParam("owner_id")
-	ownerID, err := strconv.ParseInt(ownerIDStr, 10, 64)
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, echo.Map{"error": "invalid owner_id"})
+	claims, ok := c.Get("user").(*auth.Claims)
+	if !ok || claims == nil {
+		return c.JSON(http.StatusUnauthorized, echo.Map{"error": "unauthorized"})
 	}
+
+	ownerID := claims.UserID
 
 	projects, err := h.service.ListProjects(c.Request().Context(), ownerID)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
+		return c.JSON(http.StatusInternalServerError, echo.Map{"error": "failed to fetch projects"})
 	}
 
 	return c.JSON(http.StatusOK, projects)

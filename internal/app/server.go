@@ -43,10 +43,10 @@ func Run() {
 	queries := sqlc.New(db)
 
 	// --- Repository ---
-	userRepo := postgres.NewUserRepository(queries)
+	userRepo := postgres.NewUserRepository(db, queries)
 
 	// Projects repo + service
-	projectsRepo := projects.NewFakeRepository() // or your real DB repo if ready
+	projectsRepo := postgres.NewProjectRepository(db) // or your real DB repo if ready
 	projectsService := projects.NewService(projectsRepo)
 	projectHandler := handlers.NewProjectHandler(projectsService)
 
@@ -73,22 +73,16 @@ func Run() {
 	http.RegisterRoutes(e, userHandler)
 
 	// --- Routes with role-based middleware ---
-
-	e.GET("/me", userHandler.Me, middleware.JWTMiddleware(jwtManager))
+	e.POST("/register", userHandler.Register)
+	e.GET("/me", userHandler.Me, middleware.JWTMiddleware(jwtManager)) //	For account panel
 	e.GET("/admin", userHandler.Admin, middleware.RequireRole(jwtManager, "admin"))
 	e.POST("/users", userHandler.Register)
 	e.POST("/login", userHandler.Login)
 	e.GET("/health", func(c echo.Context) error {
 		return c.JSON(stdhttp.StatusOK, map[string]string{"status": "ok"})
 	})
-	//e.POST("/projects", projectHandler.Create, middleware.JWTMiddleware(jwtManager)) for later with real DB
-	//e.GET("/projects", projectHandler.List, middleware.JWTMiddleware(jwtManager))
-	e.POST(
-		"/projects",
-		projectHandler.Create,
-		middleware.JWTMiddleware(jwtManager),
-	)
-	e.GET("/projects", projectHandler.List)
+	e.POST("/projects", projectHandler.Create, middleware.JWTMiddleware(jwtManager))
+	e.GET("/projects", projectHandler.List, middleware.JWTMiddleware(jwtManager))
 
 	// --- Start server ---
 	logger.Println("starting HTTP server on :" + cfg.Port)

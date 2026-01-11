@@ -29,7 +29,6 @@ func (s *service) RegisterUser(ctx context.Context, email, hashedPassword string
 	}
 
 	createdUser, err := s.repo.Create(ctx, u)
-
 	if err != nil {
 		return nil, err
 	}

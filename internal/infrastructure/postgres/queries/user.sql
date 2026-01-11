@@ -7,4 +7,3 @@ RETURNING id, email, password_hash, role, status, created_at;
 SELECT id, email, password_hash, role, status, created_at
 FROM users
 WHERE email = $1;
-
