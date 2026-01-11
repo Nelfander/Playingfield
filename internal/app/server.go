@@ -6,6 +6,7 @@ import (
 	stdhttp "net/http"
 
 	"github.com/labstack/echo/v4"
+	"github.com/nelfander/Playingfield/internal/domain/projects"
 	"github.com/nelfander/Playingfield/internal/domain/user"
 	"github.com/nelfander/Playingfield/internal/infrastructure/auth"
 	"github.com/nelfander/Playingfield/internal/infrastructure/postgres"
@@ -44,6 +45,11 @@ func Run() {
 	// --- Repository ---
 	userRepo := postgres.NewUserRepository(queries)
 
+	// Projects repo + service
+	projectsRepo := projects.NewFakeRepository() // or your real DB repo if ready
+	projectsService := projects.NewService(projectsRepo)
+	projectHandler := handlers.NewProjectHandler(projectsService)
+
 	// --- Seed default admin ---
 	if err := postgres.SeedAdminUser(context.Background(), userRepo); err != nil {
 		log.Fatal("failed to seed admin user:", err)
@@ -68,13 +74,21 @@ func Run() {
 
 	// --- Routes with role-based middleware ---
 
-	e.GET("/me", userHandler.Me, middleware.RequireRole(jwtManager, "user", "admin"))
+	e.GET("/me", userHandler.Me, middleware.JWTMiddleware(jwtManager))
 	e.GET("/admin", userHandler.Admin, middleware.RequireRole(jwtManager, "admin"))
 	e.POST("/users", userHandler.Register)
 	e.POST("/login", userHandler.Login)
 	e.GET("/health", func(c echo.Context) error {
 		return c.JSON(stdhttp.StatusOK, map[string]string{"status": "ok"})
 	})
+	//e.POST("/projects", projectHandler.Create, middleware.JWTMiddleware(jwtManager)) for later with real DB
+	//e.GET("/projects", projectHandler.List, middleware.JWTMiddleware(jwtManager))
+	e.POST(
+		"/projects",
+		projectHandler.Create,
+		middleware.JWTMiddleware(jwtManager),
+	)
+	e.GET("/projects", projectHandler.List)
 
 	// --- Start server ---
 	logger.Println("starting HTTP server on :" + cfg.Port)

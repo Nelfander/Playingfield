@@ -2,37 +2,47 @@ package user
 
 import (
 	"context"
+	"time"
 )
 
 // FakeRepository implements Repository for testing without a real DB
 type FakeRepository struct {
-	users []User
+	Users []User
 }
 
 func NewFakeRepository() *FakeRepository {
 	return &FakeRepository{
-		users: []User{},
+		Users: []User{},
 	}
 }
 
 func (f *FakeRepository) Create(ctx context.Context, u User) (*User, error) {
-	for _, user := range f.users {
+	for _, user := range f.Users {
 		if user.Email == u.Email {
 			return nil, ErrUserAlreadyExists
 		}
 	}
 
-	u.ID = int64(len(f.users) + 1)
+	u.ID = int64(len(f.Users) + 1)
+
 	if u.Role == "" {
 		u.Role = "user"
 	}
 
-	f.users = append(f.users, u)
+	if u.Status == "" {
+		u.Status = "active"
+	}
+
+	if u.CreatedAt.IsZero() {
+		u.CreatedAt = time.Now()
+	}
+
+	f.Users = append(f.Users, u)
 	return &u, nil
 }
 
 func (f *FakeRepository) GetByEmail(ctx context.Context, email string) (*User, error) {
-	for _, u := range f.users {
+	for _, u := range f.Users {
 		if u.Email == email {
 			c := u
 			return &c, nil

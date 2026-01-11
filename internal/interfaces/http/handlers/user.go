@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/labstack/echo/v4"
@@ -13,6 +14,16 @@ import (
 type UserHandler struct {
 	service user.Service
 	auth    *auth.JWTManager
+}
+
+// for test purposes
+func (h *UserHandler) RegisterUserForTest(email, password string) (*user.User, error) {
+	return h.service.RegisterUser(context.Background(), email, password)
+}
+
+// Generate JWT token directly via auth (for testing)
+func (h *UserHandler) GenerateTokenForTest(id int64, email, role string) (string, error) {
+	return h.auth.GenerateToken(id, email, role)
 }
 
 func NewUserHandler(service user.Service, auth *auth.JWTManager) *UserHandler {
@@ -44,6 +55,7 @@ func (h *UserHandler) Register(c echo.Context) error {
 		ID:        u.ID,
 		Email:     u.Email,
 		Role:      u.Role,
+		Status:    u.Status,
 		CreatedAt: u.CreatedAt,
 	}
 
@@ -60,6 +72,11 @@ func (h *UserHandler) Login(c echo.Context) error {
 	// Call domain service
 	u, err := h.service.Login(c.Request().Context(), req.Email, req.Password)
 	if err != nil {
+		// Handle inactive account separately
+		if err == user.ErrInactiveAccount {
+			return c.JSON(http.StatusForbidden, echo.Map{"error": err.Error()})
+		}
+		// All other errors (wrong credentials, etc.)
 		return c.JSON(http.StatusUnauthorized, echo.Map{"error": "invalid credentials"})
 	}
 
@@ -76,6 +93,7 @@ func (h *UserHandler) Login(c echo.Context) error {
 			ID:        u.ID,
 			Email:     u.Email,
 			Role:      u.Role,
+			Status:    u.Status,
 			CreatedAt: u.CreatedAt,
 		},
 	}
@@ -83,13 +101,22 @@ func (h *UserHandler) Login(c echo.Context) error {
 	return c.JSON(http.StatusOK, resp)
 }
 
+// Me handles GET /me
 func (h *UserHandler) Me(c echo.Context) error {
-	claims := c.Get("user").(*auth.Claims)
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"id":    claims.UserID,
-		"email": claims.Email,
-		"role":  claims.Role,
-	})
+	// Grab claims from context (set by JWT middleware)
+	claims, ok := c.Get("user").(*auth.Claims)
+	if !ok || claims == nil {
+		return c.JSON(http.StatusUnauthorized, echo.Map{"error": "unauthorized"})
+	}
+
+	resp := dto.UserResponse{
+		ID:     claims.UserID,
+		Email:  claims.Email,
+		Role:   claims.Role,
+		Status: claims.Status,
+	}
+
+	return c.JSON(http.StatusOK, resp)
 }
 
 func (h *UserHandler) Admin(c echo.Context) error {

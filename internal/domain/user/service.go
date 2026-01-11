@@ -25,9 +25,11 @@ func (s *service) RegisterUser(ctx context.Context, email, hashedPassword string
 		Email:        email,
 		PasswordHash: hashedPassword,
 		Role:         "user",
+		Status:       "active",
 	}
 
 	createdUser, err := s.repo.Create(ctx, u)
+
 	if err != nil {
 		return nil, err
 	}
@@ -48,6 +50,10 @@ func (s *service) Login(ctx context.Context, email, password string) (*User, err
 
 	if !auth.CheckPasswordHash(password, u.PasswordHash) {
 		return nil, ErrInvalidCredentials
+	}
+
+	if u.Status != "active" {
+		return nil, ErrInactiveAccount
 	}
 
 	return u, nil

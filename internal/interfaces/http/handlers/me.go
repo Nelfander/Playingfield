@@ -8,8 +8,9 @@ import (
 
 func Me(c echo.Context) error {
 	return c.JSON(http.StatusOK, echo.Map{
-		"id":    c.Get("user_id"),
-		"email": c.Get("email"),
-		"role":  c.Get("role"),
+		"id":     c.Get("user_id"),
+		"email":  c.Get("email"),
+		"role":   c.Get("role"),
+		"status": c.Get("status"),
 	})
 }
