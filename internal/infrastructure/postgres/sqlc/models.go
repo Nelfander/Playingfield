@@ -8,6 +8,32 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type Project struct {
+	ID          int64
+	Name        string
+	Description pgtype.Text
+	OwnerID     int64
+	CreatedAt   pgtype.Timestamptz
+}
+
+type ProjectUser struct {
+	ID        int64
+	ProjectID int64
+	UserID    int64
+	Role      pgtype.Text
+}
+
+type Task struct {
+	ID          int64
+	ProjectID   int64
+	Title       string
+	Description pgtype.Text
+	Status      pgtype.Text
+	AssignedTo  pgtype.Int8
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
+}
+
 type User struct {
 	ID           int64
 	Email        string

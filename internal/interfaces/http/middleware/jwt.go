@@ -27,8 +27,10 @@ func JWTMiddleware(jwtManager *auth.JWTManager) echo.MiddlewareFunc {
 				return c.JSON(http.StatusUnauthorized, map[string]string{"message": "invalid or expired token"})
 			}
 
-			// Store claims in context for later use
+			// Store full claims
 			c.Set("user", claims)
+
+			c.Set("user_id", claims.UserID)
 
 			return next(c)
 		}

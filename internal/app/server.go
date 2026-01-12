@@ -47,8 +47,8 @@ func Run() {
 	userRepo := postgres.NewUserRepository(db, queries)
 
 	// Projects repo + service
-	projectsRepo := postgres.NewProjectRepository(db) // or your real DB repo if ready
-	projectsService := projects.NewService(projectsRepo)
+	projectsRepo := postgres.NewProjectRepository(db)
+	projectsService := projects.NewService(projectsRepo, queries)
 	projectHandler := handlers.NewProjectHandler(projectsService)
 
 	// --- Seed default admin ---
@@ -87,6 +87,10 @@ func Run() {
 
 	http.RegisterRoutes(e, userHandler)
 
+	// a group for all project-related routes
+	r := e.Group("/projects")
+	r.Use(httpMiddleware.JWTMiddleware(jwtManager))
+
 	// --- Routes with role-based middleware ---
 	e.POST("/register", userHandler.Register)
 	e.GET("/me", userHandler.Me, middleware.JWTMiddleware(jwtManager)) //	For account panel
@@ -96,8 +100,11 @@ func Run() {
 	e.GET("/health", func(c echo.Context) error {
 		return c.JSON(stdhttp.StatusOK, map[string]string{"status": "ok"})
 	})
-	e.POST("/projects", projectHandler.Create, middleware.JWTMiddleware(jwtManager))
-	e.GET("/projects", projectHandler.List, middleware.JWTMiddleware(jwtManager))
+	r.POST("", projectHandler.Create)                        // /projects
+	r.GET("", projectHandler.List)                           // /projects
+	r.POST("/users", projectHandler.AddUserToProject)        // /projects/users
+	r.GET("/users", projectHandler.ListUsersInProject)       // /projects/users
+	r.DELETE("/users", projectHandler.RemoveUserFromProject) // /projects/users
 
 	// --- Start server ---
 	logger.Println("starting HTTP server on :" + cfg.Port)
