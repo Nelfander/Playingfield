@@ -6,6 +6,7 @@ import (
 	stdhttp "net/http"
 
 	"github.com/labstack/echo/v4"
+	echomiddleware "github.com/labstack/echo/v4/middleware"
 	"github.com/nelfander/Playingfield/internal/domain/projects"
 	"github.com/nelfander/Playingfield/internal/domain/user"
 	"github.com/nelfander/Playingfield/internal/infrastructure/auth"
@@ -65,6 +66,20 @@ func Run() {
 
 	// --- Echo server ---
 	e := echo.New()
+
+	e.Use(echomiddleware.CORSWithConfig(echomiddleware.CORSConfig{
+		AllowOrigins: []string{"http://localhost:5173"},
+		AllowMethods: []string{
+			stdhttp.MethodGet,
+			stdhttp.MethodPost,
+			stdhttp.MethodPut,
+			stdhttp.MethodDelete,
+		},
+		AllowHeaders: []string{
+			echo.HeaderAuthorization,
+			echo.HeaderContentType,
+		},
+	}))
 
 	authGroup := e.Group("")
 	authGroup.Use(httpMiddleware.JWTMiddleware(jwtManager))
