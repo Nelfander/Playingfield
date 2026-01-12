@@ -184,3 +184,33 @@ Invoke-RestMethod -Method GET -Uri http://localhost:880/projects -Headers @{ Aut
                      │ - projects   │
                      └──────────────┘
 
+## 🛠 Development History
+
+<details>
+  <summary><b>Jan 12, 2026: Frontend & Security Integration</b> (Click to expand)</summary>
+
+  #### Frontend Updates
+  * **React Frontend Implemented:** * Full Login page with JWT authentication integration.
+    * Dynamic Projects list with a "Load projects" toggle to manage visibility.
+    * **Interactive Members & Tasks:** Each project includes "Show Members" and "Show Tasks" buttons with smooth slide-down animations.
+    * **Empty State Handling:** Fixed crashes when backend returns `null` projects; added fallback messages ("No members yet").
+  * **Polished UI:** * Centered layout with modern Glassmorphism (frosted glass effect).
+    * High-resolution mountain background (Moraine Lake) with readability overlays.
+
+  #### Project Users & Roles (Backend)
+  * **Ownership Logic:** Only project owners are permitted to remove users from a project.
+  * **JWT Claims:** Security checks are now enforced using role-based claims within the JWT.
+  * **Error Handling:** API now returns descriptive error messages for unauthorized actions (401/403).
+
+  #### Misc
+  * **Verified Requests:** Example PowerShell scripts for adding/removing users are now fully functional.
+  * **Live Integration:** The frontend is fully integrated with the backend API for real-time data display.
+</details>
+
+<details>
+  <summary><b>Future Goals</b></summary>
+  
+  - [ ] Add Search/Filter functionality.
+  - [ ] Implement Task creation from the UI.
+  - [ ] Add database persistence (PostgreSQL/SQLite).
+</details>

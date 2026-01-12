@@ -68,7 +68,7 @@ func Run() {
 	e := echo.New()
 
 	e.Use(echomiddleware.CORSWithConfig(echomiddleware.CORSConfig{
-		AllowOrigins: []string{"http://localhost:5173"},
+		AllowOrigins: []string{"*"},
 		AllowMethods: []string{
 			stdhttp.MethodGet,
 			stdhttp.MethodPost,
