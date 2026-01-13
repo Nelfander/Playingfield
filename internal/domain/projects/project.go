@@ -9,4 +9,5 @@ type Project struct {
 	OwnerID     int64     `json:"owner_id"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
+	OwnerName   string    `json:"owner_name"`
 }

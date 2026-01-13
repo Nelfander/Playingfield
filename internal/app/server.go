@@ -84,6 +84,7 @@ func Run() {
 	authGroup := e.Group("")
 	authGroup.Use(httpMiddleware.JWTMiddleware(jwtManager))
 	authGroup.GET("/me", userHandler.Me)
+	authGroup.GET("/users", userHandler.List)
 
 	http.RegisterRoutes(e, userHandler)
 
@@ -95,7 +96,7 @@ func Run() {
 	e.POST("/register", userHandler.Register)
 	e.GET("/me", userHandler.Me, middleware.JWTMiddleware(jwtManager)) //	For account panel
 	e.GET("/admin", userHandler.Admin, middleware.RequireRole(jwtManager, "admin"))
-	e.POST("/users", userHandler.Register)
+	e.POST("/users", userHandler.Register) // for now i leave it public to allow user creation
 	e.POST("/login", userHandler.Login)
 	e.GET("/health", func(c echo.Context) error {
 		return c.JSON(stdhttp.StatusOK, map[string]string{"status": "ok"})

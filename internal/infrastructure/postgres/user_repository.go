@@ -60,3 +60,7 @@ func (r *UserRepository) Create(ctx context.Context, u user.User) (*user.User, e
 
 	return &created, nil
 }
+
+func (r *UserRepository) ListUsers(ctx context.Context) ([]sqlc.ListUsersRow, error) {
+	return r.queries.ListUsers(ctx)
+}

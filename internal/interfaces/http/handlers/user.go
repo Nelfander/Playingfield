@@ -95,7 +95,8 @@ func (h *UserHandler) Login(c echo.Context) error {
 
 	// Map domain User -> DTO
 	resp := dto.LoginResponse{
-		Token: token,
+		Token:  token,
+		UserId: u.ID,
 		User: dto.UserResponse{
 			ID:        u.ID,
 			Email:     u.Email,
@@ -131,4 +132,15 @@ func (h *UserHandler) Admin(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]string{
 		"message": "Welcome, admin " + claims.Email,
 	})
+}
+
+// GET /users
+func (h *UserHandler) List(c echo.Context) error {
+	// This should now compile perfectly because s.repo.ListAllUsers exists!
+	users, err := h.service.ListAllUsers(c.Request().Context())
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, echo.Map{"error": "failed to fetch users"})
+	}
+
+	return c.JSON(http.StatusOK, users)
 }

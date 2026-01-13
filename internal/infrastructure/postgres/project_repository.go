@@ -39,12 +39,21 @@ func (r *ProjectRepository) Create(ctx context.Context, p projects.Project) (*pr
 	return &created, nil
 }
 
-// GetAllByOwner fetches all projects for a specific owner
+// GetAllByOwner fetches all projects the user owns OR is a member of
 func (r *ProjectRepository) GetAllByOwner(ctx context.Context, ownerID int64) ([]projects.Project, error) {
 	rows, err := r.db.Query(ctx,
-		`SELECT id, name, description, owner_id, created_at
-		 FROM projects
-		 WHERE owner_id = $1`,
+		`SELECT 
+            p.id, 
+            p.name, 
+            p.description, 
+            p.owner_id, 
+            p.created_at,
+            u.email AS owner_name
+         FROM projects p
+         LEFT JOIN users u ON p.owner_id = u.id
+         WHERE p.owner_id = $1 
+            OR p.id IN (SELECT project_id FROM project_users WHERE user_id = $1)
+         ORDER BY p.created_at ASC`,
 		ownerID,
 	)
 	if err != nil {
@@ -55,11 +64,16 @@ func (r *ProjectRepository) GetAllByOwner(ctx context.Context, ownerID int64) ([
 	var list []projects.Project
 	for rows.Next() {
 		var p projects.Project
-		var createdAt time.Time
-		if err := rows.Scan(&p.ID, &p.Name, &p.Description, &p.OwnerID, &createdAt); err != nil {
+		if err := rows.Scan(
+			&p.ID,
+			&p.Name,
+			&p.Description,
+			&p.OwnerID,
+			&p.CreatedAt,
+			&p.OwnerName,
+		); err != nil {
 			return nil, err
 		}
-		p.CreatedAt = createdAt
 		list = append(list, p)
 	}
 

@@ -3,6 +3,8 @@ package user
 import (
 	"context"
 	"time"
+
+	"github.com/nelfander/Playingfield/internal/infrastructure/postgres/sqlc"
 )
 
 // FakeRepository implements Repository for testing without a real DB
@@ -49,4 +51,17 @@ func (f *FakeRepository) GetByEmail(ctx context.Context, email string) (*User, e
 		}
 	}
 	return nil, ErrInvalidCredentials
+}
+
+func (f *FakeRepository) ListUsers(ctx context.Context) ([]sqlc.ListUsersRow, error) {
+	var list []sqlc.ListUsersRow
+
+	for _, u := range f.Users {
+		list = append(list, sqlc.ListUsersRow{
+			ID:    u.ID,
+			Email: u.Email,
+		})
+	}
+
+	return list, nil
 }

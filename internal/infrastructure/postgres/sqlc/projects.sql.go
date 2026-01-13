@@ -56,27 +56,45 @@ func (q *Queries) GetProjectByID(ctx context.Context, id int64) (Project, error)
 }
 
 const listProjectsByOwner = `-- name: ListProjectsByOwner :many
-SELECT id, name, description, owner_id, created_at
-FROM projects
-WHERE owner_id = $1
-ORDER BY created_at ASC
+SELECT 
+    p.id, 
+    p.name, 
+    p.description, 
+    p.owner_id, 
+    p.created_at,
+    u.email AS owner_name
+FROM projects p
+LEFT JOIN users u ON p.owner_id = u.id
+WHERE p.owner_id = $1 
+   OR p.id IN (SELECT project_id FROM project_users WHERE user_id = $1)
+ORDER BY p.created_at ASC
 `
 
-func (q *Queries) ListProjectsByOwner(ctx context.Context, ownerID int64) ([]Project, error) {
+type ListProjectsByOwnerRow struct {
+	ID          int64
+	Name        string
+	Description pgtype.Text
+	OwnerID     int64
+	CreatedAt   pgtype.Timestamptz
+	OwnerName   pgtype.Text
+}
+
+func (q *Queries) ListProjectsByOwner(ctx context.Context, ownerID int64) ([]ListProjectsByOwnerRow, error) {
 	rows, err := q.db.Query(ctx, listProjectsByOwner, ownerID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Project
+	var items []ListProjectsByOwnerRow
 	for rows.Next() {
-		var i Project
+		var i ListProjectsByOwnerRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Name,
 			&i.Description,
 			&i.OwnerID,
 			&i.CreatedAt,
+			&i.OwnerName,
 		); err != nil {
 			return nil, err
 		}

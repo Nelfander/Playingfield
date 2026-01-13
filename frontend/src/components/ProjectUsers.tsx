@@ -1,26 +1,39 @@
-import React from "react";
+import React from 'react';
 
-export type UserInProject = {
+export interface UserInProject {
     id: number;
     email: string;
     role: string;
-};
+}
 
-export type ProjectUsersProps = {
+interface ProjectUsersProps {
     users: UserInProject[];
-    removeUser: (userID: number) => Promise<void>;
-};
+    // The '?' makes it optional, fixing the ts(2322) error
+    onRemove?: (userId: number) => void;
+}
 
-const ProjectUsers: React.FC<ProjectUsersProps> = ({ users, removeUser }) => {
+const ProjectUsers: React.FC<ProjectUsersProps> = ({ users, onRemove }) => {
     return (
-        <ul>
-            {users.map((u) => (
-                <li key={u.id}>
-                    {u.email} — {u.role}{" "}
-                    <button onClick={() => removeUser(u.id)}>Remove</button>
-                </li>
+        <div className="member-list">
+            {users.map((user) => (
+                <div key={user.id} className="member-item">
+                    <div className="member-info">
+                        <span className="member-email">{user.email}</span>
+                        <span className="member-role" style={{ marginLeft: '5px', opacity: 0.7 }}>({user.role})</span>
+                    </div>
+
+                    {/* Only show the button if onRemove was passed (Owner check) */}
+                    {onRemove && (
+                        <button
+                            className="btn-danger-sm"
+                            onClick={() => onRemove(user.id)}
+                        >
+                            Remove
+                        </button>
+                    )}
+                </div>
             ))}
-        </ul>
+        </div>
     );
 };
 

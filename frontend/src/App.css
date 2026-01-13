@@ -1,184 +1,340 @@
-/* App.css - Final Integrated Version */
+/* App.css - COMPLETE MASTER STYLE */
 
-/* 1. MAIN CONTAINER & BACKGROUND */
-.app-container {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  width: 100vw;
+/* 1. GLOBAL RESET - Removes white/black corners */
+html,
+body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
   min-height: 100vh;
-  position: absolute;
-  left: 0;
-  top: 0;
+  background-color: #000;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
 
-  /* PEXELS BACKGROUND IMAGE WITH DARK OVERLAY FOR READABILITY */
-  background-image: linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.4)),
+* {
+  box-sizing: border-box;
+}
+
+/* 2. MAIN CONTAINER */
+.app-container {
+  min-height: 100vh;
+  width: 100%;
+  padding: 60px 20px;
+  position: relative;
+  background: linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.4)),
     url('https://images.pexels.com/photos/2662116/pexels-photo-2662116.jpeg?auto=compress&cs=tinysrgb&w=1920');
   background-size: cover;
   background-position: center;
   background-attachment: fixed;
   background-repeat: no-repeat;
-
-  padding: 2rem;
-  box-sizing: border-box;
-  z-index: 1;
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
 }
 
-/* 2. GLASS EFFECT CARDS */
-.card,
-.project-card,
-.welcome-card {
-  background: rgba(255, 255, 255, 0.9) !important;
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  border-radius: 1rem;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-  transition: transform 0.2s ease;
-}
+/* --- LOGIN SECTION ONLY --- */
+/* This will not affect your project cards or headers */
 
-.card {
-  background: rgba(255, 255, 255, 0.85);
-  /* white with 85% opacity */
-  padding: 2rem;
-  border-radius: 0.5rem;
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
-  text-align: center;
-  width: 300px;
-  transition: all 0.3s ease;
-}
-
-
-.project-card {
-  padding: 1.5rem;
-  margin-bottom: 1.5rem;
-  text-align: left;
-}
-
-.welcome-card {
-  padding: 3rem;
-  text-align: center;
-  margin-top: 1rem;
-}
-
-/* 3. TITLES & TEXT */
-h1 {
-  color: white;
-  text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.6);
-  margin-bottom: 1.5rem;
-}
-
-.project-list-container {
-  text-align: center;
+.login-wrapper {
+  margin: 15vh auto;
+  /* Centers the box vertically */
   width: 100%;
-  max-width: 650px;
+  max-width: 400px;
+  /* Limits the width of the login card */
+  padding: 0 20px;
 }
 
-/* 4. SLIDING ANIMATION LOGIC */
-.expandable-section {
-  display: grid;
-  grid-template-rows: 0fr;
-  transition: grid-template-rows 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
-  opacity: 0;
-  overflow: hidden;
+.login-card {
+  background: white;
+  padding: 40px;
+  border-radius: 24px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  text-align: center;
 }
 
-.expandable-section.open {
-  grid-template-rows: 1fr;
-  opacity: 1;
+.login-card h1 {
+  color: #1e293b;
+  font-size: 2.5rem;
+  margin-bottom: 30px;
+  font-weight: 800;
 }
 
-.expandable-section.open.main-list {
-  margin-top: 1.5rem;
-}
-
-.inner-content,
-.inner-content-wrapper {
-  min-height: 0;
-}
-
-.inner-content {
-  padding: 1rem;
-  background: rgba(249, 250, 251, 0.8);
-  border-radius: 0.5rem;
-  border: 1px solid #edf2f7;
-  margin-top: 0.5rem;
-}
-
-/* 5. BUTTONS & INPUTS */
-button {
-  cursor: pointer;
-  padding: 0.6rem 1.2rem;
-  border-radius: 0.5rem;
-  border: none;
-  font-weight: 600;
-  transition: all 0.2s ease;
-}
-
-button:hover {
-  transform: translateY(-1px);
-  filter: brightness(1.1);
-}
-
-.btn-primary {
-  background: #4F46E5;
-  color: white;
-  width: 100%;
-}
-
-.btn-success {
-  background: #10B981;
-  color: white;
-}
-
-.btn-secondary {
-  background: rgba(255, 255, 255, 0.2);
-  color: white;
-  border: 1px solid rgba(255, 255, 255, 0.5);
-}
-
-.btn-logout {
-  background: #ef4444;
-  color: white;
-}
-
-.toggle-btn {
-  display: block;
-  width: 100%;
-  margin-top: 10px;
-  background: #f3f4f6;
-  color: #374151;
-  border: 1px solid #d1d5db;
-}
-
+/* This is the part that fixes your squashed inputs */
 .login-form {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  /* Forces Email and Password to stack */
+  gap: 15px;
+  /* Adds space between the inputs */
+  align-items: center;
 }
 
 .login-form input {
-  padding: 0.75rem;
-  border-radius: 0.5rem;
-  border: 1px solid #ddd;
+  width: 100%;
+  /* Makes inputs fill the card width */
+  padding: 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
   font-size: 1rem;
+  outline: none;
 }
 
+.login-form input:focus {
+  border-color: #4F46E5;
+}
+
+.btn-login {
+  background: #4F46E5;
+  color: white;
+  padding: 14px;
+  width: 100%;
+  /* Makes button same width as inputs */
+  border-radius: 12px;
+  font-weight: bold;
+  border: none;
+  cursor: pointer;
+  margin-top: 10px;
+  transition: background 0.2s;
+}
+
+.btn-login:hover {
+  background: #4338ca;
+}
+
+/* 4. PROJECT LIST LAYOUT */
+.project-list-container {
+  width: 100%;
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+.project-list-container h1 {
+  color: white;
+  text-align: center;
+  font-size: 3.2rem;
+  margin-bottom: 40px;
+  text-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+}
+
+.projects-container {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+}
+
+.project-card {
+  background: white;
+  padding: 40px;
+  border-radius: 25px;
+  width: 100%;
+  box-shadow: 0 15px 45px rgba(0, 0, 0, 0.4);
+}
+
+/* --- Project Card Refinements --- */
+
+.project-header {
+  margin-bottom: 20px;
+}
+
+.project-owner {
+  font-size: 0.95rem;
+  color: #64748b;
+  /* Subtle slate color */
+  margin-top: 4px;
+  font-weight: 500;
+}
+
+.project-owner span {
+  color: #1e293b;
+  /* Darker color for the actual name */
+  font-weight: 700;
+}
+
+/* 5. BUTTONS & ACCORDIONS */
 .button-group {
   display: flex;
   justify-content: center;
-  gap: 1rem;
+  gap: 15px;
+  margin-bottom: 50px;
 }
 
-.project-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
+.button-group button {
+  padding: 12px 24px;
+  border-radius: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: white;
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
 }
 
-.error-message {
-  color: #ff8a8a;
-  margin-top: 1rem;
+/* Style for the Show Project Info button */
+.btn-info {
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #e2e8f0;
+  padding: 10px 20px;
+  border-radius: 10px;
+  font-weight: 600;
+  width: 100%;
+  margin-top: 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-info:hover {
+  background: #e2e8f0;
+}
+
+.info-content {
+  background: #ffffff;
+  padding: 15px;
+  border: 1px solid #e2e8f0;
+  border-top: none;
+  border-bottom-left-radius: 10px;
+  border-bottom-right-radius: 10px;
+  font-size: 0.95rem;
+  color: #334155;
+  line-height: 1.5;
+}
+
+
+
+.btn-success {
+  background: #10B981 !important;
+  border: none !important;
+}
+
+.full-width {
+  width: 100%;
+  padding: 16px;
+  border-radius: 12px;
+  font-weight: 700;
+  background: #475569;
+  color: white;
+  border: none;
+  margin-top: 15px;
+  cursor: pointer;
+}
+
+.accordion-content {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-top: none;
+  padding: 25px;
+  border-bottom-left-radius: 15px;
+  border-bottom-right-radius: 15px;
+}
+
+/* 6. MEMBER LIST */
+.member-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px;
+  background: white;
+  border-radius: 10px;
+  margin-bottom: 10px;
+  border: 1px solid #edf2f7;
+}
+
+.btn-danger-sm {
+  background: #fee2e2;
+  color: #ef4444;
+  padding: 8px 16px;
+  border-radius: 8px;
   font-weight: bold;
+  border: none;
+  cursor: pointer;
+}
+
+/* 7. THE MODAL (SOLID & CENTERED) */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(8px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+}
+
+.modal-content {
+  background: white;
+  width: 95%;
+  max-width: 500px;
+  padding: 45px;
+  border-radius: 30px;
+  box-shadow: 0 30px 70px rgba(0, 0, 0, 0.5);
+}
+
+.modal-content h2 {
+  margin-bottom: 25px;
+  color: #0f172a;
+  text-align: center;
+}
+
+.modal-content label {
+  display: block;
+  font-weight: 700;
+  color: #475569;
+  margin-top: 15px;
+}
+
+.modal-content input {
+  width: 100%;
+  padding: 15px;
+  margin-top: 8px;
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 15px;
+  margin-top: 30px;
+}
+
+.btn-confirm {
+  background: #10B981;
+  color: white;
+  border: none;
+  padding: 15px;
+  border-radius: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  flex: 1;
+}
+
+.btn-cancel {
+  background: #e2e8f0;
+  color: #475569;
+  border: none;
+  padding: 15px;
+  border-radius: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  flex: 1;
+}
+
+/* 8. ADD MEMBER SECTION */
+.inner-add-section {
+  background: white;
+  padding: 20px;
+  border-radius: 15px;
+  border: 2px dashed #cbd5e1;
+  margin-top: 20px;
+}
+
+.add-member-controls {
+  display: flex;
+  gap: 15px;
+  margin-top: 10px;
+}
+
+.add-member-controls select {
+  flex: 1;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid #cbd5e1;
 }

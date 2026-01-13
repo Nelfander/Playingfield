@@ -35,12 +35,22 @@ func (s *Service) CreateProject(ctx context.Context, name, description string, o
 
 	project, err := s.repo.Create(ctx, p)
 	if err != nil {
-		// Check if it's a PostgreSQL unique violation (per-user project name)
 		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) && pgErr.Code == "23505" { // unique_violation
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
 			return nil, fmt.Errorf("you already have a project with the name '%s'", name)
 		}
 		return nil, err
+	}
+
+	arg := sqlc.AddUserToProjectParams{
+		ProjectID: project.ID,
+		UserID:    ownerID,
+		Role:      pgtype.Text{String: "owner", Valid: true},
+	}
+
+	_, err = s.store.AddUserToProject(ctx, arg)
+	if err != nil {
+		return nil, fmt.Errorf("project created but failed to assign ownership: %w", err)
 	}
 
 	return project, nil

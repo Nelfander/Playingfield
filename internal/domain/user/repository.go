@@ -4,11 +4,14 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+
+	"github.com/nelfander/Playingfield/internal/infrastructure/postgres/sqlc"
 )
 
 type Repository interface {
 	Create(ctx context.Context, user User) (*User, error)
 	GetByEmail(ctx context.Context, email string) (*User, error)
+	ListUsers(ctx context.Context) ([]sqlc.ListUsersRow, error)
 }
 
 // repo implementation
@@ -19,6 +22,33 @@ type repo struct {
 // NewRepository constructor
 func NewRepository(db *sql.DB) Repository {
 	return &repo{db: db}
+
+}
+
+// ListUsers fetches all users from the database so that they can be added to a project
+func (r *repo) ListUsers(ctx context.Context) ([]sqlc.ListUsersRow, error) {
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT id, email FROM users ORDER BY email ASC`,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var users []sqlc.ListUsersRow
+	for rows.Next() {
+		var u sqlc.ListUsersRow
+		if err := rows.Scan(&u.ID, &u.Email); err != nil {
+			return nil, err
+		}
+		users = append(users, u)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return users, nil
 }
 
 // Create inserts a new user into the database

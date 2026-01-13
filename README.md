@@ -214,3 +214,18 @@ Invoke-RestMethod -Method GET -Uri http://localhost:880/projects -Headers @{ Aut
   - [ ] Implement Task creation from the UI.
   - [ ] Add database persistence (PostgreSQL/SQLite).
 </details>
+
+<details>
+<summary><b>Latest Updates — 13/01/2026 (Click to expand)</b></summary>
+
+### Backend (Go)
+* Updated `LoginResponse` DTO to include `userId` field for frontend permission handling.
+* Modified `UserHandler` to return the `userId` directly in the login response payload.
+
+### Frontend (React/TS)
+* Implemented strict ownership checks in `ProjectList` using `currentUserId`.
+* Fixed bug where project management buttons were visible to non-owners by ensuring ID type consistency.
+* Updated `LoginForm` to persist `userId` in `localStorage` upon successful authentication.
+* Added console debugging for real-time verification of owner vs. current user IDs.
+
+</details>

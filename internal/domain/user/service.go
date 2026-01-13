@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/nelfander/Playingfield/internal/infrastructure/auth"
+	"github.com/nelfander/Playingfield/internal/infrastructure/postgres/sqlc"
 )
 
 type service struct {
@@ -56,4 +57,9 @@ func (s *service) Login(ctx context.Context, email, password string) (*User, err
 	}
 
 	return u, nil
+}
+
+func (s *service) ListAllUsers(ctx context.Context) ([]sqlc.ListUsersRow, error) {
+	// This calls the generated code you just verified in Step 18
+	return s.repo.ListUsers(ctx)
 }
