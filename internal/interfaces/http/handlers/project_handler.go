@@ -94,6 +94,22 @@ func (h *ProjectHandler) List(c echo.Context) error {
 	return c.JSON(http.StatusOK, projects)
 }
 
+func (h *ProjectHandler) DeleteProject(c echo.Context) error {
+	projectID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"error": "Invalid project ID"})
+	}
+
+	userID := c.Get("user_id").(int64)
+
+	err = h.service.DeleteProject(c.Request().Context(), projectID, userID)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, echo.Map{"error": "Failed to delete project"})
+	}
+
+	return c.NoContent(http.StatusNoContent)
+}
+
 func (h *ProjectHandler) AddUserToProject(c echo.Context) error {
 	var req AddUserToProjectRequest
 	if err := c.Bind(&req); err != nil {

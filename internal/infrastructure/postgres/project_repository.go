@@ -15,7 +15,6 @@ func NewProjectRepository(db *DBAdapter) *ProjectRepository {
 	return &ProjectRepository{db: db}
 }
 
-// Create inserts a new project
 func (r *ProjectRepository) Create(ctx context.Context, p projects.Project) (*projects.Project, error) {
 	row := r.db.QueryRow(ctx,
 		`INSERT INTO projects (name, description, owner_id)
@@ -95,4 +94,12 @@ func (r *ProjectRepository) GetByID(ctx context.Context, id int64) (*projects.Pr
 	}
 	p.CreatedAt = createdAt
 	return &p, nil
+}
+
+func (r *ProjectRepository) DeleteProject(ctx context.Context, id int64, ownerID int64) error {
+	_, err := r.db.Exec(ctx,
+		`DELETE FROM projects WHERE id = $1 AND owner_id = $2`,
+		id, ownerID,
+	)
+	return err
 }

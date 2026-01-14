@@ -10,6 +10,7 @@ type Project = {
   name: string;
   description: string;
   owner_id: number;
+  owner_name?: string;
 };
 
 function App() {
@@ -21,35 +22,92 @@ function App() {
   const [showTasksMap, setShowTasksMap] = useState<Record<number, boolean>>({});
 
   const token = localStorage.getItem("token");
-
-  // LOGIC FIX: Ensure we get a valid number or 0
   const currentUserId = Number(localStorage.getItem("userId")) || 0;
 
-  async function handleProjectToggle() {
+  async function fetchProjects() {
     if (!token) return;
-
-    if (showProjects) {
-      setShowProjects(false);
-      setProjects([]);
-      return;
-    }
-
     try {
       const res = await fetch("http://localhost:880/projects", {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
       setProjects(data || []);
-      setShowProjects(true);
     } catch (err) {
       console.error("Fetch projects error:", err);
-      setMessage("Could not load projects.");
+    }
+  }
+
+  async function handleProjectToggle() {
+    if (showProjects) {
+      setShowProjects(false);
+      setProjects([]);
+    } else {
+      await fetchProjects();
+      setShowProjects(true);
+    }
+  }
+
+  async function handleLiveProjectCreated() {
+    console.log("WS Signal: New project created. Updating state...");
+    await fetchProjects();
+  }
+
+  function handleDeleteProjectState(projectId: number) {
+    setProjects(prev => prev.filter(p => p.id !== projectId));
+    setProjectUsersMap(prev => {
+      const updated = { ...prev };
+      delete updated[projectId];
+      return updated;
+    });
+  }
+
+  function handleLiveUserAdded(projectId: number, userId: number, role: string) {
+    const isMe = userId === currentUserId;
+
+    if (isMe) {
+      console.log("I was added to a new project! Refreshing list...");
+      fetchProjects();
+      setShowProjects(true);
+    } else {
+      console.log(`User ${userId} was added to project ${projectId}. Refreshing members...`);
+      if (!token) return;
+
+      fetch(`http://localhost:880/projects/users?project_id=${projectId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+        .then(res => res.json())
+        .then(data => {
+          setProjectUsersMap(prev => ({
+            ...prev,
+            [projectId]: data || []
+          }));
+        })
+        .catch(err => console.error("Live sync fetch error:", err));
+    }
+  }
+
+  // NEW: Handle user removal via WebSocket
+  function handleLiveUserRemoved(projectId: number, userId: number) {
+    const isMe = userId === currentUserId;
+
+    if (isMe) {
+      console.log("I was removed from a project. Refreshing my project list...");
+      fetchProjects();
+    } else {
+      console.log(`User ${userId} was removed from project ${projectId}. Updating local UI...`);
+      // Update the member list locally if we are currently viewing it
+      setProjectUsersMap(prev => {
+        if (!prev[projectId]) return prev;
+        return {
+          ...prev,
+          [projectId]: prev[projectId].filter(u => u.id !== userId)
+        };
+      });
     }
   }
 
   async function handleAddMember(projectId: number, userId: number) {
     if (!token) return;
-
     const confirmAdd = window.confirm("Are you sure you want to add this member?");
     if (!confirmAdd) return;
 
@@ -64,7 +122,7 @@ function App() {
       });
 
       if (res.ok) {
-        // Refresh the user list for this project
+        // Clear local map to trigger a fresh fetch on next toggle
         setProjectUsersMap(prev => {
           const n = { ...prev };
           delete n[projectId];
@@ -107,6 +165,7 @@ function App() {
         },
         body: JSON.stringify({ project_id: projectID, user_id: userID })
       });
+      // Local state update (handled for the person performing the action)
       setProjectUsersMap(prev => ({
         ...prev,
         [projectID]: prev[projectID]?.filter(u => u.id !== userID) || []
@@ -147,6 +206,10 @@ function App() {
             toggleTasks={(id) => setShowTasksMap(p => ({ ...p, [id]: !p[id] }))}
             removeUser={removeUser}
             handleAddMember={handleAddMember}
+            onDeleteProject={handleDeleteProjectState}
+            onUserAdded={handleLiveUserAdded}
+            onProjectCreated={handleLiveProjectCreated}
+            onUserRemoved={handleLiveUserRemoved} // Passed to ProjectList
           />
 
           <CreateProjectModal

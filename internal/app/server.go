@@ -12,6 +12,7 @@ import (
 	"github.com/nelfander/Playingfield/internal/infrastructure/auth"
 	"github.com/nelfander/Playingfield/internal/infrastructure/postgres"
 	"github.com/nelfander/Playingfield/internal/infrastructure/postgres/sqlc"
+	"github.com/nelfander/Playingfield/internal/infrastructure/ws"
 	"github.com/nelfander/Playingfield/internal/interfaces/http"
 	"github.com/nelfander/Playingfield/internal/interfaces/http/handlers"
 	"github.com/nelfander/Playingfield/internal/interfaces/http/middleware"
@@ -46,9 +47,15 @@ func Run() {
 	// --- Repository ---
 	userRepo := postgres.NewUserRepository(db, queries)
 
+	//  Initialize the Hub
+	hub := ws.NewHub()
+
+	//  Start the Hub in a background Goroutine
+	go hub.Run()
+
 	// Projects repo + service
 	projectsRepo := postgres.NewProjectRepository(db)
-	projectsService := projects.NewService(projectsRepo, queries)
+	projectsService := projects.NewService(projectsRepo, queries, hub)
 	projectHandler := handlers.NewProjectHandler(projectsService)
 
 	// --- Seed default admin ---
@@ -61,6 +68,8 @@ func Run() {
 
 	jwtManager := auth.NewJWTManager(cfg.JWTSecret, cfg.JWTExpiry)
 
+	// WebSocket handler creation
+	wsHandler := handlers.NewWSHandler(jwtManager, hub)
 	// --- Handler ---
 	userHandler := handlers.NewUserHandler(userService, jwtManager)
 
@@ -92,7 +101,7 @@ func Run() {
 	r := e.Group("/projects")
 	r.Use(httpMiddleware.JWTMiddleware(jwtManager))
 
-	// --- Routes with role-based middleware ---
+	// --- Routes ---
 	e.POST("/register", userHandler.Register)
 	e.GET("/me", userHandler.Me, middleware.JWTMiddleware(jwtManager)) //	For account panel
 	e.GET("/admin", userHandler.Admin, middleware.RequireRole(jwtManager, "admin"))
@@ -101,11 +110,16 @@ func Run() {
 	e.GET("/health", func(c echo.Context) error {
 		return c.JSON(stdhttp.StatusOK, map[string]string{"status": "ok"})
 	})
-	r.POST("", projectHandler.Create)                        // /projects
-	r.GET("", projectHandler.List)                           // /projects
+	// project routes
+	r.POST("", projectHandler.Create) // /projects
+	r.GET("", projectHandler.List)    // /projects
+	r.DELETE("/:id", projectHandler.DeleteProject)
 	r.POST("/users", projectHandler.AddUserToProject)        // /projects/users
 	r.GET("/users", projectHandler.ListUsersInProject)       // /projects/users
 	r.DELETE("/users", projectHandler.RemoveUserFromProject) // /projects/users
+
+	// websocket route
+	e.GET("/ws", wsHandler.HandleConnection)
 
 	// --- Start server ---
 	logger.Println("starting HTTP server on :" + cfg.Port)

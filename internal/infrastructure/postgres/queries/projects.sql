@@ -8,6 +8,10 @@ INSERT INTO projects (name, description, owner_id)
 VALUES ($1, $2, $3)
 RETURNING id, name, description, owner_id, created_at;
 
+-- name: DeleteProject :exec
+DELETE FROM projects
+WHERE id = $1 AND owner_id = $2;
+
 -- name: ListProjectsByOwner :many
 SELECT 
     p.id, 

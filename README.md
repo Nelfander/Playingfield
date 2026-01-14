@@ -1,45 +1,41 @@
 # Playingfield
 
-A lightweight backend and frontend project management platform.
-This project is built with **Go (Echo framework)**, **PostgreSQL/Neon**, and eventually a React frontend.
+A real-time, lightweight project management platform.
+Built with **Go (Echo framework)**, **PostgreSQL (Neon)**, and a **React (TypeScript)** frontend.
 
 ---
 
-## Current Features (Achieved So Far)
+## 🌟 Key Features
 
-### Authentication
+### ⚡ Real-Time Synchronization (WebSockets)
+* **Live Updates:** The dashboard uses a custom WebSocket Hub to broadcast changes across all connected clients instantly.
+* **Smart Refreshing:** The system intelligently distinguishes between "your" updates and "others'" updates:
+    * If you are **added** to a project, the project card appears instantly without refreshing.
+    * If you are **removed**, the project vanishes from your list in real-time.
+    * If a project is **deleted** by an owner, it is removed from every member's screen immediately.
+* **Member Sync:** Adding or removing members updates the member list for everyone currently viewing that project.
 
-* User registration and login with **JWT-based authentication**.
-* Passwords securely hashed.
-* Role and status fields enforced (`role = "user"`, `status = "active"`).
-* Handlers never rely on client-sent `owner_id`; identity always comes from JWT claims.
+### 🔐 Authentication & Security
+* **JWT-Based Auth:** Secure registration and login with token-based identity.
+* **Identity Integrity:** Handlers never rely on client-sent owner_id; identity is always extracted from verified JWT claims.
+* **Ownership Enforcement:** Only owners can delete projects or manage memberships. The UI dynamically hides management buttons for non-owners.
 
-### Projects
+### 📂 Project Management
+* **Dynamic UI:** Glassmorphic interface with interactive "Show Members" and "Show Tasks" toggles using smooth animations.
+* **Per-User Uniqueness:** Database constraints prevent a user from creating duplicate project names while allowing different users to use the same name.
 
-* Users can create projects with a **name and description**.
-* Enforces **per-user uniqueness**: a user cannot have two projects with the same name, but different users can have projects with the same name.
-* Users can list only their own projects; JWT required.
-* Backend correctly returns HTTP 409 for duplicate project names.
-
-### Database
-
-* PostgreSQL/Neon schema enforces defaults (`role`, `status`) and per-user uniqueness.
-* SQLC is used to generate type-safe queries.
-* Clean separation between **repository**, **service**, and **handler** layers.
-
----
+🛠 Tech Stack
+Backend: Go (Echo Framework), SQLC (Type-safe SQL), Gorilla WebSocket.
+Frontend: **React, TypeScript, Vite, CSS3 (Glassmorphism).
+Database: PostgreSQL (Neon.tech).
+Communication: REST API + WebSockets for real-time reactivity.
 
 ## Future Goals
-
-* Implement a **minimal React frontend**:
-
-  * Login page with JWT integration.
-  * Projects list for the logged-in user.
-  * Create new projects with real-time validation for duplicates.
-* Add **tasks under projects**.
+* Implement **Task creation from the UI**.
 * Improve **error handling and logging** further.
 * Implement **user role management** (admin vs regular users).
 * Add **unit and integration tests** for the project domain.
+* Add **Project group chats and 1 on 1 individual project member chat feature**.
 
 ---
 
@@ -129,7 +125,75 @@ Invoke-RestMethod -Method GET -Uri http://localhost:880/projects -Headers @{ Aut
   * Added **debug logging** in handlers to print real errors to server console.
   * Ensured handler returns **specific HTTP status codes** (`400`, `401`, `409`) with JSON error bodies.
 
+  🔧 Known Issues & Solutions
+1. The "Vanishing List" Bug
+Issue: WebSocket updates triggered a UI toggle, closing the project list.
+
+Solution: Separated fetchProjects logic from the showProjects toggle state, allowing background refreshes without affecting UI visibility.
+
+2. Users created with empty role/status
+Issue: Old rows in Neon had role="", breaking login and JWT logic.
+
+Solution: Set default values in DB (role='user', status='active') and updated SQLC queries.
+
+3. Duplicate project names
+Issue: No enforcement of per-user uniqueness.
+
+Solution: Added a database unique constraint on (owner_id, name) and return 409 Conflict.
+
 ---
+
+🛠 Development History
+<details> <summary><b>Jan 14, 2026: The WebSocket Revolution</b> (Click to expand)</summary>
+
+Real-Time Engine
+Implemented a WebSocket Hub in Go to manage concurrent client connections.
+
+Created a custom useWebSockets React hook to handle incoming signals (PROJECT_CREATED, PROJECT_DELETED, USER_ADDED, USER_REMOVED).
+
+UI Stability: Refactored project fetching to allow "background refreshes," preventing the UI list from closing when updates arrive.
+
+Membership Logic
+Added AddUserToProject and RemoveUserFromProject with real-time broadcasting.
+
+Refined ListProjects to ensure users see projects they own and projects where they are members.
+
+</details>
+
+<details> <summary><b>Jan 13, 2026: Ownership & Permissions</b> (Click to expand)</summary>
+
+Backend (Go)
+Updated LoginResponse DTO to include userId field for frontend permission handling.
+
+Modified UserHandler to return the userId directly in the login response payload.
+
+Frontend (React/TS)
+Implemented strict ownership checks in ProjectList using currentUserId.
+
+Fixed bug where project management buttons were visible to non-owners by ensuring ID type consistency.
+
+Updated LoginForm to persist userId in localStorage upon successful authentication.
+
+</details>
+
+<details> <summary><b>Jan 12, 2026: Frontend & Security Integration</b> (Click to expand)</summary>
+
+Frontend Updates
+React Frontend Implemented: Login page with JWT authentication integration.
+
+Interactive UI: Smooth slide-down animations for Members and Tasks.
+
+Polished UI: Modern Glassmorphism effect with Moraine Lake background.
+
+Project Users & Roles (Backend)
+Ownership Logic: Only project owners are permitted to remove users.
+
+JWT Claims: Security checks enforced using role-based claims within the JWT.
+
+</details>
+
+
+
 
 ## Architecture & Flow Diagram
 
@@ -184,48 +248,3 @@ Invoke-RestMethod -Method GET -Uri http://localhost:880/projects -Headers @{ Aut
                      │ - projects   │
                      └──────────────┘
 
-## 🛠 Development History
-
-<details>
-  <summary><b>Jan 12, 2026: Frontend & Security Integration</b> (Click to expand)</summary>
-
-  #### Frontend Updates
-  * **React Frontend Implemented:** * Full Login page with JWT authentication integration.
-    * Dynamic Projects list with a "Load projects" toggle to manage visibility.
-    * **Interactive Members & Tasks:** Each project includes "Show Members" and "Show Tasks" buttons with smooth slide-down animations.
-    * **Empty State Handling:** Fixed crashes when backend returns `null` projects; added fallback messages ("No members yet").
-  * **Polished UI:** * Centered layout with modern Glassmorphism (frosted glass effect).
-    * High-resolution mountain background (Moraine Lake) with readability overlays.
-
-  #### Project Users & Roles (Backend)
-  * **Ownership Logic:** Only project owners are permitted to remove users from a project.
-  * **JWT Claims:** Security checks are now enforced using role-based claims within the JWT.
-  * **Error Handling:** API now returns descriptive error messages for unauthorized actions (401/403).
-
-  #### Misc
-  * **Verified Requests:** Example PowerShell scripts for adding/removing users are now fully functional.
-  * **Live Integration:** The frontend is fully integrated with the backend API for real-time data display.
-</details>
-
-<details>
-  <summary><b>Future Goals</b></summary>
-  
-  - [ ] Add Search/Filter functionality.
-  - [ ] Implement Task creation from the UI.
-  - [ ] Add database persistence (PostgreSQL/SQLite).
-</details>
-
-<details>
-<summary><b>Latest Updates — 13/01/2026 (Click to expand)</b></summary>
-
-### Backend (Go)
-* Updated `LoginResponse` DTO to include `userId` field for frontend permission handling.
-* Modified `UserHandler` to return the `userId` directly in the login response payload.
-
-### Frontend (React/TS)
-* Implemented strict ownership checks in `ProjectList` using `currentUserId`.
-* Fixed bug where project management buttons were visible to non-owners by ensuring ID type consistency.
-* Updated `LoginForm` to persist `userId` in `localStorage` upon successful authentication.
-* Added console debugging for real-time verification of owner vs. current user IDs.
-
-</details>
