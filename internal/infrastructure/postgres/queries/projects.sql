@@ -26,4 +26,7 @@ WHERE p.owner_id = $1
    OR p.id IN (SELECT project_id FROM project_users WHERE user_id = $1)
 ORDER BY p.created_at ASC;
 
+-- name: GetProject :one
+SELECT * FROM projects
+WHERE id = $1 LIMIT 1;
 

@@ -35,6 +35,27 @@ func (q *Queries) AddUserToProject(ctx context.Context, arg AddUserToProjectPara
 	return i, err
 }
 
+const checkSharedProject = `-- name: CheckSharedProject :one
+SELECT EXISTS (
+    SELECT 1 
+    FROM project_users pu1
+    JOIN project_users pu2 ON pu1.project_id = pu2.project_id
+    WHERE pu1.user_id = $1 AND pu2.user_id = $2
+) AS shared
+`
+
+type CheckSharedProjectParams struct {
+	SenderID   int64
+	ReceiverID int64
+}
+
+func (q *Queries) CheckSharedProject(ctx context.Context, arg CheckSharedProjectParams) (bool, error) {
+	row := q.db.QueryRow(ctx, checkSharedProject, arg.SenderID, arg.ReceiverID)
+	var shared bool
+	err := row.Scan(&shared)
+	return shared, err
+}
+
 const listUsersInProject = `-- name: ListUsersInProject :many
 SELECT u.id, u.email, pu.role
 FROM users u

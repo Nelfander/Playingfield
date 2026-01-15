@@ -1,24 +1,37 @@
 package handlers
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv" // Added for string conversion
 
 	"github.com/gorilla/websocket"
 	"github.com/labstack/echo/v4"
+	"github.com/nelfander/Playingfield/internal/domain/messages"
 	"github.com/nelfander/Playingfield/internal/infrastructure/auth"
 	"github.com/nelfander/Playingfield/internal/infrastructure/ws"
 )
 
 type WSHandler struct {
-	jwtManager *auth.JWTManager
-	hub        *ws.Hub
+	jwtManager  *auth.JWTManager
+	hub         *ws.Hub
+	chatService *messages.Service
 }
 
-func NewWSHandler(jwtManager *auth.JWTManager, hub *ws.Hub) *WSHandler {
+type WSIncomingMessage struct {
+	Type       string `json:"type"`
+	ProjectID  int64  `json:"project_id"`
+	ReceiverID int64  `json:"receiver_id"`
+	Content    string `json:"content"`
+}
+
+func NewWSHandler(jwtManager *auth.JWTManager, hub *ws.Hub, chatService *messages.Service) *WSHandler {
 	return &WSHandler{
-		jwtManager: jwtManager,
-		hub:        hub,
+		jwtManager:  jwtManager,
+		hub:         hub,
+		chatService: chatService,
 	}
 }
 
@@ -29,13 +42,22 @@ var upgrader = websocket.Upgrader{
 }
 
 func (h *WSHandler) HandleConnection(c echo.Context) error {
-	//  Get token from query string
 	tokenStr := c.QueryParam("token")
 	if tokenStr == "" {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"message": "missing token"})
 	}
 
-	// Validate user
+	// This identifies which project "room" the user is joining
+	pIDStr := c.QueryParam("projectId")
+	var projectID int64
+	if pIDStr != "" {
+		pID, err := strconv.ParseInt(pIDStr, 10, 64)
+		if err == nil {
+			projectID = pID
+		}
+	}
+
+	//  Validate user
 	claims, err := h.jwtManager.VerifyToken(tokenStr)
 	if err != nil {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"message": "invalid or expired token"})
@@ -47,14 +69,14 @@ func (h *WSHandler) HandleConnection(c echo.Context) error {
 		return err
 	}
 
-	//  Create Client
+	// We include the ProjectID so the Hub knows where to route messages
 	client := &ws.Client{
-		UserID: claims.UserID,
-		Conn:   conn,
-		Send:   make(chan []byte, 256),
+		UserID:    claims.UserID,
+		ProjectID: projectID,
+		Conn:      conn,
+		Send:      make(chan []byte, 256),
 	}
 
-	//  Register with Hub
 	h.hub.Register <- client
 
 	// This goroutine listens to the Hub and pushes messages to the browser
@@ -62,10 +84,8 @@ func (h *WSHandler) HandleConnection(c echo.Context) error {
 		for {
 			message, ok := <-client.Send
 			if !ok {
-				// Hub closed the channel, connection ending
 				return
 			}
-			// Write the message to the browser
 			err := conn.WriteMessage(websocket.TextMessage, message)
 			if err != nil {
 				return
@@ -77,10 +97,7 @@ func (h *WSHandler) HandleConnection(c echo.Context) error {
 	defer func() {
 		h.hub.Unregister <- client
 		conn.Close()
-		//fmt.Printf("User %d (Email: %s) disconnected\n", claims.UserID, claims.Email)
 	}()
-
-	//fmt.Printf("User %d (Email: %s) connected and registered in Hub!\n", claims.UserID, claims.Email)
 
 	// The Read Loop (The "Ear")
 	for {
@@ -88,8 +105,42 @@ func (h *WSHandler) HandleConnection(c echo.Context) error {
 		if err != nil {
 			break
 		}
-		fmt.Printf("Message received from %d: %s\n", claims.UserID, string(payload))
+
+		var msg WSIncomingMessage
+		if err := json.Unmarshal(payload, &msg); err != nil {
+			h.sendWSError(conn, "Invalid JSON format")
+			continue
+		}
+
+		ctx := context.Background()
+		var chatErr error
+
+		switch msg.Type {
+		case "project_chat":
+			_, chatErr = h.chatService.SendProjectMessage(ctx, claims.UserID, msg.ProjectID, msg.Content)
+		case "direct_message":
+			_, chatErr = h.chatService.SendDirectMessage(ctx, claims.UserID, msg.ReceiverID, msg.Content)
+		default:
+			fmt.Printf("Unknown message type: %s\n", msg.Type)
+			continue
+		}
+
+		if chatErr != nil {
+			fmt.Printf("Chat error: %v\n", chatErr)
+			h.sendWSError(conn, chatErr.Error())
+			continue
+		}
 	}
 
 	return nil
+}
+
+// Helper method to send error messages over the socket
+func (h *WSHandler) sendWSError(conn *websocket.Conn, message string) {
+	errPayload := map[string]string{
+		"type":  "error",
+		"error": message,
+	}
+	b, _ := json.Marshal(errPayload)
+	conn.WriteMessage(websocket.TextMessage, b)
 }

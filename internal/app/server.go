@@ -7,6 +7,7 @@ import (
 
 	"github.com/labstack/echo/v4"
 	echomiddleware "github.com/labstack/echo/v4/middleware"
+	"github.com/nelfander/Playingfield/internal/domain/messages"
 	"github.com/nelfander/Playingfield/internal/domain/projects"
 	"github.com/nelfander/Playingfield/internal/domain/user"
 	"github.com/nelfander/Playingfield/internal/infrastructure/auth"
@@ -58,6 +59,11 @@ func Run() {
 	projectsService := projects.NewService(projectsRepo, queries, hub)
 	projectHandler := handlers.NewProjectHandler(projectsService)
 
+	// --- Chat/Messages logic ---
+	messageRepo := postgres.NewMessageRepository(db)
+	chatService := messages.NewService(messageRepo, queries, hub)
+	chatHandler := handlers.NewChatHandler(chatService)
+
 	// --- Seed default admin ---
 	if err := postgres.SeedAdminUser(context.Background(), userRepo); err != nil {
 		log.Fatal("failed to seed admin user:", err)
@@ -69,7 +75,7 @@ func Run() {
 	jwtManager := auth.NewJWTManager(cfg.JWTSecret, cfg.JWTExpiry)
 
 	// WebSocket handler creation
-	wsHandler := handlers.NewWSHandler(jwtManager, hub)
+	wsHandler := handlers.NewWSHandler(jwtManager, hub, chatService)
 	// --- Handler ---
 	userHandler := handlers.NewUserHandler(userService, jwtManager)
 
@@ -94,6 +100,8 @@ func Run() {
 	authGroup.Use(httpMiddleware.JWTMiddleware(jwtManager))
 	authGroup.GET("/me", userHandler.Me)
 	authGroup.GET("/users", userHandler.List)
+	// DM Chat History: /messages/direct/:other_id
+	authGroup.GET("/messages/direct/:other_id", chatHandler.GetDMHistory)
 
 	http.RegisterRoutes(e, userHandler)
 
@@ -117,6 +125,8 @@ func Run() {
 	r.POST("/users", projectHandler.AddUserToProject)        // /projects/users
 	r.GET("/users", projectHandler.ListUsersInProject)       // /projects/users
 	r.DELETE("/users", projectHandler.RemoveUserFromProject) // /projects/users
+	// Project Chat History: /projects/:id/messages
+	r.GET("/:id/messages", chatHandler.GetProjectHistory)
 
 	// websocket route
 	e.GET("/ws", wsHandler.HandleConnection)

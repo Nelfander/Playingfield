@@ -24,8 +24,8 @@ interface ProjectListProps {
     onDeleteProject: (projectId: number) => void;
     onUserAdded: (projectId: number, userId: number, role: string) => void;
     onProjectCreated: () => void;
-    // NEW: Prop to handle live user removals
     onUserRemoved: (projectId: number, userId: number) => void;
+    onSelectProject: (projectId: number) => void;
 }
 
 const ProjectList: React.FC<ProjectListProps> = ({
@@ -41,13 +41,12 @@ const ProjectList: React.FC<ProjectListProps> = ({
     onDeleteProject,
     onUserAdded,
     onProjectCreated,
-    onUserRemoved // Destructure new prop
+    onUserRemoved,
+    onSelectProject
 }) => {
     const [showInfoMap, setShowInfoMap] = useState<Record<number, boolean>>({});
-
     const token = localStorage.getItem('token');
 
-    // Updated hook call with the 5th argument (onUserRemoved)
     useWebSockets(
         token,
         (id) => {
@@ -70,15 +69,22 @@ const ProjectList: React.FC<ProjectListProps> = ({
 
     if (!showProjects) return null;
 
+    // --- GUARD CLAUSE: Fixes "projects.map is not a function" ---
+    if (!projects || !Array.isArray(projects)) {
+        return (
+            <div className="projects-container">
+                <p>Loading projects...</p>
+            </div>
+        );
+    }
+    // -----------------------------------------------------------
+
     const handleDeleteClick = async (projectId: number, projectName: string) => {
-        if (window.confirm(`Are you sure you want to delete "${projectName}"? This action cannot be undone.`)) {
+        if (window.confirm(`Are you sure you want to delete "${projectName}"?`)) {
             try {
-                const token = localStorage.getItem('token');
                 const response = await fetch(`http://localhost:880/projects/${projectId}`, {
                     method: 'DELETE',
-                    headers: {
-                        'Authorization': `Bearer ${token}`
-                    }
+                    headers: { 'Authorization': `Bearer ${token}` }
                 });
 
                 if (response.ok) {
@@ -89,7 +95,6 @@ const ProjectList: React.FC<ProjectListProps> = ({
                 }
             } catch (err) {
                 console.error("Error deleting project:", err);
-                alert("An error occurred while trying to delete the project.");
             }
         }
     };
@@ -106,24 +111,29 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                 <div>
                                     <h2>{project.name}</h2>
                                     <p className="project-owner">
-                                        Project owner: <span>{project.owner_name || `User #${project.owner_id}`}</span>
+                                        Owner: <span>{project.owner_name || `User #${project.owner_id}`}</span>
                                     </p>
                                 </div>
 
-                                {isOwner && (
+                                <div style={{ display: 'flex', gap: '8px' }}>
                                     <button
-                                        className="btn-danger"
-                                        onClick={() => handleDeleteClick(project.id, project.name)}
-                                        style={{
-                                            backgroundColor: '#ff4d4f',
-                                            color: 'white',
-                                            padding: '5px 10px',
-                                            fontSize: '0.8rem'
-                                        }}
+                                        className="btn-chat"
+                                        onClick={() => onSelectProject(project.id)}
+                                        style={{ backgroundColor: '#1890ff', color: 'white', padding: '5px 10px', fontSize: '0.8rem', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
                                     >
-                                        Delete Project
+                                        💬 Chat
                                     </button>
-                                )}
+
+                                    {isOwner && (
+                                        <button
+                                            className="btn-danger"
+                                            onClick={() => handleDeleteClick(project.id, project.name)}
+                                            style={{ backgroundColor: '#ff4d4f', color: 'white', padding: '5px 10px', fontSize: '0.8rem', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                                        >
+                                            Delete
+                                        </button>
+                                    )}
+                                </div>
                             </div>
                         </div>
 
@@ -135,7 +145,9 @@ const ProjectList: React.FC<ProjectListProps> = ({
                         </button>
 
                         {showInfoMap[project.id] && (
-                            <div className="info-content">{project.description}</div>
+                            <div className="info-content" style={{ padding: '10px', backgroundColor: '#f9f9f9', marginTop: '5px' }}>
+                                {project.description}
+                            </div>
                         )}
 
                         <div className="accordion-section">
@@ -156,12 +168,6 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                             onAdd={handleAddMember}
                                             excludeIds={projectUsersMap[project.id].map(u => u.id)}
                                         />
-                                    )}
-
-                                    {!isOwner && (
-                                        <p style={{ fontSize: '0.8rem', color: '#64748b', textAlign: 'center', marginTop: '10px' }}>
-                                            Only the owner can manage members.
-                                        </p>
                                     )}
                                 </div>
                             )}

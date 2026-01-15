@@ -2,6 +2,7 @@ import { useState } from "react";
 import ProjectList from "./components/ProjectList";
 import LoginForm from "./components/LoginForm";
 import CreateProjectModal from "./components/CreateProjectModal";
+import { ChatBox } from "./components/ChatBox"; // <-- Import the ChatBox
 import { type UserInProject } from "./components/ProjectUsers";
 import "./App.css";
 
@@ -21,12 +22,16 @@ function App() {
   const [projectUsersMap, setProjectUsersMap] = useState<Record<number, UserInProject[]>>({});
   const [showTasksMap, setShowTasksMap] = useState<Record<number, boolean>>({});
 
+  // NEW: Track which project chat is open
+  const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
+
   const token = localStorage.getItem("token");
   const currentUserId = Number(localStorage.getItem("userId")) || 0;
 
   async function fetchProjects() {
     if (!token) return;
     try {
+      // Note: Ensure your port is correct (8080 vs 880)
       const res = await fetch("http://localhost:880/projects", {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -41,6 +46,7 @@ function App() {
     if (showProjects) {
       setShowProjects(false);
       setProjects([]);
+      setSelectedProjectId(null); // Close chat if hiding projects
     } else {
       await fetchProjects();
       setShowProjects(true);
@@ -54,6 +60,7 @@ function App() {
 
   function handleDeleteProjectState(projectId: number) {
     setProjects(prev => prev.filter(p => p.id !== projectId));
+    if (selectedProjectId === projectId) setSelectedProjectId(null);
     setProjectUsersMap(prev => {
       const updated = { ...prev };
       delete updated[projectId];
@@ -63,15 +70,11 @@ function App() {
 
   function handleLiveUserAdded(projectId: number, userId: number, role: string) {
     const isMe = userId === currentUserId;
-
     if (isMe) {
-      console.log("I was added to a new project! Refreshing list...");
       fetchProjects();
       setShowProjects(true);
     } else {
-      console.log(`User ${userId} was added to project ${projectId}. Refreshing members...`);
       if (!token) return;
-
       fetch(`http://localhost:880/projects/users?project_id=${projectId}`, {
         headers: { Authorization: `Bearer ${token}` },
       })
@@ -86,16 +89,12 @@ function App() {
     }
   }
 
-  // NEW: Handle user removal via WebSocket
   function handleLiveUserRemoved(projectId: number, userId: number) {
     const isMe = userId === currentUserId;
-
     if (isMe) {
-      console.log("I was removed from a project. Refreshing my project list...");
       fetchProjects();
+      if (selectedProjectId === projectId) setSelectedProjectId(null);
     } else {
-      console.log(`User ${userId} was removed from project ${projectId}. Updating local UI...`);
-      // Update the member list locally if we are currently viewing it
       setProjectUsersMap(prev => {
         if (!prev[projectId]) return prev;
         return {
@@ -122,7 +121,6 @@ function App() {
       });
 
       if (res.ok) {
-        // Clear local map to trigger a fresh fetch on next toggle
         setProjectUsersMap(prev => {
           const n = { ...prev };
           delete n[projectId];
@@ -165,7 +163,6 @@ function App() {
         },
         body: JSON.stringify({ project_id: projectID, user_id: userID })
       });
-      // Local state update (handled for the person performing the action)
       setProjectUsersMap(prev => ({
         ...prev,
         [projectID]: prev[projectID]?.filter(u => u.id !== userID) || []
@@ -178,39 +175,53 @@ function App() {
       {!token ? (
         <LoginForm message={message} setMessage={setMessage} />
       ) : (
-        <div className="project-list-container">
-          <h1>My Projects</h1>
-          <div className="button-group">
-            <button onClick={handleProjectToggle}>
-              {showProjects ? "Hide Projects" : "Load Projects"}
-            </button>
-            <button onClick={() => setIsModalOpen(true)} className="btn-success">
-              Create Project
-            </button>
-            <button onClick={() => {
-              localStorage.removeItem("token");
-              localStorage.removeItem("userId");
-              window.location.reload();
-            }}>
-              Logout
-            </button>
+        <div className="main-layout" style={{ display: 'flex', gap: '20px', padding: '20px' }}>
+
+          {/* Left Side: Project List */}
+          <div className="project-list-container" style={{ flex: 1 }}>
+            <h1>My Projects</h1>
+            <div className="button-group">
+              <button onClick={handleProjectToggle}>
+                {showProjects ? "Hide Projects" : "Load Projects"}
+              </button>
+              <button onClick={() => setIsModalOpen(true)} className="btn-success">
+                Create Project
+              </button>
+              <button onClick={() => {
+                localStorage.removeItem("token");
+                localStorage.removeItem("userId");
+                window.location.reload();
+              }}>
+                Logout
+              </button>
+            </div>
+
+            <ProjectList
+              projects={projects}
+              currentUserId={currentUserId}
+              showProjects={showProjects}
+              projectUsersMap={projectUsersMap}
+              showTasksMap={showTasksMap}
+              toggleProjectUsers={toggleProjectUsers}
+              toggleTasks={(id) => setShowTasksMap(p => ({ ...p, [id]: !p[id] }))}
+              removeUser={removeUser}
+              handleAddMember={handleAddMember}
+              onDeleteProject={handleDeleteProjectState}
+              onUserAdded={handleLiveUserAdded}
+              onProjectCreated={handleLiveProjectCreated}
+              onUserRemoved={handleLiveUserRemoved}
+              // Pass a way to select a project for chat
+              onSelectProject={(id) => setSelectedProjectId(id)}
+            />
           </div>
 
-          <ProjectList
-            projects={projects}
-            currentUserId={currentUserId}
-            showProjects={showProjects}
-            projectUsersMap={projectUsersMap}
-            showTasksMap={showTasksMap}
-            toggleProjectUsers={toggleProjectUsers}
-            toggleTasks={(id) => setShowTasksMap(p => ({ ...p, [id]: !p[id] }))}
-            removeUser={removeUser}
-            handleAddMember={handleAddMember}
-            onDeleteProject={handleDeleteProjectState}
-            onUserAdded={handleLiveUserAdded}
-            onProjectCreated={handleLiveProjectCreated}
-            onUserRemoved={handleLiveUserRemoved} // Passed to ProjectList
-          />
+          {/* Right Side: Chat (Only shows if a project is selected) */}
+          {selectedProjectId && (
+            <div className="chat-sidebar">
+              <button onClick={() => setSelectedProjectId(null)} style={{ marginBottom: '10px' }}>Close Chat</button>
+              <ChatBox projectId={selectedProjectId} token={token} />
+            </div>
+          )}
 
           <CreateProjectModal
             isOpen={isModalOpen}
