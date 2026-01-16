@@ -119,8 +119,9 @@ func Run() {
 		return c.JSON(stdhttp.StatusOK, map[string]string{"status": "ok"})
 	})
 	// project routes
-	r.POST("", projectHandler.Create) // /projects
-	r.GET("", projectHandler.List)    // /projects
+	r.POST("", projectHandler.Create)     // /projects
+	r.GET("", projectHandler.List)        // /projects
+	r.GET("/:id", projectHandler.GetByID) // This handles /projects/1, /projects/2, etc.
 	r.DELETE("/:id", projectHandler.DeleteProject)
 	r.POST("/users", projectHandler.AddUserToProject)        // /projects/users
 	r.GET("/users", projectHandler.ListUsersInProject)       // /projects/users

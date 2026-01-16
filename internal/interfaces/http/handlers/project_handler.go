@@ -186,3 +186,24 @@ func (h *ProjectHandler) RemoveUserFromProject(c echo.Context) error {
 
 	return c.JSON(200, map[string]string{"status": "user removed"})
 }
+
+// GET /projects/:id
+func (h *ProjectHandler) GetByID(c echo.Context) error {
+	idParam := c.Param("id")
+	id, err := strconv.ParseInt(idParam, 10, 64)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"error": "invalid project id"})
+	}
+
+	claims, ok := c.Get("user").(*auth.Claims)
+	if !ok || claims == nil {
+		return c.JSON(http.StatusUnauthorized, echo.Map{"error": "unauthorized"})
+	}
+
+	project, err := h.service.GetProject(c.Request().Context(), id)
+	if err != nil {
+		return c.JSON(http.StatusNotFound, echo.Map{"error": "project not found"})
+	}
+
+	return c.JSON(http.StatusOK, project)
+}

@@ -2,7 +2,6 @@ package postgres
 
 import (
 	"context"
-	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/nelfander/Playingfield/internal/domain/messages"
@@ -16,8 +15,8 @@ func NewMessageRepository(db *DBAdapter) *MessageRepository {
 	return &MessageRepository{db: db}
 }
 
+// i should name this createmessage later for more clarity
 func (r *MessageRepository) Create(ctx context.Context, m messages.Message) (*messages.Message, error) {
-	//  pgtype to handle the nullable pointers from domain
 	var pID, rID pgtype.Int8
 
 	if m.ProjectID != nil {
@@ -28,20 +27,23 @@ func (r *MessageRepository) Create(ctx context.Context, m messages.Message) (*me
 	}
 
 	row := r.db.QueryRow(ctx,
-		`INSERT INTO messages (sender_id, content, project_id, receiver_id)
-		 VALUES ($1, $2, $3, $4)
-		 RETURNING id, created_at`,
+		`WITH inserted AS (
+            INSERT INTO messages (sender_id, content, project_id, receiver_id)
+            VALUES ($1, $2, $3, $4)
+            RETURNING id, sender_id, created_at
+         )
+         SELECT i.id, i.created_at, u.email 
+         FROM inserted i
+         JOIN users u ON i.sender_id = u.id`,
 		m.SenderID, m.Content, pID, rID,
 	)
 
 	var created messages.Message = m
-	var createdAt time.Time
 
-	if err := row.Scan(&created.ID, &createdAt); err != nil {
+	if err := row.Scan(&created.ID, &created.CreatedAt, &created.SenderEmail); err != nil {
 		return nil, err
 	}
 
-	created.CreatedAt = createdAt
 	return &created, nil
 }
 

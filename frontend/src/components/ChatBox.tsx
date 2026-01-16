@@ -4,8 +4,9 @@ import { useChat } from '../hooks/useChat';
 interface Message {
     id: number;
     sender_id: number;
+    sender_email?: string;
     content: string;
-    created_at?: string; // Added timestamp field
+    created_at?: string;
 }
 
 interface ChatBoxProps {
@@ -16,9 +17,30 @@ interface ChatBoxProps {
 export const ChatBox: React.FC<ChatBoxProps> = ({ projectId, token }) => {
     const { messages, setMessages, sendMessage, isConnected } = useChat(token, projectId);
     const [inputValue, setInputValue] = useState("");
-    const messagesEndRef = useRef<HTMLDivElement>(null);
+    // NEW STEP: State to hold the project name
+    const [projectName, setProjectName] = useState<string>("");
 
+    const messagesEndRef = useRef<HTMLDivElement>(null);
     const currentUserId = Number(localStorage.getItem("userId"));
+
+    // NEW STEP: Fetch project details (Name) on load
+    useEffect(() => {
+        const fetchProjectDetails = async () => {
+            try {
+                const response = await fetch(`http://localhost:880/projects/${projectId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (response.ok) {
+                    const project = await response.json();
+                    setProjectName(project.name);
+                }
+            } catch (err) {
+                console.error("Failed to fetch project details:", err);
+            }
+        };
+
+        if (projectId && token) fetchProjectDetails();
+    }, [projectId, token]);
 
     useEffect(() => {
         const fetchHistory = async () => {
@@ -49,7 +71,6 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ projectId, token }) => {
         setInputValue("");
     };
 
-    // Helper to format time
     const formatTime = (dateStr?: string) => {
         if (!dateStr) return "";
         const date = new Date(dateStr);
@@ -59,7 +80,8 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ projectId, token }) => {
     return (
         <div style={styles.container}>
             <div style={styles.header}>
-                <span>Project {projectId} Chat</span>
+
+                <span>{projectName ? projectName : `Project ${projectId}`} Chat</span>
                 <span style={{ color: isConnected ? '#4caf50' : '#f44336' }}>
                     {isConnected ? ' ● Online' : ' ● Offline'}
                 </span>
@@ -85,7 +107,7 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ projectId, token }) => {
                                     ...styles.sender,
                                     color: isMe ? '#e0e0e0' : '#888'
                                 }}>
-                                    {isMe ? "Me" : `User ${m.sender_id}`}
+                                    {isMe ? "Me" : m.sender_email || `User ${m.sender_id}`}
                                 </small>
                                 {time && (
                                     <small style={{ fontSize: '0.6rem', color: isMe ? '#ccc' : '#999' }}>

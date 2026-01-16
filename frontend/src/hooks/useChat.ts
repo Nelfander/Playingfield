@@ -7,6 +7,7 @@ export interface Message {
     receiver_id?: number;
     content: string;
     created_at: string;
+    sender_email?: string;
 }
 
 interface ChatResponse {

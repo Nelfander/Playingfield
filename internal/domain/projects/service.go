@@ -134,3 +134,7 @@ func (s *Service) RemoveUserFromProject(requesterID, projectID, userID int64) er
 
 	return nil
 }
+
+func (s *Service) GetProject(ctx context.Context, id int64) (*Project, error) {
+	return s.repo.GetByID(ctx, id)
+}

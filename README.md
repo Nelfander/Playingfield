@@ -166,6 +166,16 @@ Solution: Added a database unique constraint on (owner_id, name) and return 409 
 
 🛠 Development History
 <details>
+<summary><b>Jan 16, 2026: The Identity & Context Update</b> (Click to expand)</summary>
+
+* **Backend (SQL):** Optimized message retrieval by implementing `JOIN` queries between `messages` and `users` tables to fetch sender emails automatically.
+* **Backend (Live Data):** Refactored the `Create` repository method using a SQL `WITH` clause to return the `sender_email` instantly for real-time WebSocket broadcasting.
+* **Feature:** Added `GET /projects/:id` endpoint and handler to fetch specific project metadata.
+* **UX:** Replaced "User ID" labels with actual "Sender Emails" and updated the chat header to display the **Project Name** instead of a raw ID.
+* **Architecture:** Synchronized TypeScript interfaces across the `ChatBox` and `useChat` hook to ensure type safety for the new `sender_email` field.
+</details>
+
+<details>
 <summary><b>Jan 15, 2026: The Chat & Stability Update</b> (Click to expand)</summary>
 
 * **Feature:** Integrated `ChatBox` with project-specific WebSocket rooms.
