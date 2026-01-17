@@ -17,7 +17,6 @@ import (
 	"github.com/nelfander/Playingfield/internal/interfaces/http"
 	"github.com/nelfander/Playingfield/internal/interfaces/http/handlers"
 	"github.com/nelfander/Playingfield/internal/interfaces/http/middleware"
-	httpMiddleware "github.com/nelfander/Playingfield/internal/interfaces/http/middleware"
 	"github.com/nelfander/Playingfield/pkg/config"
 )
 
@@ -97,7 +96,7 @@ func Run() {
 	}))
 
 	authGroup := e.Group("")
-	authGroup.Use(httpMiddleware.JWTMiddleware(jwtManager))
+	authGroup.Use(middleware.JWTMiddleware(jwtManager))
 	authGroup.GET("/me", userHandler.Me)
 	authGroup.GET("/users", userHandler.List)
 	// DM Chat History: /messages/direct/:other_id
@@ -107,11 +106,10 @@ func Run() {
 
 	// a group for all project-related routes
 	r := e.Group("/projects")
-	r.Use(httpMiddleware.JWTMiddleware(jwtManager))
+	r.Use(middleware.JWTMiddleware(jwtManager))
 
 	// --- Routes ---
 	e.POST("/register", userHandler.Register)
-	e.GET("/me", userHandler.Me, middleware.JWTMiddleware(jwtManager)) //	For account panel
 	e.GET("/admin", userHandler.Admin, middleware.RequireRole(jwtManager, "admin"))
 	e.POST("/users", userHandler.Register) // for now i leave it public to allow user creation
 	e.POST("/login", userHandler.Login)
@@ -119,13 +117,13 @@ func Run() {
 		return c.JSON(stdhttp.StatusOK, map[string]string{"status": "ok"})
 	})
 	// project routes
-	r.POST("", projectHandler.Create)     // /projects
-	r.GET("", projectHandler.List)        // /projects
-	r.GET("/:id", projectHandler.GetByID) // This handles /projects/1, /projects/2, etc.
+	r.POST("", projectHandler.Create)
+	r.GET("", projectHandler.List)
+	r.GET("/:id", projectHandler.GetByID)
 	r.DELETE("/:id", projectHandler.DeleteProject)
-	r.POST("/users", projectHandler.AddUserToProject)        // /projects/users
-	r.GET("/users", projectHandler.ListUsersInProject)       // /projects/users
-	r.DELETE("/users", projectHandler.RemoveUserFromProject) // /projects/users
+	r.POST("/users", projectHandler.AddUserToProject)
+	r.GET("/users", projectHandler.ListUsersInProject)
+	r.DELETE("/users", projectHandler.RemoveUserFromProject)
 	// Project Chat History: /projects/:id/messages
 	r.GET("/:id/messages", chatHandler.GetProjectHistory)
 

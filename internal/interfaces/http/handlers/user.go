@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 
 	"github.com/labstack/echo/v4"
@@ -35,28 +34,21 @@ func NewUserHandler(service user.Service, auth *auth.JWTManager) *UserHandler {
 func (h *UserHandler) Register(c echo.Context) error {
 	var req dto.RegisterUserRequest
 	if err := c.Bind(&req); err != nil {
-		fmt.Println("Bind error:", err)
 		return c.JSON(http.StatusBadRequest, echo.Map{"error": "invalid request"})
 	}
 
-	fmt.Println("Register request:", req.Email)
-
 	hash, err := auth.HashPassword(req.Password)
 	if err != nil {
-		fmt.Println("HashPassword error:", err)
 		return c.JSON(http.StatusInternalServerError, echo.Map{"error": "failed to hash password"})
 	}
 
 	u, err := h.service.RegisterUser(c.Request().Context(), req.Email, hash)
 	if err != nil {
-		fmt.Println("RegisterUser error:", err)
 		if err == user.ErrUserAlreadyExists {
 			return c.JSON(http.StatusConflict, echo.Map{"error": "user already exists"})
 		}
 		return c.JSON(http.StatusInternalServerError, echo.Map{"error": "internal error"})
 	}
-
-	fmt.Println("User created:", u.Email)
 
 	resp := dto.UserResponse{
 		ID:        u.ID,

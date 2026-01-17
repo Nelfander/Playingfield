@@ -2,7 +2,8 @@ import { useState } from "react";
 import ProjectList from "./components/ProjectList";
 import LoginForm from "./components/LoginForm";
 import CreateProjectModal from "./components/CreateProjectModal";
-import { ChatBox } from "./components/ChatBox"; // <-- Import the ChatBox
+import { ChatBox } from "./components/ChatBox";
+import { DirectMessageBox } from "./components/DirectMessageBox";
 import { type UserInProject } from "./components/ProjectUsers";
 import "./App.css";
 
@@ -22,8 +23,12 @@ function App() {
   const [projectUsersMap, setProjectUsersMap] = useState<Record<number, UserInProject[]>>({});
   const [showTasksMap, setShowTasksMap] = useState<Record<number, boolean>>({});
 
-  // NEW: Track which project chat is open
+  // Track which project chat is open
   const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
+
+  // Track which direct message conversation is open
+  const [selectedDMUserId, setSelectedDMUserId] = useState<number | null>(null);
+  const [selectedDMUserEmail, setSelectedDMUserEmail] = useState<string>("");
 
   const token = localStorage.getItem("token");
   const currentUserId = Number(localStorage.getItem("userId")) || 0;
@@ -47,6 +52,7 @@ function App() {
       setShowProjects(false);
       setProjects([]);
       setSelectedProjectId(null); // Close chat if hiding projects
+      setSelectedDMUserId(null); // Close DM if hiding projects
     } else {
       await fetchProjects();
       setShowProjects(true);
@@ -170,6 +176,13 @@ function App() {
     } catch (err) { console.error(err); }
   }
 
+  // Handler to start a direct message conversation
+  function handleStartDM(userId: number, userEmail: string) {
+    setSelectedDMUserId(userId);
+    setSelectedDMUserEmail(userEmail);
+    setSelectedProjectId(null); // Close project chat if open
+  }
+
   return (
     <div className="app-container">
       {!token ? (
@@ -212,14 +225,27 @@ function App() {
               onUserRemoved={handleLiveUserRemoved}
               // Pass a way to select a project for chat
               onSelectProject={(id) => setSelectedProjectId(id)}
+              // Pass a way to start a direct message
+              onStartDM={handleStartDM}
             />
           </div>
 
-          {/* Right Side: Chat (Only shows if a project is selected) */}
+          {/* Right Side: Chat (Project Chat or Direct Message) */}
           {selectedProjectId && (
             <div className="chat-sidebar">
               <button onClick={() => setSelectedProjectId(null)} style={{ marginBottom: '10px' }}>Close Chat</button>
               <ChatBox projectId={selectedProjectId} token={token} />
+            </div>
+          )}
+
+          {selectedDMUserId && (
+            <div className="chat-sidebar">
+              <button onClick={() => setSelectedDMUserId(null)} style={{ marginBottom: '10px' }}>Close Chat</button>
+              <DirectMessageBox
+                otherUserId={selectedDMUserId}
+                otherUserEmail={selectedDMUserEmail}
+                token={token!}
+              />
             </div>
           )}
 

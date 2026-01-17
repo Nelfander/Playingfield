@@ -166,6 +166,15 @@ Solution: Added a database unique constraint on (owner_id, name) and return 409 
 
 🛠 Development History
 <details>
+<summary><b>Jan 17, 2026: Tooling & Private Messaging Update</b> (Click to expand)</summary>
+
+* **Fix (UX):** Resolved an issue where the `ChatBox` would trigger an outer page scroll on new messages by switching from `scrollIntoView` to direct `scrollTop` container manipulation.
+* **Feature:** Implemented **Direct Messaging (1-on-1)** between project members.
+* **Frontend:** Created `DirectMessageBox` and `useDirectChat` hook to handle private WebSocket events and history fetching for 1-on-1 conversations.
+* **Architecture:** Updated `ProjectList` and `App.tsx` to support toggling between Project-wide chat and Private Member chat without visual conflicts.
+</details>
+
+<details>
 <summary><b>Jan 16, 2026: The Identity & Context Update</b> (Click to expand)</summary>
 
 * **Backend (SQL):** Optimized message retrieval by implementing `JOIN` queries between `messages` and `users` tables to fetch sender emails automatically.

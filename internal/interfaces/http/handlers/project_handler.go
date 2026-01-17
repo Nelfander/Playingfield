@@ -100,7 +100,11 @@ func (h *ProjectHandler) DeleteProject(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, echo.Map{"error": "Invalid project ID"})
 	}
 
-	userID := c.Get("user_id").(int64)
+	claims, ok := c.Get("user").(*auth.Claims)
+	if !ok || claims == nil {
+		return c.JSON(http.StatusUnauthorized, echo.Map{"error": "unauthorized"})
+	}
+	userID := claims.UserID
 
 	err = h.service.DeleteProject(c.Request().Context(), projectID, userID)
 	if err != nil {
@@ -151,10 +155,16 @@ func (h *ProjectHandler) ListUsersInProject(c echo.Context) error {
 
 	var resp []UserResponse
 	for _, u := range users {
+		roleStr := ""
+		if u.Role != nil {
+			if str, ok := u.Role.(string); ok {
+				roleStr = str
+			}
+		}
 		resp = append(resp, UserResponse{
 			ID:    u.ID,
 			Email: u.Email,
-			Role:  u.Role.String,
+			Role:  roleStr,
 		})
 	}
 
@@ -173,11 +183,11 @@ func (h *ProjectHandler) RemoveUserFromProject(c echo.Context) error {
 		return c.JSON(400, map[string]string{"error": "invalid request"})
 	}
 
-	requesterIDInterface := c.Get("user_id")
-	if requesterIDInterface == nil {
-		return c.JSON(401, map[string]string{"error": "unauthorized"})
+	claims, ok := c.Get("user").(*auth.Claims)
+	if !ok || claims == nil {
+		return c.JSON(http.StatusUnauthorized, echo.Map{"error": "unauthorized"})
 	}
-	requesterID := requesterIDInterface.(int64)
+	requesterID := claims.UserID
 
 	err := h.service.RemoveUserFromProject(requesterID, req.ProjectID, req.UserID)
 	if err != nil {

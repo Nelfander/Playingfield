@@ -1,51 +1,26 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useChat } from '../hooks/useChat';
+import { useDirectChat } from '../hooks/useDirectChat';
 
-interface Message {
-    id: number;
-    sender_id: number;
-    sender_email?: string;
-    content: string;
-    created_at?: string;
-}
-
-interface ChatBoxProps {
-    projectId: number;
+interface DirectMessageBoxProps {
+    otherUserId: number;
+    otherUserEmail: string;
     token: string;
 }
 
-export const ChatBox: React.FC<ChatBoxProps> = ({ projectId, token }) => {
-    const { messages, setMessages, sendMessage, isConnected } = useChat(token, projectId);
+export const DirectMessageBox: React.FC<DirectMessageBoxProps> = ({
+    otherUserId,
+    otherUserEmail,
+    token
+}) => {
+    const { messages, setMessages, sendMessage, isConnected } = useDirectChat(token, otherUserId);
     const [inputValue, setInputValue] = useState("");
-    // NEW STEP: State to hold the project name
-    const [projectName, setProjectName] = useState<string>("");
-
     const messageListRef = useRef<HTMLDivElement>(null);
     const currentUserId = Number(localStorage.getItem("userId"));
-
-    // NEW STEP: Fetch project details (Name) on load
-    useEffect(() => {
-        const fetchProjectDetails = async () => {
-            try {
-                const response = await fetch(`http://localhost:880/projects/${projectId}`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                if (response.ok) {
-                    const project = await response.json();
-                    setProjectName(project.name);
-                }
-            } catch (err) {
-                console.error("Failed to fetch project details:", err);
-            }
-        };
-
-        if (projectId && token) fetchProjectDetails();
-    }, [projectId, token]);
 
     useEffect(() => {
         const fetchHistory = async () => {
             try {
-                const response = await fetch(`http://localhost:880/projects/${projectId}/messages`, {
+                const response = await fetch(`http://localhost:880/messages/direct/${otherUserId}`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 if (response.ok) {
@@ -53,13 +28,13 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ projectId, token }) => {
                     setMessages(history || []);
                 }
             } catch (err) {
-                console.error("Failed to load history:", err);
+                console.error("Failed to load DM history:", err);
                 setMessages([]);
             }
         };
 
-        if (projectId && token) fetchHistory();
-    }, [projectId, token, setMessages]);
+        if (otherUserId && token) fetchHistory();
+    }, [otherUserId, token, setMessages]);
 
     useEffect(() => {
         const container = messageListRef.current;
@@ -70,7 +45,7 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ projectId, token }) => {
 
     const handleSend = () => {
         if (!inputValue.trim()) return;
-        sendMessage(inputValue, 'project_chat', projectId);
+        sendMessage(inputValue, otherUserId);
         setInputValue("");
     };
 
@@ -83,8 +58,7 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ projectId, token }) => {
     return (
         <div style={styles.container}>
             <div style={styles.header}>
-
-                <span>{projectName ? projectName : `Project ${projectId}`} Chat</span>
+                <span>Chat with {otherUserEmail}</span>
                 <span style={{ color: isConnected ? '#4caf50' : '#f44336' }}>
                     {isConnected ? ' ● Online' : ' ● Offline'}
                 </span>
@@ -110,7 +84,7 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ projectId, token }) => {
                                     ...styles.sender,
                                     color: isMe ? '#e0e0e0' : '#888'
                                 }}>
-                                    {isMe ? "Me" : m.sender_email || `User ${m.sender_id}`}
+                                    {isMe ? "Me" : otherUserEmail}
                                 </small>
                                 {time && (
                                     <small style={{ fontSize: '0.6rem', color: isMe ? '#ccc' : '#999' }}>

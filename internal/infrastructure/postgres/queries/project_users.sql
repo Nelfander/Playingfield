@@ -8,9 +8,16 @@ DELETE FROM project_users
 WHERE project_id = $1 AND user_id = $2;
 
 -- name: ListUsersInProject :many
-SELECT u.id, u.email, pu.role
+SELECT 
+    u.id, 
+    u.email, 
+    CASE 
+        WHEN p.owner_id = u.id THEN 'owner'::text
+        ELSE pu.role
+    END AS role
 FROM users u
 JOIN project_users pu ON u.id = pu.user_id
+JOIN projects p ON pu.project_id = p.id
 WHERE pu.project_id = $1;
 
 -- name: CheckSharedProject :one

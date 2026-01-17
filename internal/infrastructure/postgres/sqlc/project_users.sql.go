@@ -57,16 +57,23 @@ func (q *Queries) CheckSharedProject(ctx context.Context, arg CheckSharedProject
 }
 
 const listUsersInProject = `-- name: ListUsersInProject :many
-SELECT u.id, u.email, pu.role
+SELECT 
+    u.id, 
+    u.email, 
+    CASE 
+        WHEN p.owner_id = u.id THEN 'owner'::text
+        ELSE pu.role
+    END AS role
 FROM users u
 JOIN project_users pu ON u.id = pu.user_id
+JOIN projects p ON pu.project_id = p.id
 WHERE pu.project_id = $1
 `
 
 type ListUsersInProjectRow struct {
 	ID    int64
 	Email string
-	Role  pgtype.Text
+	Role  interface{}
 }
 
 func (q *Queries) ListUsersInProject(ctx context.Context, projectID int64) ([]ListUsersInProjectRow, error) {

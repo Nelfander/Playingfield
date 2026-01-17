@@ -26,6 +26,7 @@ interface ProjectListProps {
     onProjectCreated: () => void;
     onUserRemoved: (projectId: number, userId: number) => void;
     onSelectProject: (projectId: number) => void;
+    onStartDM: (userId: number, userEmail: string) => void;
 }
 
 const ProjectList: React.FC<ProjectListProps> = ({
@@ -42,7 +43,8 @@ const ProjectList: React.FC<ProjectListProps> = ({
     onUserAdded,
     onProjectCreated,
     onUserRemoved,
-    onSelectProject
+    onSelectProject,
+    onStartDM
 }) => {
     const [showInfoMap, setShowInfoMap] = useState<Record<number, boolean>>({});
     const token = localStorage.getItem('token');
@@ -160,6 +162,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                     <ProjectUsers
                                         users={projectUsersMap[project.id]}
                                         onRemove={isOwner ? (uId) => removeUser(project.id, uId) : undefined}
+                                        onMessage={onStartDM}
                                     />
 
                                     {isOwner && (
