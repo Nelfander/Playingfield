@@ -132,34 +132,19 @@ Invoke-RestMethod -Method GET -Uri http://localhost:880/projects -Headers @{ Aut
 
   * Added **debug logging** in handlers to print real errors to server console.
   * Ensured handler returns **specific HTTP status codes** (`400`, `401`, `409`) with JSON error bodies.
-
   
 ### 5. The "Vanishing List" Bug
-Issue: WebSocket updates triggered a UI toggle, closing the project list.
+* **Issue:** WebSocket updates triggered a UI toggle, closing the project list.
+* **Solution:** Separated fetchProjects logic from the showProjects toggle state, allowing background refreshes without affecting UI visibility.
 
-Solution: Separated fetchProjects logic from the showProjects toggle state, allowing background refreshes without affecting UI visibility.
-
-### 6. Users created with empty role/status
-Issue: Old rows in Neon had role="", breaking login and JWT logic.
-
-Solution: Set default values in DB (role='user', status='active') and updated SQLC queries.
-
-### 7. Duplicate project names
-Issue: No enforcement of per-user uniqueness.
-
-Solution: Added a database unique constraint on (owner_id, name) and return 409 Conflict.
-
-### 8. The "Room 0" Connection Spam
+### 6. The "Room 0" Connection Spam
 * **Issue:** Components re-rendering caused the WebSocket hook to reconnect multiple times, flooding the server with "User joined Room 0" warnings.
 * **Solution:** Implemented `useRef` to maintain a stable socket connection and a **cleanup function** to close old sockets before new ones open. Added a "connection lock" to prevent React Strict Mode from double-connecting.
 
-### 9. The "Null Map" Crash
+### 7. The "Null Map" Crash
 * **Issue:** Fetching chat history for a brand-new project returned `null`, causing the frontend `.map()` function to crash the app.
 * **Solution:** Implemented "Guard Clauses" in the frontend (`history || []`) and ensured the Go backend initializes empty slices instead of returning nil.
 
-### 10. Duplicate project names
-* **Issue:** No enforcement of per-user uniqueness.
-* **Solution:** Added a database unique constraint on `(owner_id, name)` and return a `409 Conflict` error if a user tries to reuse a name.
 
 ---------------
 </details>
@@ -241,7 +226,44 @@ JWT Claims: Security checks enforced using role-based claims within the JWT.
 
 </details>
 
-<details> <summary> <b> # WebSocket Integration Testing </b> (Click to expand) </summary>
+
+## 🧪 Testing  (Will add all of the tests here in the future)
+
+The project utilizes Go's native testing toolchain and testify/assert to validate system integrity. I'm using Fake Repositories to ensure tests are fast and run without a live database.
+
+<details> <summary> <b> Middleware & Security Testing </b> (Click to expand) </summary>
+
+This suite verifies that the security layers correctly identify users and enforce access rules.
+
+### What it tests:
+1. **Authentication (JWT)**: Ensures the JWTMiddleware correctly extracts and validates tokens from the Authorization header.
+2. **Context Injection**: Verifies that user claims (ID, Email, Role) are correctly injected into the Echo context for use by handlers.
+3. **RBAC (Role-Based Access Control)**: Validates that the RequireRole middleware allows admin access while returning 403 Forbidden for standard users.
+4. **Failure Handling**: Ensures malformed tokens or missing headers result in proper 401 Unauthorized responses.
+
+### Files:
+
+# internal/interfaces/http/middleware/test/required_role_test.go
+# internal/interfaces/http/tests/auth_middleware_test.go
+</details>
+
+<details> <summary> <b> API Handler & Integration Testing </b> (Click to expand) </summary> 
+These tests verify the "Social" integration between the HTTP layer, Business Services, and the Repository.
+
+### What it tests:
+1. **User Registration**: Validates the flow from JSON request to the hashing of passwords and final storage.
+2. **Login Logic**: Verifies that the system correctly checks credentials and account status (active vs. inactive).
+3. **Repository Interfacing**: Uses a FakeRepository to simulate database behavior (auto-incrementing IDs, duplicate email checks) in memory.
+4. **Data Integrity**: Ensures that the /me endpoint correctly retrieves the authenticated user's profile information.
+
+### Usage:
+1. Run all backend integration tests using:
+   ```bash
+   go test ./internal/interfaces/http/tests/... -v
+   
+</details>
+
+<details> <summary> <b> WebSocket Integration Testing </b> (Click to expand) </summary>
 
 This directory contains utility scripts to verify the real-time communication engine of the Playingfield API.
 
@@ -263,19 +285,6 @@ This script performs a full end-to-end integration test of the WebSocket flow. I
 3. Run the script:
    ```bash
    go run scripts/test_chat.go
-
-</details>
-
-## 🧪 Testing Suite (Will add all of the tests here in the future)
-
-<details> <summary><b>Testing!</b> (Click to expand)</summary>
-
-We use Go's native testing tool combined with custom integration scripts:
-
-1. **Integration Tests (WebSockets):**
-   ```bash
-   go run scripts/test_chat.go
-
 
 </details>
 

@@ -18,6 +18,7 @@ import (
 )
 
 // setupHandler returns both the UserHandler and the underlying FakeRepository
+// clean way to get empty FakeRepository for every test so that one test doesnt affect another
 func setupHandler() (*handlers.UserHandler, *user.FakeRepository) {
 	fakeRepo := user.NewFakeRepository()
 	service := user.NewService(fakeRepo)
@@ -48,13 +49,14 @@ func TestUserLogin(t *testing.T) {
 	handler, fakeRepo := setupHandler()
 	e := echo.New()
 
-	// Prepare user manually in fake repo
+	// hash password manually to append in fake repo
 	password := "supersecret"
 	hashed, err := auth.HashPassword(password)
 	if err != nil {
 		t.Fatal(err)
 	}
 
+	// append user to fake repo
 	fakeRepo.Users = append(fakeRepo.Users, user.User{
 		Email:        "login@example.com",
 		PasswordHash: hashed,
@@ -99,7 +101,6 @@ func TestUserLogin_InactiveAccount(t *testing.T) {
 	handler, fakeRepo := setupHandler()
 	e := echo.New()
 
-	// Insert inactive user
 	password := "secret"
 	hashed, err := auth.HashPassword(password)
 	if err != nil {
@@ -113,7 +114,6 @@ func TestUserLogin_InactiveAccount(t *testing.T) {
 		Status:       "inactive",
 	})
 
-	// Attempt login
 	loginBody := `{"email":"inactive@example.com","password":"secret"}`
 	reqLogin := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(loginBody))
 	reqLogin.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
@@ -162,7 +162,7 @@ func TestMeEndpoint(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rec.Code)
 
 	var resp dto.UserResponse
-	json.Unmarshal(rec.Body.Bytes(), &resp)
+	assert.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
 	assert.Equal(t, "me@example.com", resp.Email)
 	assert.Equal(t, "user", resp.Role)
 	assert.Equal(t, "active", resp.Status)

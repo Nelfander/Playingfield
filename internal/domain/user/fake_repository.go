@@ -24,7 +24,7 @@ func (f *FakeRepository) Create(ctx context.Context, u User) (*User, error) {
 			return nil, ErrUserAlreadyExists
 		}
 	}
-
+	// simulate how a db handles primary keys
 	u.ID = int64(len(f.Users) + 1)
 
 	if u.Role == "" {
