@@ -55,7 +55,7 @@ func Run() {
 
 	// Projects repo + service
 	projectsRepo := postgres.NewProjectRepository(db)
-	projectsService := projects.NewService(projectsRepo, queries, hub)
+	projectsService := projects.NewService(projectsRepo, hub)
 	projectHandler := handlers.NewProjectHandler(projectsService)
 
 	// --- Chat/Messages logic ---

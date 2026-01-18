@@ -70,7 +70,7 @@ func (h *ProjectHandler) Create(c echo.Context) error {
 	if req.AssignedUserID != "" {
 		targetUserID, parseErr := strconv.ParseInt(req.AssignedUserID, 10, 64)
 		if parseErr == nil {
-			_, _ = h.service.AddUserToProject(project.ID, targetUserID, "member")
+			_ = h.service.AddUserToProject(c.Request().Context(), project.ID, targetUserID, "member")
 		}
 	}
 
@@ -108,7 +108,7 @@ func (h *ProjectHandler) DeleteProject(c echo.Context) error {
 
 	err = h.service.DeleteProject(c.Request().Context(), projectID, userID)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, echo.Map{"error": "Failed to delete project"})
+		return c.JSON(http.StatusForbidden, echo.Map{"error": "You do not have permission to delete this project"})
 	}
 
 	return c.NoContent(http.StatusNoContent)
@@ -120,12 +120,12 @@ func (h *ProjectHandler) AddUserToProject(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request"})
 	}
 
-	projectUser, err := h.service.AddUserToProject(req.ProjectID, req.UserID, req.Role)
+	err := h.service.AddUserToProject(c.Request().Context(), req.ProjectID, req.UserID, req.Role)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
 
-	return c.JSON(http.StatusOK, ProjectUserToResponse(projectUser))
+	return c.JSON(http.StatusOK, map[string]string{"message": "User added successfully"})
 }
 
 func (h *ProjectHandler) ListUsersInProject(c echo.Context) error {
@@ -141,7 +141,7 @@ func (h *ProjectHandler) ListUsersInProject(c echo.Context) error {
 	}
 
 	// call the service
-	users, err := h.service.ListUsersInProject(projectID)
+	users, err := h.service.ListUsersInProject(c.Request().Context(), projectID)
 	if err != nil {
 		return c.JSON(500, map[string]string{"error": err.Error()})
 	}

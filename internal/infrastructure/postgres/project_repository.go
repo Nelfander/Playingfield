@@ -5,14 +5,19 @@ import (
 	"time"
 
 	"github.com/nelfander/Playingfield/internal/domain/projects"
+	"github.com/nelfander/Playingfield/internal/infrastructure/postgres/sqlc"
 )
 
 type ProjectRepository struct {
-	db *DBAdapter
+	db      *DBAdapter
+	queries *sqlc.Queries
 }
 
 func NewProjectRepository(db *DBAdapter) *ProjectRepository {
-	return &ProjectRepository{db: db}
+	return &ProjectRepository{
+		db:      db,
+		queries: sqlc.New(db),
+	}
 }
 
 func (r *ProjectRepository) Create(ctx context.Context, p projects.Project) (*projects.Project, error) {
@@ -80,20 +85,24 @@ func (r *ProjectRepository) GetAllByOwner(ctx context.Context, ownerID int64) ([
 }
 
 func (r *ProjectRepository) GetByID(ctx context.Context, id int64) (*projects.Project, error) {
-	row := r.db.QueryRow(ctx,
-		`SELECT id, name, description, owner_id, created_at
-         FROM projects
-         WHERE id = $1`,
-		id,
-	)
-
-	var p projects.Project
-	var createdAt time.Time
-	if err := row.Scan(&p.ID, &p.Name, &p.Description, &p.OwnerID, &createdAt); err != nil {
+	res, err := r.queries.GetProjectByID(ctx, id)
+	if err != nil {
 		return nil, err
 	}
-	p.CreatedAt = createdAt
-	return &p, nil
+
+	// MAP: Convert SQLC types to Domain types
+	return &projects.Project{
+		ID:   res.ID,
+		Name: res.Name,
+
+		// pgtype.Text -> string
+		Description: res.Description.String,
+
+		OwnerID: res.OwnerID,
+
+		// pgtype.Timestamp/Timestamptz -> time.Time
+		CreatedAt: res.CreatedAt.Time,
+	}, nil
 }
 
 func (r *ProjectRepository) DeleteProject(ctx context.Context, id int64, ownerID int64) error {
@@ -102,4 +111,23 @@ func (r *ProjectRepository) DeleteProject(ctx context.Context, id int64, ownerID
 		id, ownerID,
 	)
 	return err
+}
+
+func (r *ProjectRepository) AddUserToProject(ctx context.Context, projectID int64, userID int64, role string) error {
+	_, err := r.db.Exec(ctx,
+		`INSERT INTO project_users (project_id, user_id, role) VALUES ($1, $2, $3)`,
+		projectID, userID, role,
+	)
+	return err
+}
+
+func (r *ProjectRepository) RemoveUserFromProject(ctx context.Context, projectID int64, userID int64) error {
+	return r.queries.RemoveUserFromProject(ctx, sqlc.RemoveUserFromProjectParams{
+		ProjectID: projectID,
+		UserID:    userID,
+	})
+}
+
+func (r *ProjectRepository) ListUsers(ctx context.Context, projectID int64) ([]sqlc.ListUsersInProjectRow, error) {
+	return r.queries.ListUsersInProject(ctx, projectID)
 }

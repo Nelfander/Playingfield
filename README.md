@@ -80,22 +80,21 @@ Invoke-RestMethod -Method GET -Uri http://localhost:880/projects -Headers @{ Aut
 ```
 
 ---
-</details
->
-## Code Structure
+</details>
+
+
 <details>
-<summary><b>Code</b> (Click to expand)</summary>
+<summary><b>Code Structure</b> (Click to expand)</summary>
 * `internal/domain/user` – domain model, repository interfaces.
 * `internal/domain/projects` – project domain, service, repository interface.
 * `internal/infrastructure/postgres` – SQLC-based repository implementation, DB adapter.
 * `cmd/server` – Echo server initialization and routing.
 
 ---
-</details
->
-## Known Issues & How I Solved Them
+</details>
+
 <details>
-<summary><b>Issues</b> (Click to expand)</summary>
+<summary><b>Known Issues & How I Solved Them</b> (Click to expand)</summary>
 
 ### 1. Users created with empty role/status
 
@@ -149,7 +148,16 @@ Invoke-RestMethod -Method GET -Uri http://localhost:880/projects -Headers @{ Aut
 ---------------
 </details>
 
-🛠 Development History
+🛠 <b>Development History</b>
+<details>
+<summary><b>Jan 18, 2026: Key Architectural Achievements in Testing</b> (Click to expand)</summary>
+
+* **Decoupled Architecture:** Refactored the Service layer to depend on a Repository interface, allowing for FakeRepository implementations that eliminate the need for a live database during test execution.
+* **Dependency Inversion:** Successfully moved from concrete sqlc.Queries dependencies to abstract interfaces, preventing nil pointer panics and making the codebase "unit-testable."
+* **Context Propagation:** Implemented context.Context throughout the stack to ensure request cancellation and timeouts are respected from the HTTP layer down to the database.
+* **Middleware Validation:** Integrated tests for JWT Authentication and Role-Based Access Control (RBAC) to ensure protected routes are only accessible by authorized users.
+</details>
+
 <details>
 <summary><b>Jan 17, 2026: Tooling & Private Messaging Update</b> (Click to expand)</summary>
 
@@ -243,8 +251,8 @@ This suite verifies that the security layers correctly identify users and enforc
 
 ### Files:
 
-# internal/interfaces/http/middleware/test/required_role_test.go
-# internal/interfaces/http/tests/auth_middleware_test.go
+ internal/interfaces/http/middleware/test/required_role_test.go
+ internal/interfaces/http/tests/auth_middleware_test.go
 </details>
 
 <details> <summary> <b> API Handler & Integration Testing </b> (Click to expand) </summary> 
@@ -287,6 +295,27 @@ This script performs a full end-to-end integration test of the WebSocket flow. I
    go run scripts/test_chat.go
 
 </details>
+
+<details> <summary> <b> Project Management & Domain Testing </b> (Click to expand) </summary>
+
+This suite validates the project lifecycle and ensures that resource ownership is strictly enforced at the service level.
+
+### What it tests:
+1. **Ownership Enforcement**: Verifies that the DeleteProject and RemoveUserFromProject actions correctly identify the requester and block unauthorized users with appropriate errors.
+2. **Automated Provisioning**: Ensures that when a project is created, the system automatically assigns the creator as the "Owner" and sets up initial permissions.
+3. **Repository Abstraction**: Utilizes a fully implemented FakeRepository to simulate complex database operations (like fetching project details and verifying ownership) without requiring a Postgres instance.
+4. **Clean Architecture Mapping**: Validates that data is correctly translated from infrastructure-specific types (like pgtype.Text) into clean Domain models before reaching the HTTP layer.
+5. **Real-time Event Triggers**: Checks that successful project modifications (creation, deletion, or adding members) correctly trigger broadcasts to the WebSocket Hub.
+
+### Files:
+internal/interfaces/http/tests/project_handler_test.go
+internal/domain/projects/fake_repository.go
+
+###Usage:
+1. Run all project-related tests:  
+   ```bash
+   go test ./internal/interfaces/http/tests/ -v -run Project
+
 
 
 ## Architecture & Flow Diagram
