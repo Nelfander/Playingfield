@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/labstack/echo/v4"
 	"github.com/nelfander/Playingfield/internal/domain/projects"
 	"github.com/nelfander/Playingfield/internal/infrastructure/auth"
@@ -121,4 +122,59 @@ func TestDeleteProject_Security(t *testing.T) {
 	}
 	savedProject, _ := fakeRepo.GetByID(context.Background(), p.ID)
 	assert.NotNil(t, savedProject, "The project should not have been deleted!")
+}
+
+func TestAddUserToProject(t *testing.T) {
+	handler, fakeRepo := setupProjectHandler()
+	e := echo.New()
+
+	// Create a project owned by User 100
+	ownerID := int64(100)
+	targetUserID := int64(200)
+	p, _ := fakeRepo.Create(context.Background(), projects.Project{
+		Name:    "Collab Project",
+		OwnerID: ownerID,
+	})
+
+	//  Prepare the JSON payload to add User 200 as a "member"
+	input := map[string]interface{}{
+		"project_id": p.ID,
+		"user_id":    targetUserID,
+		"role":       "member",
+	}
+	body, _ := json.Marshal(input)
+
+	req := httptest.NewRequest(http.MethodPost, "/projects/members", strings.NewReader(string(body)))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	// Mock Authentication: The owner is the one performing the action
+	claims := &auth.Claims{UserID: ownerID}
+	c.Set("user", claims)
+
+	// Execute the handler
+	if assert.NoError(t, handler.AddUserToProject(c)) {
+		assert.Equal(t, http.StatusOK, rec.Code)
+
+		// Check if the message in the response is what we expect
+		var resp map[string]string
+		json.Unmarshal(rec.Body.Bytes(), &resp)
+		assert.Equal(t, "User added successfully", resp["message"])
+	}
+
+	members, _ := fakeRepo.ListUsers(context.Background(), p.ID)
+
+	assert.Equal(t, 1, len(members), "There should be exactly one member added")
+	assert.Equal(t, targetUserID, members[0].ID)
+	row := members[0]
+
+	roleText, ok := row.Role.(pgtype.Text)
+	if ok {
+		assert.Equal(t, "member", roleText.String)
+	} else {
+		// If it's already a string (sometimes pgx does this)
+		assert.Equal(t, "member", row.Role)
+	}
+
 }

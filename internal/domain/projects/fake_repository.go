@@ -5,16 +5,28 @@ import (
 	"errors"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/nelfander/Playingfield/internal/infrastructure/postgres/sqlc"
 )
 
+type projectUserEntry struct {
+	ProjectID int64
+	UserID    int64
+	Role      string
+}
+
 type FakeRepository struct {
-	projects []Project
-	nextID   int64
+	projects     []Project
+	projectUsers []projectUserEntry
+	nextID       int64
 }
 
 func NewFakeRepository() *FakeRepository {
-	return &FakeRepository{nextID: 1}
+	return &FakeRepository{
+		nextID:       1,
+		projects:     []Project{},
+		projectUsers: []projectUserEntry{},
+	}
 }
 
 func (f *FakeRepository) Create(ctx context.Context, p Project) (*Project, error) {
@@ -56,7 +68,18 @@ func (f *FakeRepository) DeleteProject(ctx context.Context, id int64, ownerID in
 	return errors.New("project not found")
 }
 
-func (f *FakeRepository) AddUserToProject(ctx context.Context, userID int64, projectID int64, role string) error {
+func (f *FakeRepository) AddUserToProject(ctx context.Context, projectID int64, userID int64, role string) error {
+	// Optional: Check if project exists first to be realistic
+	_, err := f.GetByID(ctx, projectID)
+	if err != nil {
+		return err
+	}
+
+	f.projectUsers = append(f.projectUsers, projectUserEntry{
+		ProjectID: projectID,
+		UserID:    userID,
+		Role:      role,
+	})
 	return nil
 }
 
@@ -66,6 +89,16 @@ func (f *FakeRepository) RemoveUserFromProject(ctx context.Context, projectID in
 	return nil
 }
 func (f *FakeRepository) ListUsers(ctx context.Context, projectID int64) ([]sqlc.ListUsersInProjectRow, error) {
-	// Return an empty list for now so tests don't break
-	return []sqlc.ListUsersInProjectRow{}, nil
+	var res []sqlc.ListUsersInProjectRow
+	for _, pu := range f.projectUsers {
+		if pu.ProjectID == projectID {
+			// We map our fake entry to the SQLC row type
+			res = append(res, sqlc.ListUsersInProjectRow{
+				ID:   pu.UserID,
+				Role: pgtype.Text{String: pu.Role, Valid: true},
+				// You can leave Email/Name empty or fake them too
+			})
+		}
+	}
+	return res, nil
 }

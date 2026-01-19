@@ -150,6 +150,14 @@ Invoke-RestMethod -Method GET -Uri http://localhost:880/projects -Headers @{ Aut
 
 🛠 <b>Development History</b>
 <details>
+<summary><b>Jan 19, 2026: Project Membership & State Verification Testing</b> (Click to expand)</summary>
+- Upgraded FakeRepository to track project-user relationships in-memory
+- Added TestAddUserToProject with deep verification of repository state
+- Implemented ListUsers in FakeRepository to support membership assertions
+- Fixed type assertion issues with SQLC-generated pgtype.Text fields in tests
+</details>
+
+<details>
 <summary><b>Jan 18, 2026: Key Architectural Achievements in Testing</b> (Click to expand)</summary>
 
 * **Decoupled Architecture:** Refactored the Service layer to depend on a Repository interface, allowing for FakeRepository implementations that eliminate the need for a live database during test execution.
@@ -265,6 +273,7 @@ These tests verify the "Social" integration between the HTTP layer, Business Ser
 4. **Data Integrity**: Ensures that the /me endpoint correctly retrieves the authenticated user's profile information.
 
 ### Usage:
+
 1. Run all backend integration tests using:
    ```bash
    go test ./internal/interfaces/http/tests/... -v
@@ -315,6 +324,29 @@ internal/domain/projects/fake_repository.go
 1. Run all project-related tests:  
    ```bash
    go test ./internal/interfaces/http/tests/ -v -run Project
+
+</details>
+
+<details> <summary> <b> Project Membership & State Verification </b> (Click to expand) </summary> 
+
+These tests ensure that project collaboration logic is sound and that data persists correctly through the service layers.
+
+### What it tests:
+1. **Member Invitation**: Validates that a project owner can successfully add new users to a project with specific roles.
+2. **Stateful Mocking**: Uses an upgraded `FakeRepository` that simulates a SQL "Join Table" in-memory, allowing tests to verify that data was actually stored.
+3. **Authorization Context**: Verifies that the system correctly identifies the project owner using JWT claims before allowing membership changes.
+4. **Side-Effect Verification**: Instead of just checking HTTP status codes, these tests perform "Deep Verification" by querying the repository state after the API call.
+
+### Files:
+- `internal/interfaces/http/tests/project_handler_test.go`
+- `internal/domain/projects/fake_repository.go`
+
+### Usage:
+1. Run the specific membership test:
+   ```bash
+   go test ./internal/interfaces/http/tests/ -v -run TestAddUserToProject
+
+</details>
 
 
 
