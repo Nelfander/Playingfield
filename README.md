@@ -150,11 +150,18 @@ Invoke-RestMethod -Method GET -Uri http://localhost:880/projects -Headers @{ Aut
 
 🛠 <b>Development History</b>
 <details>
+<summary><b>Jan 20, 2026: Project Membership & Security Enforcement</b> (Click to expand)</summary>
+* Added TestRemoveUserFromProject to verify successful member deletion
+* Added TestRemoveUserFromProject_Unauthorized to enforce ownership rules
+* Verified data persistence and side-effects using stateful repository checks
+</details>
+
+<details>
 <summary><b>Jan 19, 2026: Project Membership & State Verification Testing</b> (Click to expand)</summary>
-- Upgraded FakeRepository to track project-user relationships in-memory
-- Added TestAddUserToProject with deep verification of repository state
-- Implemented ListUsers in FakeRepository to support membership assertions
-- Fixed type assertion issues with SQLC-generated pgtype.Text fields in tests
+* Upgraded FakeRepository to track project-user relationships in-memory
+* Added TestAddUserToProject with deep verification of repository state
+* Implemented ListUsers in FakeRepository to support membership assertions
+* Fixed type assertion issues with SQLC-generated pgtype.Text fields in tests
 </details>
 
 <details>
