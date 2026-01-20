@@ -83,22 +83,25 @@ func (f *FakeRepository) AddUserToProject(ctx context.Context, projectID int64, 
 	return nil
 }
 
-func (f *FakeRepository) RemoveUserFromProject(ctx context.Context, projectID int64, userID int64) error {
-	// For now, we just return nil to satisfy the interface.
-	// If you ever write a test for "Removing a User", you can add logic here.
-	return nil
-}
 func (f *FakeRepository) ListUsers(ctx context.Context, projectID int64) ([]sqlc.ListUsersInProjectRow, error) {
 	var res []sqlc.ListUsersInProjectRow
 	for _, pu := range f.projectUsers {
 		if pu.ProjectID == projectID {
-			// We map our fake entry to the SQLC row type
 			res = append(res, sqlc.ListUsersInProjectRow{
 				ID:   pu.UserID,
 				Role: pgtype.Text{String: pu.Role, Valid: true},
-				// You can leave Email/Name empty or fake them too
 			})
 		}
 	}
 	return res, nil
+}
+
+func (f *FakeRepository) RemoveUserFromProject(ctx context.Context, projectID int64, userID int64) error {
+	for i, pu := range f.projectUsers {
+		if pu.ProjectID == projectID && pu.UserID == userID {
+			f.projectUsers = append(f.projectUsers[:i], f.projectUsers[i+1:]...)
+			return nil
+		}
+	}
+	return errors.New("user not found in project")
 }

@@ -348,6 +348,26 @@ These tests ensure that project collaboration logic is sound and that data persi
 
 </details>
 
+<details> <summary> <b> Project Membership & Security Enforcement </b> (Click to expand) </summary> 
+
+This suite validates the collaborative lifecycle of projects and ensures that resource modifications are strictly guarded.
+
+### What it tests:
+1. **User Removal**: Verifies that members can be successfully removed from a project, ensuring the "Join Table" state in the repository is updated.
+2. **Unauthorized Access (Sad Path)**: Ensures that users who are NOT the project owner are blocked with a `403 Forbidden` when attempting to modify project membership.
+3. **State Consistency**: Uses "Before-and-After" assertions to verify that data is only deleted when authorized, and remains untouched when a request is rejected.
+4. **Context-Aware Security**: Validates that the handler correctly extracts the requester's identity from JWT claims to make authorization decisions.
+
+### Files:
+- `internal/interfaces/http/tests/project_handler_test.go`
+- `internal/domain/projects/fake_repository.go`
+
+### Usage:
+1. Run all membership security tests:
+   ```bash
+   go test ./internal/interfaces/http/tests/ -v -run Member
+
+</details>
 
 
 ## Architecture & Flow Diagram

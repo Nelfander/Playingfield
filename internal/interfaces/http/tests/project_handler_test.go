@@ -178,3 +178,98 @@ func TestAddUserToProject(t *testing.T) {
 	}
 
 }
+
+func TestRemoveUserFromProject(t *testing.T) {
+	handler, fakeRepo := setupProjectHandler()
+	e := echo.New()
+
+	//  Creates a project and pre-adds a member
+	ownerID := int64(100)
+	targetUserID := int64(200)
+
+	p, _ := fakeRepo.Create(context.Background(), projects.Project{
+		Name:    "Project to Clean Up",
+		OwnerID: ownerID,
+	})
+
+	// manually inject the user into the fake repo so they exist to be removed
+	_ = fakeRepo.AddUserToProject(context.Background(), p.ID, targetUserID, "member")
+
+	// verify the user is actually there before it starts
+	initialMembers, _ := fakeRepo.ListUsers(context.Background(), p.ID)
+	assert.Equal(t, 1, len(initialMembers))
+
+	//  Prepare the delete request
+	input := map[string]interface{}{
+		"project_id": p.ID,
+		"user_id":    targetUserID,
+	}
+	body, _ := json.Marshal(input)
+
+	req := httptest.NewRequest(http.MethodDelete, "/projects/members", strings.NewReader(string(body)))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	// mock authentication: the owner is the one performing the removal
+	claims := &auth.Claims{UserID: ownerID}
+	c.Set("user", claims)
+
+	// Execute the handler
+	if assert.NoError(t, handler.RemoveUserFromProject(c)) {
+		//  response is successful
+		assert.Equal(t, http.StatusOK, rec.Code)
+
+		// check that the fake DB is now empty for this project
+		finalMembers, _ := fakeRepo.ListUsers(context.Background(), p.ID)
+		assert.Equal(t, 0, len(finalMembers), "The member list should be empty after removal")
+	}
+}
+
+func TestRemoveUserFromProject_Unauthorized(t *testing.T) {
+	handler, fakeRepo := setupProjectHandler()
+	e := echo.New()
+
+	ownerID := int64(100)
+	hackerID := int64(666) // The unauthorized user
+	targetUserID := int64(200)
+
+	p, _ := fakeRepo.Create(context.Background(), projects.Project{
+		Name:    "Secure Project",
+		OwnerID: ownerID,
+	})
+
+	// add the user to the project
+	_ = fakeRepo.AddUserToProject(context.Background(), p.ID, targetUserID, "member")
+
+	// "hacker" tries to remove the user
+	input := map[string]interface{}{
+		"project_id": p.ID,
+		"user_id":    targetUserID,
+	}
+	body, _ := json.Marshal(input)
+
+	req := httptest.NewRequest(http.MethodDelete, "/projects/members", strings.NewReader(string(body)))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	//  logged in as the "hacker", not the owner
+	claims := &auth.Claims{UserID: hackerID}
+	c.Set("user", claims)
+
+	// system should reject this
+	err := handler.RemoveUserFromProject(c)
+
+	if err != nil {
+		he, ok := err.(*echo.HTTPError)
+		assert.True(t, ok)
+		assert.Equal(t, http.StatusForbidden, he.Code)
+	} else {
+		assert.Equal(t, http.StatusForbidden, rec.Code)
+	}
+
+	// ensure the user was NOT actually removed from the repo
+	members, _ := fakeRepo.ListUsers(context.Background(), p.ID)
+	assert.Equal(t, 1, len(members), "The user should still be in the project!")
+}
