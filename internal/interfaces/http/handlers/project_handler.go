@@ -70,7 +70,7 @@ func (h *ProjectHandler) Create(c echo.Context) error {
 	if req.AssignedUserID != "" {
 		targetUserID, parseErr := strconv.ParseInt(req.AssignedUserID, 10, 64)
 		if parseErr == nil {
-			_ = h.service.AddUserToProject(c.Request().Context(), project.ID, targetUserID, "member")
+			_ = h.service.AddUserToProject(c.Request().Context(), 0, project.ID, targetUserID, "member")
 		}
 	}
 
@@ -120,8 +120,20 @@ func (h *ProjectHandler) AddUserToProject(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request"})
 	}
 
-	err := h.service.AddUserToProject(c.Request().Context(), req.ProjectID, req.UserID, req.Role)
+	// extract requester's id from the jwt claims set by middleware
+	claims, ok := c.Get("user").(*auth.Claims)
+	if !ok || claims == nil {
+		return c.JSON(http.StatusUnauthorized, echo.Map{"error": "unauthorized"})
+	}
+	requesterID := claims.UserID
+
+	err := h.service.AddUserToProject(c.Request().Context(), requesterID, req.ProjectID, req.UserID, req.Role)
 	if err != nil {
+		//  if authorization error return 403 Forbidden
+		if strings.Contains(err.Error(), "unauthorized") {
+			return c.JSON(http.StatusForbidden, map[string]string{"error": err.Error()})
+		}
+		// otherwise return 500
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
 

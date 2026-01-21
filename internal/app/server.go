@@ -104,7 +104,7 @@ func Run() {
 
 	http.RegisterRoutes(e, userHandler)
 
-	// a group for all project-related routes
+	// a group for all project-related routes w
 	r := e.Group("/projects")
 	r.Use(middleware.JWTMiddleware(jwtManager))
 

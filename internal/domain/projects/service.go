@@ -12,8 +12,7 @@ import (
 
 type Service struct {
 	repo Repository
-	//store *sqlc.Queries
-	hub *ws.Hub
+	hub  *ws.Hub
 }
 
 func (s *Service) ListUsersInProject(ctx context.Context, projectID int64) ([]sqlc.ListUsersInProjectRow, error) {
@@ -84,13 +83,24 @@ func (s *Service) DeleteProject(ctx context.Context, projectID, ownerID int64) e
 	return nil
 }
 
-func (s *Service) AddUserToProject(ctx context.Context, projectID, userID int64, role string) error {
-	err := s.repo.AddUserToProject(ctx, projectID, userID, role)
+func (s *Service) AddUserToProject(ctx context.Context, requesterID, projectID, userID int64, role string) error {
+	project, err := s.repo.GetByID(ctx, projectID)
+	if err != nil {
+		return fmt.Errorf("project not found: %w", err)
+	}
+
+	// only project owner can add members
+	if project.OwnerID != userID {
+		return fmt.Errorf("unauthorized: user %d is not the owner of project %d", userID, projectID)
+	}
+
+	// add the user
+	err = s.repo.AddUserToProject(ctx, userID, projectID, role)
 	if err != nil {
 		return err
 	}
 
-	// Broadcast the change
+	// broadcast the change
 	if s.hub != nil {
 		notification := fmt.Sprintf("USER_ADDED:%d:%d:%s", projectID, userID, role)
 		s.hub.Broadcast <- []byte(notification)

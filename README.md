@@ -144,11 +144,34 @@ Invoke-RestMethod -Method GET -Uri http://localhost:880/projects -Headers @{ Aut
 * **Issue:** Fetching chat history for a brand-new project returned `null`, causing the frontend `.map()` function to crash the app.
 * **Solution:** Implemented "Guard Clauses" in the frontend (`history || []`) and ensured the Go backend initializes empty slices instead of returning nil.
 
+### 8. Testing really helps =D
+* **Issue**: While writing automated tests for "Unauthorized Access," I discovered a security vulnerability. The system allowed *any* logged-in user to add members to *any* project because the service lacked ownership context.
+* **Solution**: 
+    * Updated the Service signature to accept a `requesterID`.
+    * Implemented **Object-Level Authorization**: The service now fetches the project and compares the `OwnerID` against the `requesterID` before performing any mutations.
+    * Fixed a "Silent Bug" regarding parameter ordering (`userID` vs `projectID`) identified during unit testing.
 
+   
 ---------------
 </details>
 
 🛠 <b>Development History</b>
+
+<details>
+<summary><b>Jan 21, 2026: Project Authorization & Membership</b> (Click to expand)</summary>
+
+### Phase 1: Testing & Security Discovery
+* **The Problem**: While writing automated tests for "Unauthorized Access," I discovered a security vulnerability. The system allowed *any* logged-in user to add members to *any* project because the service lacked ownership context.
+* **The Refactor**: 
+    * Updated the Service signature to accept a `requesterID`.
+    * Implemented **Object-Level Authorization**: The service now fetches the project and compares the `OwnerID` against the `requesterID` before performing any mutations.
+    * Fixed a "Silent Bug" regarding parameter ordering (`userID` vs `projectID`) identified during unit testing.
+
+### Phase 2: Robust Membership Logic
+* **Goal**: Implement secure removal and state verification.
+* **Outcome**: Added `RemoveUserFromProject` with the same ownership guards. Updated the `FakeRepository` to handle slice manipulation, allowing for "Deep Verification" (checking if the user was actually removed from memory after the API call).
+</details>
+
 <details>
 <summary><b>Jan 20, 2026: Project Membership & Security Enforcement</b> (Click to expand)</summary>
 * Added TestRemoveUserFromProject to verify successful member deletion
@@ -357,24 +380,24 @@ These tests ensure that project collaboration logic is sound and that data persi
 
 <details> <summary> <b> Project Membership & Security Enforcement </b> (Click to expand) </summary> 
 
-This suite validates the collaborative lifecycle of projects and ensures that resource modifications are strictly guarded.
+This suite validates the collaborative lifecycle of projects and ensures that resource modifications are strictly guarded by ownership rules.
 
 ### What it tests:
-1. **User Removal**: Verifies that members can be successfully removed from a project, ensuring the "Join Table" state in the repository is updated.
-2. **Unauthorized Access (Sad Path)**: Ensures that users who are NOT the project owner are blocked with a `403 Forbidden` when attempting to modify project membership.
-3. **State Consistency**: Uses "Before-and-After" assertions to verify that data is only deleted when authorized, and remains untouched when a request is rejected.
-4. **Context-Aware Security**: Validates that the handler correctly extracts the requester's identity from JWT claims to make authorization decisions.
+1. **Member Management**: Verifies that owners can successfully add and remove members, ensuring the "Join Table" state in the repository is updated correctly.
+2. **Unauthorized Access (Sad Path)**: Ensures that users who are NOT the project owner are blocked with a `403 Forbidden` when attempting to add or remove members.
+3. **State Consistency**: Uses "Before-and-After" assertions to verify that data is only modified when authorized, and remains untouched when a request is rejected.
+4. **Context-Aware Security**: Validates that the handler correctly extracts the requester's identity from JWT claims to make authorization decisions in the service layer.
 
 ### Files:
 - `internal/interfaces/http/tests/project_handler_test.go`
 - `internal/domain/projects/fake_repository.go`
+- `internal/domain/projects/service.go`
 
 ### Usage:
 1. Run all membership security tests:
    ```bash
-   go test ./internal/interfaces/http/tests/ -v -run Member
+   go test ./internal/interfaces/http/tests/ -v -run Project
 
-</details>
 
 
 ## Architecture & Flow Diagram

@@ -179,6 +179,56 @@ func TestAddUserToProject(t *testing.T) {
 
 }
 
+func TestAddUserToProjectUnauthorized(t *testing.T) {
+	handler, fakeRepo := setupProjectHandler()
+	e := echo.New()
+
+	// 3 users , 1 owner , 1 the hacker and 1 is the target
+	ownerID := int64(100)
+	targetUserID := int64(200)
+	hackerID := int64(666)
+
+	// create a project owned by user 100(ownerid)
+	p, _ := fakeRepo.Create(context.Background(), projects.Project{
+		Name:    "is 666 considered evil?",
+		OwnerID: ownerID,
+	})
+
+	// prepare the json payload to add user 200
+	input := map[string]interface{}{
+		"project_id": p.ID,
+		"user_id":    targetUserID,
+		"role":       "member",
+	}
+	body, _ := json.Marshal(input)
+
+	req := httptest.NewRequest(http.MethodPost, "/projects/members", strings.NewReader(string(body)))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	// logged in as the hacker(or 666)
+	hackerClaims := &auth.Claims{UserID: hackerID}
+	c.Set("user", hackerClaims)
+
+	// this should be blocked
+	err := handler.AddUserToProject(c)
+
+	// check for 403 Forbidden
+	if err != nil {
+		he, ok := err.(*echo.HTTPError)
+		assert.True(t, ok)
+		assert.Equal(t, http.StatusForbidden, he.Code)
+	} else {
+		assert.Equal(t, http.StatusForbidden, rec.Code)
+	}
+
+	// verify that the repository remains empty
+	members, _ := fakeRepo.ListUsers(context.Background(), p.ID)
+	assert.Equal(t, 0, len(members), "the hacker should not have been able to add any members")
+
+}
+
 func TestRemoveUserFromProject(t *testing.T) {
 	handler, fakeRepo := setupProjectHandler()
 	e := echo.New()
@@ -199,7 +249,7 @@ func TestRemoveUserFromProject(t *testing.T) {
 	initialMembers, _ := fakeRepo.ListUsers(context.Background(), p.ID)
 	assert.Equal(t, 1, len(initialMembers))
 
-	//  Prepare the delete request
+	//  prepare the delete request
 	input := map[string]interface{}{
 		"project_id": p.ID,
 		"user_id":    targetUserID,
@@ -215,7 +265,7 @@ func TestRemoveUserFromProject(t *testing.T) {
 	claims := &auth.Claims{UserID: ownerID}
 	c.Set("user", claims)
 
-	// Execute the handler
+	// execute the handler
 	if assert.NoError(t, handler.RemoveUserFromProject(c)) {
 		//  response is successful
 		assert.Equal(t, http.StatusOK, rec.Code)
@@ -231,7 +281,7 @@ func TestRemoveUserFromProject_Unauthorized(t *testing.T) {
 	e := echo.New()
 
 	ownerID := int64(100)
-	hackerID := int64(666) // The unauthorized user
+	hackerID := int64(666) // the unauthorized user
 	targetUserID := int64(200)
 
 	p, _ := fakeRepo.Create(context.Background(), projects.Project{
@@ -242,7 +292,6 @@ func TestRemoveUserFromProject_Unauthorized(t *testing.T) {
 	// add the user to the project
 	_ = fakeRepo.AddUserToProject(context.Background(), p.ID, targetUserID, "member")
 
-	// "hacker" tries to remove the user
 	input := map[string]interface{}{
 		"project_id": p.ID,
 		"user_id":    targetUserID,
