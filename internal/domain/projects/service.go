@@ -15,15 +15,15 @@ type Service struct {
 	hub  *ws.Hub
 }
 
-func (s *Service) ListUsersInProject(ctx context.Context, projectID int64) ([]sqlc.ListUsersInProjectRow, error) {
-	return s.repo.ListUsers(ctx, projectID)
-}
-
 func NewService(repo Repository, hub *ws.Hub) *Service {
 	return &Service{
 		repo: repo,
 		hub:  hub,
 	}
+}
+
+func (s *Service) ListUsersInProject(ctx context.Context, projectID int64) ([]sqlc.ListUsersInProjectRow, error) {
+	return s.repo.ListUsers(ctx, projectID)
 }
 
 func (s *Service) CreateProject(ctx context.Context, name, description string, ownerID int64) (*Project, error) {
@@ -55,6 +55,37 @@ func (s *Service) CreateProject(ctx context.Context, name, description string, o
 	return project, nil
 }
 
+func (s *Service) UpdateProject(ctx context.Context, requesterID, projectID int64, name, description string) (*Project, error) {
+	// get current project to check ownership
+	project, err := s.repo.GetByID(ctx, projectID)
+	if err != nil {
+		return nil, fmt.Errorf("project not found: %w", err)
+	}
+
+	//  only owner can update
+	if project.OwnerID != requesterID {
+		return nil, fmt.Errorf("unauthorized: user %d is not the owner", requesterID)
+	}
+
+	// update the fields
+	project.Name = name
+	project.Description = description
+
+	// update in the database
+	updatedProject, err := s.repo.Update(ctx, *project)
+	if err != nil {
+		return nil, err
+	}
+
+	// broadcast the change to the Hub
+	if s.hub != nil {
+		notification := fmt.Sprintf("PROJECT_UPDATED:%d", projectID)
+		s.hub.Broadcast <- []byte(notification)
+	}
+
+	return updatedProject, nil
+}
+
 func (s *Service) ListProjects(ctx context.Context, ownerID int64) ([]Project, error) {
 	return s.repo.GetAllByOwner(ctx, ownerID)
 }
@@ -83,15 +114,26 @@ func (s *Service) DeleteProject(ctx context.Context, projectID, ownerID int64) e
 	return nil
 }
 
-func (s *Service) AddUserToProject(ctx context.Context, requesterID, projectID, userID int64, role string) error {
+func (s *Service) AddUserToProject(ctx context.Context, requesterID int64, projectID int64, userID int64, role string) error {
 	project, err := s.repo.GetByID(ctx, projectID)
 	if err != nil {
 		return fmt.Errorf("project not found: %w", err)
 	}
 
 	// only project owner can add members
-	if project.OwnerID != userID {
-		return fmt.Errorf("unauthorized: user %d is not the owner of project %d", userID, projectID)
+	if project.OwnerID != requesterID {
+		return fmt.Errorf("unauthorized: user %d is not the owner of project %d", requesterID, projectID)
+	}
+
+	// --- NEW: DUPLICATE CHECK ---
+	members, err := s.repo.ListUsers(ctx, projectID)
+	if err == nil {
+		for _, m := range members {
+			if m.ID == userID {
+				return fmt.Errorf("user is already a member of this project")
+			}
+		}
+
 	}
 
 	// add the user

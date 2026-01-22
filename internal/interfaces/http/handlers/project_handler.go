@@ -77,6 +77,41 @@ func (h *ProjectHandler) Create(c echo.Context) error {
 	return c.JSON(http.StatusCreated, project)
 }
 
+func (h *ProjectHandler) Update(c echo.Context) error {
+	// parse project id from the url (/projects/:id)
+	idParam := c.Param("id")
+	projectID, err := strconv.ParseInt(idParam, 10, 64)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid project id")
+	}
+
+	// bind JSON body
+	var req struct {
+		Name        string `json:"name"`
+		Description string `json:"description"`
+	}
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
+	}
+
+	// get the requester's id from the context (auth middleware)
+	userClaims := c.Get("user").(*auth.Claims)
+	requesterID := userClaims.UserID
+
+	// call the Service
+	updatedProject, err := h.service.UpdateProject(c.Request().Context(), requesterID, projectID, req.Name, req.Description)
+	if err != nil {
+		if strings.Contains(err.Error(), "unauthorized") {
+			return echo.NewHTTPError(http.StatusForbidden, err.Error())
+		}
+		if strings.Contains(err.Error(), "not found") {
+			return echo.NewHTTPError(http.StatusNotFound, err.Error())
+		}
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	return c.JSON(http.StatusOK, updatedProject)
+}
+
 // GET /projects
 func (h *ProjectHandler) List(c echo.Context) error {
 	claims, ok := c.Get("user").(*auth.Claims)
@@ -129,6 +164,10 @@ func (h *ProjectHandler) AddUserToProject(c echo.Context) error {
 
 	err := h.service.AddUserToProject(c.Request().Context(), requesterID, req.ProjectID, req.UserID, req.Role)
 	if err != nil {
+		// check if the error is due to a duplicate
+		if strings.Contains(err.Error(), "already a member") {
+			return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+		}
 		//  if authorization error return 403 Forbidden
 		if strings.Contains(err.Error(), "unauthorized") {
 			return c.JSON(http.StatusForbidden, map[string]string{"error": err.Error()})

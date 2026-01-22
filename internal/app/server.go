@@ -44,39 +44,37 @@ func Run() {
 	// --- SQLC wrapper ---
 	queries := sqlc.New(db)
 
-	// --- Repository ---
-	userRepo := postgres.NewUserRepository(db, queries)
+	jwtManager := auth.NewJWTManager(cfg.JWTSecret, cfg.JWTExpiry)
 
 	//  Initialize the Hub
 	hub := ws.NewHub()
 
-	//  Start the Hub in a background Goroutine
-	go hub.Run()
+	// --- user repo + service + handler ---
+	userRepo := postgres.NewUserRepository(db, queries)
+	userService := user.NewService(userRepo)
+	userHandler := handlers.NewUserHandler(userService, jwtManager)
 
-	// Projects repo + service
+	// Projects repo + service + handler
 	projectsRepo := postgres.NewProjectRepository(db)
 	projectsService := projects.NewService(projectsRepo, hub)
 	projectHandler := handlers.NewProjectHandler(projectsService)
 
-	// --- Chat/Messages logic ---
+	// --- Chat/Messages repo + service + handler ---
 	messageRepo := postgres.NewMessageRepository(db)
 	chatService := messages.NewService(messageRepo, queries, hub)
 	chatHandler := handlers.NewChatHandler(chatService)
+
+	//  Start the Hub in a background goroutine
+	go hub.Run()
 
 	// --- Seed default admin ---
 	if err := postgres.SeedAdminUser(context.Background(), userRepo); err != nil {
 		log.Fatal("failed to seed admin user:", err)
 	}
 
-	// --- Service ---
-	userService := user.NewService(userRepo)
-
-	jwtManager := auth.NewJWTManager(cfg.JWTSecret, cfg.JWTExpiry)
-
 	// WebSocket handler creation
 	wsHandler := handlers.NewWSHandler(jwtManager, hub, chatService)
 	// --- Handler ---
-	userHandler := handlers.NewUserHandler(userService, jwtManager)
 
 	// --- Echo server ---
 	e := echo.New()
@@ -118,6 +116,7 @@ func Run() {
 	})
 	// project routes
 	r.POST("", projectHandler.Create)
+	r.PUT("/:id", projectHandler.Update)
 	r.GET("", projectHandler.List)
 	r.GET("/:id", projectHandler.GetByID)
 	r.DELETE("/:id", projectHandler.DeleteProject)

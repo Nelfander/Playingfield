@@ -3,6 +3,7 @@ package projects
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -34,8 +35,23 @@ func (f *FakeRepository) Create(ctx context.Context, p Project) (*Project, error
 	f.nextID++
 	p.CreatedAt = time.Now()
 	p.UpdatedAt = time.Now()
+
 	f.projects = append(f.projects, p)
-	return &p, nil
+
+	// return a pointer to the version actually stored in the slice
+	return &f.projects[len(f.projects)-1], nil
+}
+
+func (f *FakeRepository) Update(ctx context.Context, p Project) (*Project, error) {
+	//  find the existing project by id
+	for i, proj := range f.projects {
+		if proj.ID == p.ID {
+			// update the record in the slice
+			f.projects[i] = p
+			return &f.projects[i], nil
+		}
+	}
+	return nil, fmt.Errorf("project not found in fake repo")
 }
 
 func (f *FakeRepository) GetAllByOwner(ctx context.Context, ownerID int64) ([]Project, error) {
@@ -49,9 +65,10 @@ func (f *FakeRepository) GetAllByOwner(ctx context.Context, ownerID int64) ([]Pr
 }
 
 func (f *FakeRepository) GetByID(ctx context.Context, id int64) (*Project, error) {
-	for _, p := range f.projects {
-		if p.ID == id {
-			return &p, nil
+	for i := range f.projects {
+		if f.projects[i].ID == id {
+			// return a pointer to the actual element in the slice
+			return &f.projects[i], nil
 		}
 	}
 	return nil, errors.New("project not found")
@@ -68,7 +85,7 @@ func (f *FakeRepository) DeleteProject(ctx context.Context, id int64, ownerID in
 	return errors.New("project not found")
 }
 
-func (f *FakeRepository) AddUserToProject(ctx context.Context, projectID int64, userID int64, role string) error {
+func (f *FakeRepository) AddUserToProject(ctx context.Context, userID int64, projectID int64, role string) error {
 	// Optional: Check if project exists first to be realistic
 	_, err := f.GetByID(ctx, projectID)
 	if err != nil {

@@ -20,8 +20,6 @@ import (
 // setupProjectHandler creates the environment for project tests
 func setupProjectHandler() (*handlers.ProjectHandler, *projects.FakeRepository) {
 	fakeRepo := projects.NewFakeRepository()
-	//  nil for the store/queries and nil for the hub
-	// because the Service now calls s.repo and has a nil-check for the hub.
 	service := projects.NewService(fakeRepo, nil)
 	handler := handlers.NewProjectHandler(service)
 	return handler, fakeRepo
@@ -52,6 +50,54 @@ func TestCreateProject(t *testing.T) {
 
 		assert.Equal(t, "New Portfolio", resp["name"])
 		assert.Equal(t, float64(100), resp["owner_id"])
+	}
+}
+
+func TestUpdateProject(t *testing.T) {
+	handler, fakeRepo := setupProjectHandler()
+	e := echo.New()
+
+	ownerID := int64(100)
+	// create a project to update
+	p, _ := fakeRepo.Create(context.Background(), projects.Project{
+		Name:        "Old Project Name",
+		Description: "Old Description",
+		OwnerID:     ownerID,
+	})
+
+	// prepare the update payload
+	input := map[string]interface{}{
+		"name":        "New Shiny Name",
+		"description": "Updated through the API",
+	}
+	body, _ := json.Marshal(input)
+
+	req := httptest.NewRequest(http.MethodPut, "/projects/"+fmt.Sprintf("%d", p.ID), strings.NewReader(string(body)))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	// url param to match the route /projects/:id
+	c.SetPath("/projects/:id")
+	c.SetParamNames("id")
+	c.SetParamValues(fmt.Sprintf("%d", p.ID))
+
+	// owner as the requester
+	c.Set("user", &auth.Claims{UserID: ownerID})
+
+	// execute the handler
+	if assert.NoError(t, handler.Update(c)) {
+		assert.Equal(t, http.StatusOK, rec.Code)
+
+		// verify the response
+		var resp map[string]interface{}
+		json.Unmarshal(rec.Body.Bytes(), &resp)
+		assert.Equal(t, "New Shiny Name", resp["name"])
+
+		// verify the Fake DB state
+		updated, _ := fakeRepo.GetByID(context.Background(), p.ID)
+		assert.Equal(t, "New Shiny Name", updated.Name)
+		assert.Equal(t, "Updated through the API", updated.Description)
 	}
 }
 
@@ -128,15 +174,16 @@ func TestAddUserToProject(t *testing.T) {
 	handler, fakeRepo := setupProjectHandler()
 	e := echo.New()
 
-	// Create a project owned by User 100
 	ownerID := int64(100)
 	targetUserID := int64(200)
-	p, _ := fakeRepo.Create(context.Background(), projects.Project{
+
+	// create the project in the fake repo
+	p, err := fakeRepo.Create(context.Background(), projects.Project{
 		Name:    "Collab Project",
 		OwnerID: ownerID,
 	})
+	assert.NoError(t, err)
 
-	//  Prepare the JSON payload to add User 200 as a "member"
 	input := map[string]interface{}{
 		"project_id": p.ID,
 		"user_id":    targetUserID,
@@ -149,34 +196,39 @@ func TestAddUserToProject(t *testing.T) {
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 
-	// Mock Authentication: The owner is the one performing the action
-	claims := &auth.Claims{UserID: ownerID}
-	c.Set("user", claims)
+	//ensure the owner is the requester
+	c.Set("user", &auth.Claims{UserID: ownerID})
 
-	// Execute the handler
-	if assert.NoError(t, handler.AddUserToProject(c)) {
-		assert.Equal(t, http.StatusOK, rec.Code)
+	// execute and assert status
+	err = handler.AddUserToProject(c)
+	assert.NoError(t, err)
 
-		// Check if the message in the response is what we expect
-		var resp map[string]string
-		json.Unmarshal(rec.Body.Bytes(), &resp)
-		assert.Equal(t, "User added successfully", resp["message"])
+	// stop if status is not 200 to see why it failed
+	if rec.Code != http.StatusOK {
+		t.Fatalf("Expected 200 OK but got %d. Body: %s", rec.Code, rec.Body.String())
 	}
 
-	members, _ := fakeRepo.ListUsers(context.Background(), p.ID)
+	// verify json Response
+	var resp map[string]string
+	json.Unmarshal(rec.Body.Bytes(), &resp)
+	assert.Equal(t, "User added successfully", resp["message"])
 
-	assert.Equal(t, 1, len(members), "There should be exactly one member added")
-	assert.Equal(t, targetUserID, members[0].ID)
-	row := members[0]
+	// verify repo state
+	members, err := fakeRepo.ListUsers(context.Background(), p.ID)
+	assert.NoError(t, err)
 
-	roleText, ok := row.Role.(pgtype.Text)
-	if ok {
-		assert.Equal(t, "member", roleText.String)
-	} else {
-		// If it's already a string (sometimes pgx does this)
-		assert.Equal(t, "member", row.Role)
+	// guard against panic only check index 0 if len is 1
+	if assert.Equal(t, 1, len(members), "There should be exactly one member added") {
+		assert.Equal(t, targetUserID, members[0].ID)
+
+		// role check
+		roleText, ok := members[0].Role.(pgtype.Text)
+		if ok {
+			assert.Equal(t, "member", roleText.String)
+		} else {
+			assert.Equal(t, "member", members[0].Role)
+		}
 	}
-
 }
 
 func TestAddUserToProjectUnauthorized(t *testing.T) {
@@ -321,4 +373,47 @@ func TestRemoveUserFromProject_Unauthorized(t *testing.T) {
 	// ensure the user was NOT actually removed from the repo
 	members, _ := fakeRepo.ListUsers(context.Background(), p.ID)
 	assert.Equal(t, 1, len(members), "The user should still be in the project!")
+}
+
+func TestAddUserToProject_Duplicate(t *testing.T) {
+	handler, fakeRepo := setupProjectHandler()
+	e := echo.New()
+
+	ownerID := int64(100)
+	targetUserID := int64(200)
+
+	// 1. Create project
+	p, _ := fakeRepo.Create(context.Background(), projects.Project{
+		Name:    "Duplicate Test Project",
+		OwnerID: ownerID,
+	})
+
+	// 2. Manually add the user once via the repo
+	_ = fakeRepo.AddUserToProject(context.Background(), targetUserID, p.ID, "member")
+
+	// 3. Try to add the same user again via the Handler
+	input := map[string]interface{}{
+		"project_id": p.ID,
+		"user_id":    targetUserID,
+		"role":       "member",
+	}
+	body, _ := json.Marshal(input)
+
+	req := httptest.NewRequest(http.MethodPost, "/projects/members", strings.NewReader(string(body)))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.Set("user", &auth.Claims{UserID: ownerID})
+
+	// 4. Assert that it fails
+	err := handler.AddUserToProject(c)
+
+	// If your handler returns the error directly to Echo
+	if err != nil {
+		assert.Contains(t, err.Error(), "already a member")
+	} else {
+		// If your handler catches the error and writes to recorder
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+		assert.Contains(t, rec.Body.String(), "already a member")
+	}
 }

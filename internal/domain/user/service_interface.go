@@ -11,3 +11,5 @@ type Service interface {
 	Login(ctx context.Context, email, password string) (*User, error)
 	ListAllUsers(ctx context.Context) ([]sqlc.ListUsersRow, error)
 }
+
+// dont actually need this file, will put the content on service.go later on or on entity.go

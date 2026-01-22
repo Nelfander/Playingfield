@@ -13,7 +13,7 @@ func SeedAdminUser(ctx context.Context, userRepo user.Repository) error {
 
 	_, err := userRepo.GetByEmail(ctx, adminEmail)
 	if err == nil {
-		// Admin already exists
+		// admin already exists
 		return nil
 	}
 

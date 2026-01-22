@@ -156,6 +156,21 @@ Invoke-RestMethod -Method GET -Uri http://localhost:880/projects -Headers @{ Aut
 </details>
 
 🛠 <b>Development History</b>
+<details>
+<summary><b>Jan 22, 2026: Real-time Project Updates & SQLC Migration</b> (Click to expand)</summary>
+
+### Phase 1: Database & Repository Evolution
+* **SQLC Integration**: Migrated the Project Update logic from raw SQL strings to type-safe code generation using `sqlc`. Defined the `UpdateProject` query to allow modifications of project names and descriptions.
+* **FakeRepo Sync**: Updated the `FakeRepository` to mirror the new generated interfaces, ensuring that automated tests remain fast and database-agnostic while still validating business rules.
+
+### Phase 2: Secure Update Logic & Real-time Sync
+* **The "Owner-Only" Guard**: Implemented the `UpdateProject` service method with strict authorization. The system now validates that only the project creator can modify project details, returning a `403 Forbidden` for unauthorized attempts.
+* **WebSocket Integration**: Connected the Update event to the global `Hub`. When a project is renamed, a broadcast signal (`PROJECT_UPDATED:ID`) is sent to all connected clients, ensuring data consistency across the platform.
+
+### Phase 3: Inline-Edit Frontend
+* **UX Transformation**: Developed an "Inline-Edit" mode in the React `ProjectList`. This allows owners to toggle between viewing project info and a live edit form without leaving the page.
+* **Zero-Refresh UI**: Integrated the new WebSocket signal into the frontend `useWebSockets` hook. The application now automatically re-fetches project data the moment a broadcast is received, providing an "instant" feel for all users.
+</details>
 
 <details>
 <summary><b>Jan 21, 2026: Project Authorization & Membership</b> (Click to expand)</summary>
@@ -397,6 +412,29 @@ This suite validates the collaborative lifecycle of projects and ensures that re
 1. Run all membership security tests:
    ```bash
    go test ./internal/interfaces/http/tests/ -v -run Project
+
+</details>
+
+<details> 
+<summary><b>Project Lifecycle & Real-time Update Validation</b> (Click to expand)</summary> 
+
+This suite focuses on the mutation of existing project resources and the verification of the real-time broadcast system.
+
+### What it tests:
+1. **Authorized Project Updates**: Verifies that project owners can modify the name and description, and that these changes are correctly persisted via `sqlc`-generated repository methods.
+2. **Ownership Guardrails**: Confirms that the system correctly identifies unauthorized update attempts and rejects them, maintaining the integrity of project data.
+3. **Event Broadcasting**: Validates that a successful update triggers the expected WebSocket signal through the `Hub`, which is essential for the "Zero-Refresh" frontend experience.
+4. **Interface Integrity**: Uses the `FakeRepository` to simulate a real database environment, allowing for rapid testing of the service-to-repository interaction without requiring a live Postgres instance.
+
+### Files:
+- `internal/interfaces/http/tests/project_handler_test.go`
+- `internal/domain/projects/service.go`
+- `internal/infrastructure/postgres/sqlc/` (Generated Models)
+
+### Usage:
+1. Run the project lifecycle and update tests:
+   ```bash
+   go test ./internal/interfaces/http/tests/ -v -run TestUpdateProject
 
 
 

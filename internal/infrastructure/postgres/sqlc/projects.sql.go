@@ -138,3 +138,21 @@ func (q *Queries) ListProjectsByOwner(ctx context.Context, ownerID int64) ([]Lis
 	}
 	return items, nil
 }
+
+const updateProject = `-- name: UpdateProject :exec
+UPDATE projects
+SET name = $2,
+    description = $3
+WHERE id = $1
+`
+
+type UpdateProjectParams struct {
+	ID          int64
+	Name        string
+	Description pgtype.Text
+}
+
+func (q *Queries) UpdateProject(ctx context.Context, arg UpdateProjectParams) error {
+	_, err := q.db.Exec(ctx, updateProject, arg.ID, arg.Name, arg.Description)
+	return err
+}

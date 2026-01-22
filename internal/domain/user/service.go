@@ -15,7 +15,6 @@ func NewService(repo Repository) Service {
 	return &service{repo: repo}
 }
 
-// RegisterUser creates a new user
 func (s *service) RegisterUser(ctx context.Context, email, hashedPassword string) (*User, error) {
 	existing, err := s.repo.GetByEmail(ctx, email)
 	if err == nil && existing.ID != 0 {
@@ -34,7 +33,7 @@ func (s *service) RegisterUser(ctx context.Context, email, hashedPassword string
 		return nil, err
 	}
 
-	// Ensure role is set correctly (in case the repository/fake repo didn't preserve it)
+	// ensure role is set correctly (in case the repository/fake repo didn't preserve it)
 	if createdUser.Role == "" {
 		createdUser.Role = "user"
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/nelfander/Playingfield/internal/domain/projects"
 	"github.com/nelfander/Playingfield/internal/infrastructure/postgres/sqlc"
 )
@@ -41,6 +42,21 @@ func (r *ProjectRepository) Create(ctx context.Context, p projects.Project) (*pr
 	}
 	created.CreatedAt = createdAt
 	return &created, nil
+}
+
+func (r *ProjectRepository) Update(ctx context.Context, p projects.Project) (*projects.Project, error) {
+	err := r.queries.UpdateProject(ctx, sqlc.UpdateProjectParams{
+		ID:   p.ID,
+		Name: p.Name,
+		Description: pgtype.Text{
+			String: p.Description,
+			Valid:  p.Description != "",
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &p, nil
 }
 
 // GetAllByOwner fetches all projects the user owns OR is a member of

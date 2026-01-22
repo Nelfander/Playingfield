@@ -23,10 +23,7 @@ function App() {
   const [projectUsersMap, setProjectUsersMap] = useState<Record<number, UserInProject[]>>({});
   const [showTasksMap, setShowTasksMap] = useState<Record<number, boolean>>({});
 
-  // Track which project chat is open
   const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
-
-  // Track which direct message conversation is open
   const [selectedDMUserId, setSelectedDMUserId] = useState<number | null>(null);
   const [selectedDMUserEmail, setSelectedDMUserEmail] = useState<string>("");
 
@@ -36,7 +33,6 @@ function App() {
   async function fetchProjects() {
     if (!token) return;
     try {
-      // Note: Ensure your port is correct (8080 vs 880)
       const res = await fetch("http://localhost:880/projects", {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -51,8 +47,8 @@ function App() {
     if (showProjects) {
       setShowProjects(false);
       setProjects([]);
-      setSelectedProjectId(null); // Close chat if hiding projects
-      setSelectedDMUserId(null); // Close DM if hiding projects
+      setSelectedProjectId(null);
+      setSelectedDMUserId(null);
     } else {
       await fetchProjects();
       setShowProjects(true);
@@ -61,6 +57,12 @@ function App() {
 
   async function handleLiveProjectCreated() {
     console.log("WS Signal: New project created. Updating state...");
+    await fetchProjects();
+  }
+
+  // --- NEW: Handle Real-time Update signal ---
+  async function handleLiveProjectUpdated() {
+    console.log("WS Signal: Project updated. Refreshing list...");
     await fetchProjects();
   }
 
@@ -176,11 +178,10 @@ function App() {
     } catch (err) { console.error(err); }
   }
 
-  // Handler to start a direct message conversation
   function handleStartDM(userId: number, userEmail: string) {
     setSelectedDMUserId(userId);
     setSelectedDMUserEmail(userEmail);
-    setSelectedProjectId(null); // Close project chat if open
+    setSelectedProjectId(null);
   }
 
   return (
@@ -190,7 +191,6 @@ function App() {
       ) : (
         <div className="main-layout" style={{ display: 'flex', gap: '20px', padding: '20px' }}>
 
-          {/* Left Side: Project List */}
           <div className="project-list-container" style={{ flex: 1 }}>
             <h1>My Projects</h1>
             <div className="button-group">
@@ -223,14 +223,13 @@ function App() {
               onUserAdded={handleLiveUserAdded}
               onProjectCreated={handleLiveProjectCreated}
               onUserRemoved={handleLiveUserRemoved}
-              // Pass a way to select a project for chat
               onSelectProject={(id) => setSelectedProjectId(id)}
-              // Pass a way to start a direct message
               onStartDM={handleStartDM}
+              // --- PLUGGED IN HERE ---
+              onProjectUpdated={fetchProjects}
             />
           </div>
 
-          {/* Right Side: Chat (Project Chat or Direct Message) */}
           {selectedProjectId && (
             <div className="chat-sidebar">
               <button onClick={() => setSelectedProjectId(null)} style={{ marginBottom: '10px' }}>Close Chat</button>

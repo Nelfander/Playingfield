@@ -22,7 +22,7 @@ type Hub struct {
 	Broadcast    chan []byte
 	Register     chan *Client
 	Unregister   chan *Client
-	mu           sync.RWMutex // To protect the clients map
+	mu           sync.RWMutex // mutex to protect the clients map
 }
 
 func NewHub() *Hub {
