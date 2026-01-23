@@ -2,13 +2,30 @@ package user
 
 import (
 	"context"
+	"errors"
 
 	"github.com/nelfander/Playingfield/internal/infrastructure/auth"
-	"github.com/nelfander/Playingfield/internal/infrastructure/postgres/sqlc"
+)
+
+var (
+	ErrUserAlreadyExists  = errors.New("user already exists")
+	ErrInvalidCredentials = errors.New("invalid credentials")
+	ErrInactiveAccount    = errors.New("account is inactive or banned")
 )
 
 type service struct {
 	repo Repository
+}
+
+type UserListRow struct {
+	ID    int64
+	Email string
+}
+
+type Service interface {
+	RegisterUser(ctx context.Context, email, hashedPassword string) (*User, error)
+	Login(ctx context.Context, email, password string) (*User, error)
+	ListAllUsers(ctx context.Context) ([]UserListRow, error)
 }
 
 func NewService(repo Repository) Service {
@@ -17,33 +34,21 @@ func NewService(repo Repository) Service {
 
 func (s *service) RegisterUser(ctx context.Context, email, hashedPassword string) (*User, error) {
 	existing, err := s.repo.GetByEmail(ctx, email)
-	if err == nil && existing.ID != 0 {
+	if err == nil && existing != nil {
 		return nil, ErrUserAlreadyExists
 	}
-
 	u := User{
 		Email:        email,
 		PasswordHash: hashedPassword,
 		Role:         "user",
 		Status:       "active",
 	}
-
-	createdUser, err := s.repo.Create(ctx, u)
-	if err != nil {
-		return nil, err
-	}
-
-	// ensure role is set correctly (in case the repository/fake repo didn't preserve it)
-	if createdUser.Role == "" {
-		createdUser.Role = "user"
-	}
-
-	return createdUser, nil
+	return s.repo.Create(ctx, u)
 }
 
 func (s *service) Login(ctx context.Context, email, password string) (*User, error) {
 	u, err := s.repo.GetByEmail(ctx, email)
-	if err != nil {
+	if err != nil || u == nil {
 		return nil, ErrInvalidCredentials
 	}
 
@@ -58,7 +63,6 @@ func (s *service) Login(ctx context.Context, email, password string) (*User, err
 	return u, nil
 }
 
-func (s *service) ListAllUsers(ctx context.Context) ([]sqlc.ListUsersRow, error) {
-	// This calls the generated code you just verified in Step 18
+func (s *service) ListAllUsers(ctx context.Context) ([]UserListRow, error) {
 	return s.repo.ListUsers(ctx)
 }

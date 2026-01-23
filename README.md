@@ -36,8 +36,8 @@ Built with **Go (Echo framework)**, **PostgreSQL (Neon)**, and a **React (TypeSc
 * Implement **Task creation from the UI**.
 * Improve **error handling and logging** further.
 * Implement **user role management** (admin vs regular users).
-* Add **unit and integration tests** for the project domain.
-* Add **Project group chats and 1 on 1 individual project member chat feature**.
+* Add **unit and integration tests** for the project domain.   Mostly Done
+* Add **Project group chats and 1 on 1 individual project member chat feature**. DONE
 
 ---
 
@@ -156,6 +156,26 @@ Invoke-RestMethod -Method GET -Uri http://localhost:880/projects -Headers @{ Aut
 </details>
 
 🛠 <b>Development History</b>
+
+<details>
+<summary><b>Jan 23, 2026: The "Grand Refactor" - Domain Purity & System-Wide Cleanup</b> (Click to expand)</summary>
+
+### Phase 1: Standardizing Domain Architecture
+* **Global Interface Decoupling**: Refactored the **User**, **Project**, and **Message** services to depend exclusively on interfaces. No service layer now "leaks" SQLC or raw database logic, making the entire system 100% unit-testable.
+* **Service-to-Service Communication**: Implemented a "Waiter-to-Waiter" pattern where the Message service asks the Project Repository for authorization checks (like membership or shared projects) rather than reaching into the database directly.
+
+### Phase 2: System Plumbing & Dependency Injection
+* **Clean Wiring in `app.Run()`**: Streamlined the initialization of the server. Standardized how repositories are injected into services, ensuring a single source of truth for database connections.
+* **Postgres Adapter Optimization**: Cleaned up the `postgres` package to act as a clean wrapper for SQLC, hiding the complexity of `pgtype` and raw SQL parameters from the business logic.
+
+### Phase 3: Project "Cleanup"
+* **Dead Code Elimination**: Identified and deleted redundant files and "ghost" structs that were left over from earlier iterations, significantly reducing the project's cognitive load.
+* **Consistent Error Handling**: Standardized error wrapping (e.g., `fmt.Errorf("...: %w", err)`) across all services to ensure that when something breaks, the logs tell a clear, traceable story.
+* **Fake Repo Synchronization**: Updated all `FakeRepository` implementations (User, Project, and Message) to match the new interface signatures, fixing global compiler errors and preparing the ground for the next phase of testing.
+
+### Phase 4: Direct Messaging Security
+* **Shared Project Constraint**: Implemented the `UsersShareProject` logic. This enforces a privacy rule: users can only send Direct Messages if they have a "social connection" through at least one shared project, preventing platform-wide spam.
+</details>
 <details>
 <summary><b>Jan 22, 2026: Real-time Project Updates & SQLC Migration</b> (Click to expand)</summary>
 

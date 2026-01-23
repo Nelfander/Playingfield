@@ -2,7 +2,6 @@ package postgres
 
 import (
 	"context"
-	"database/sql"
 
 	"github.com/nelfander/Playingfield/internal/domain/user"
 
@@ -35,32 +34,41 @@ func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*user.Us
 	}, nil
 }
 
-// Create inserts a new user and returns a pointer to domain User
+// create inserts a new user and returns a pointer to domain User
 func (r *UserRepository) Create(ctx context.Context, u user.User) (*user.User, error) {
-	row := r.db.QueryRow(ctx,
-		`INSERT INTO users (email, password_hash, role, status)
-	 VALUES ($1, $2, $3, $4)
-	 RETURNING id, email, password_hash, role, status, created_at`,
-		u.Email, u.PasswordHash, u.Role, u.Status,
-	)
-
-	var created user.User
-	var createdAt sql.NullTime
-	if err := row.Scan(
-		&created.ID,
-		&created.Email,
-		&created.PasswordHash,
-		&created.Role,
-		&created.Status,
-		&createdAt,
-	); err != nil {
+	res, err := r.queries.CreateUser(ctx, sqlc.CreateUserParams{
+		Email:        u.Email,
+		PasswordHash: u.PasswordHash,
+		Role:         u.Role,
+		Status:       u.Status,
+	})
+	if err != nil {
 		return nil, err
 	}
-	created.CreatedAt = createdAt.Time
 
-	return &created, nil
+	// map the database result back to your Domain User
+	return &user.User{
+		ID:           res.ID,
+		Email:        res.Email,
+		PasswordHash: res.PasswordHash,
+		Role:         res.Role,
+		Status:       res.Status,
+		CreatedAt:    res.CreatedAt.Time,
+	}, nil
 }
 
-func (r *UserRepository) ListUsers(ctx context.Context) ([]sqlc.ListUsersRow, error) {
-	return r.queries.ListUsers(ctx)
+func (r *UserRepository) ListUsers(ctx context.Context) ([]user.UserListRow, error) {
+	rows, err := r.queries.ListUsers(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var result []user.UserListRow
+	for _, row := range rows {
+		result = append(result, user.UserListRow{
+			ID:    row.ID,
+			Email: row.Email,
+		})
+	}
+	return result, nil
 }

@@ -61,7 +61,7 @@ func Run() {
 
 	// --- Chat/Messages repo + service + handler ---
 	messageRepo := postgres.NewMessageRepository(db)
-	chatService := messages.NewService(messageRepo, queries, hub)
+	chatService := messages.NewService(messageRepo, projectsRepo, hub)
 	chatHandler := handlers.NewChatHandler(chatService)
 
 	//  Start the Hub in a background goroutine

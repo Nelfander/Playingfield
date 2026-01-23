@@ -46,7 +46,7 @@ func (h *ProjectHandler) Create(c echo.Context) error {
 	var req struct {
 		Name           string `json:"name"`
 		Description    string `json:"description"`
-		AssignedUserID string `json:"assigned_user_id"` // Matches React frontend
+		AssignedUserID string `json:"assigned_user_id"` // matches React frontend
 	}
 
 	if err := c.Bind(&req); err != nil {
@@ -206,19 +206,12 @@ func (h *ProjectHandler) ListUsersInProject(c echo.Context) error {
 
 	var resp []UserResponse
 	for _, u := range users {
-		roleStr := ""
-		if u.Role != nil {
-			if str, ok := u.Role.(string); ok {
-				roleStr = str
-			}
-		}
 		resp = append(resp, UserResponse{
 			ID:    u.ID,
 			Email: u.Email,
-			Role:  roleStr,
+			Role:  u.Role,
 		})
 	}
-
 	return c.JSON(200, resp)
 }
 

@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/nelfander/Playingfield/internal/infrastructure/postgres/sqlc"
 	"github.com/nelfander/Playingfield/internal/infrastructure/ws"
 )
 
@@ -22,8 +21,8 @@ func NewService(repo Repository, hub *ws.Hub) *Service {
 	}
 }
 
-func (s *Service) ListUsersInProject(ctx context.Context, projectID int64) ([]sqlc.ListUsersInProjectRow, error) {
-	return s.repo.ListUsers(ctx, projectID)
+func (s *Service) ListUsersInProject(ctx context.Context, projectID int64) ([]ProjectMember, error) {
+	return s.repo.ListUsersInProject(ctx, projectID)
 }
 
 func (s *Service) CreateProject(ctx context.Context, name, description string, ownerID int64) (*Project, error) {
@@ -33,7 +32,7 @@ func (s *Service) CreateProject(ctx context.Context, name, description string, o
 		OwnerID:     ownerID,
 	}
 
-	project, err := s.repo.Create(ctx, p)
+	project, err := s.repo.CreateProject(ctx, p)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
@@ -126,7 +125,7 @@ func (s *Service) AddUserToProject(ctx context.Context, requesterID int64, proje
 	}
 
 	// --- NEW: DUPLICATE CHECK ---
-	members, err := s.repo.ListUsers(ctx, projectID)
+	members, err := s.repo.ListUsersInProject(ctx, projectID)
 	if err == nil {
 		for _, m := range members {
 			if m.ID == userID {
@@ -137,7 +136,7 @@ func (s *Service) AddUserToProject(ctx context.Context, requesterID int64, proje
 	}
 
 	// add the user
-	err = s.repo.AddUserToProject(ctx, userID, projectID, role)
+	err = s.repo.AddUserToProject(ctx, projectID, userID, role)
 	if err != nil {
 		return err
 	}

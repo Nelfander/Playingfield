@@ -9,7 +9,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/labstack/echo/v4"
 	"github.com/nelfander/Playingfield/internal/domain/projects"
 	"github.com/nelfander/Playingfield/internal/infrastructure/auth"
@@ -59,7 +58,7 @@ func TestUpdateProject(t *testing.T) {
 
 	ownerID := int64(100)
 	// create a project to update
-	p, _ := fakeRepo.Create(context.Background(), projects.Project{
+	p, _ := fakeRepo.CreateProject(context.Background(), projects.Project{
 		Name:        "Old Project Name",
 		Description: "Old Description",
 		OwnerID:     ownerID,
@@ -107,9 +106,9 @@ func TestListProjects(t *testing.T) {
 
 	//  Seed the fake database with some projects
 	ownerID := int64(100)
-	fakeRepo.Create(context.Background(), projects.Project{Name: "Project 1", OwnerID: ownerID})
-	fakeRepo.Create(context.Background(), projects.Project{Name: "Project 2", OwnerID: ownerID})
-	fakeRepo.Create(context.Background(), projects.Project{Name: "Other User Project", OwnerID: 999})
+	fakeRepo.CreateProject(context.Background(), projects.Project{Name: "Project 1", OwnerID: ownerID})
+	fakeRepo.CreateProject(context.Background(), projects.Project{Name: "Project 2", OwnerID: ownerID})
+	fakeRepo.CreateProject(context.Background(), projects.Project{Name: "Other User Project", OwnerID: 999})
 
 	//  Setup Request
 	req := httptest.NewRequest(http.MethodGet, "/projects", nil)
@@ -140,7 +139,7 @@ func TestDeleteProject_Security(t *testing.T) {
 
 	// create a project owned by User 100
 	ownerID := int64(100)
-	p, _ := fakeRepo.Create(context.Background(), projects.Project{
+	p, _ := fakeRepo.CreateProject(context.Background(), projects.Project{
 		Name:    "Owner's Secret Project",
 		OwnerID: ownerID,
 	})
@@ -178,7 +177,7 @@ func TestAddUserToProject(t *testing.T) {
 	targetUserID := int64(200)
 
 	// create the project in the fake repo
-	p, err := fakeRepo.Create(context.Background(), projects.Project{
+	p, err := fakeRepo.CreateProject(context.Background(), projects.Project{
 		Name:    "Collab Project",
 		OwnerID: ownerID,
 	})
@@ -214,7 +213,7 @@ func TestAddUserToProject(t *testing.T) {
 	assert.Equal(t, "User added successfully", resp["message"])
 
 	// verify repo state
-	members, err := fakeRepo.ListUsers(context.Background(), p.ID)
+	members, err := fakeRepo.ListUsersInProject(context.Background(), p.ID)
 	assert.NoError(t, err)
 
 	// guard against panic only check index 0 if len is 1
@@ -222,12 +221,7 @@ func TestAddUserToProject(t *testing.T) {
 		assert.Equal(t, targetUserID, members[0].ID)
 
 		// role check
-		roleText, ok := members[0].Role.(pgtype.Text)
-		if ok {
-			assert.Equal(t, "member", roleText.String)
-		} else {
-			assert.Equal(t, "member", members[0].Role)
-		}
+		assert.Equal(t, "member", members[0].Role)
 	}
 }
 
@@ -241,7 +235,7 @@ func TestAddUserToProjectUnauthorized(t *testing.T) {
 	hackerID := int64(666)
 
 	// create a project owned by user 100(ownerid)
-	p, _ := fakeRepo.Create(context.Background(), projects.Project{
+	p, _ := fakeRepo.CreateProject(context.Background(), projects.Project{
 		Name:    "is 666 considered evil?",
 		OwnerID: ownerID,
 	})
@@ -276,7 +270,7 @@ func TestAddUserToProjectUnauthorized(t *testing.T) {
 	}
 
 	// verify that the repository remains empty
-	members, _ := fakeRepo.ListUsers(context.Background(), p.ID)
+	members, _ := fakeRepo.ListUsersInProject(context.Background(), p.ID)
 	assert.Equal(t, 0, len(members), "the hacker should not have been able to add any members")
 
 }
@@ -289,7 +283,7 @@ func TestRemoveUserFromProject(t *testing.T) {
 	ownerID := int64(100)
 	targetUserID := int64(200)
 
-	p, _ := fakeRepo.Create(context.Background(), projects.Project{
+	p, _ := fakeRepo.CreateProject(context.Background(), projects.Project{
 		Name:    "Project to Clean Up",
 		OwnerID: ownerID,
 	})
@@ -298,7 +292,7 @@ func TestRemoveUserFromProject(t *testing.T) {
 	_ = fakeRepo.AddUserToProject(context.Background(), p.ID, targetUserID, "member")
 
 	// verify the user is actually there before it starts
-	initialMembers, _ := fakeRepo.ListUsers(context.Background(), p.ID)
+	initialMembers, _ := fakeRepo.ListUsersInProject(context.Background(), p.ID)
 	assert.Equal(t, 1, len(initialMembers))
 
 	//  prepare the delete request
@@ -323,7 +317,7 @@ func TestRemoveUserFromProject(t *testing.T) {
 		assert.Equal(t, http.StatusOK, rec.Code)
 
 		// check that the fake DB is now empty for this project
-		finalMembers, _ := fakeRepo.ListUsers(context.Background(), p.ID)
+		finalMembers, _ := fakeRepo.ListUsersInProject(context.Background(), p.ID)
 		assert.Equal(t, 0, len(finalMembers), "The member list should be empty after removal")
 	}
 }
@@ -336,7 +330,7 @@ func TestRemoveUserFromProject_Unauthorized(t *testing.T) {
 	hackerID := int64(666) // the unauthorized user
 	targetUserID := int64(200)
 
-	p, _ := fakeRepo.Create(context.Background(), projects.Project{
+	p, _ := fakeRepo.CreateProject(context.Background(), projects.Project{
 		Name:    "Secure Project",
 		OwnerID: ownerID,
 	})
@@ -371,7 +365,7 @@ func TestRemoveUserFromProject_Unauthorized(t *testing.T) {
 	}
 
 	// ensure the user was NOT actually removed from the repo
-	members, _ := fakeRepo.ListUsers(context.Background(), p.ID)
+	members, _ := fakeRepo.ListUsersInProject(context.Background(), p.ID)
 	assert.Equal(t, 1, len(members), "The user should still be in the project!")
 }
 
@@ -382,16 +376,16 @@ func TestAddUserToProject_Duplicate(t *testing.T) {
 	ownerID := int64(100)
 	targetUserID := int64(200)
 
-	// 1. Create project
-	p, _ := fakeRepo.Create(context.Background(), projects.Project{
+	// create project
+	p, _ := fakeRepo.CreateProject(context.Background(), projects.Project{
 		Name:    "Duplicate Test Project",
 		OwnerID: ownerID,
 	})
 
-	// 2. Manually add the user once via the repo
-	_ = fakeRepo.AddUserToProject(context.Background(), targetUserID, p.ID, "member")
+	// manually add the user once via the repo
+	_ = fakeRepo.AddUserToProject(context.Background(), p.ID, targetUserID, "member")
 
-	// 3. Try to add the same user again via the Handler
+	// try to add the same user again via the Handler
 	input := map[string]interface{}{
 		"project_id": p.ID,
 		"user_id":    targetUserID,
@@ -405,14 +399,14 @@ func TestAddUserToProject_Duplicate(t *testing.T) {
 	c := e.NewContext(req, rec)
 	c.Set("user", &auth.Claims{UserID: ownerID})
 
-	// 4. Assert that it fails
+	// assert that it fails
 	err := handler.AddUserToProject(c)
 
-	// If your handler returns the error directly to Echo
+	// if handler returns the error directly to Echo
 	if err != nil {
 		assert.Contains(t, err.Error(), "already a member")
 	} else {
-		// If your handler catches the error and writes to recorder
+		// if handler catches the error and writes to recorder
 		assert.Equal(t, http.StatusBadRequest, rec.Code)
 		assert.Contains(t, rec.Body.String(), "already a member")
 	}

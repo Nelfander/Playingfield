@@ -5,9 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"time"
-
-	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/nelfander/Playingfield/internal/infrastructure/postgres/sqlc"
 )
 
 type projectUserEntry struct {
@@ -30,7 +27,7 @@ func NewFakeRepository() *FakeRepository {
 	}
 }
 
-func (f *FakeRepository) Create(ctx context.Context, p Project) (*Project, error) {
+func (f *FakeRepository) CreateProject(ctx context.Context, p Project) (*Project, error) {
 	p.ID = f.nextID
 	f.nextID++
 	p.CreatedAt = time.Now()
@@ -85,7 +82,7 @@ func (f *FakeRepository) DeleteProject(ctx context.Context, id int64, ownerID in
 	return errors.New("project not found")
 }
 
-func (f *FakeRepository) AddUserToProject(ctx context.Context, userID int64, projectID int64, role string) error {
+func (f *FakeRepository) AddUserToProject(ctx context.Context, projectID int64, userID int64, role string) error {
 	// Optional: Check if project exists first to be realistic
 	_, err := f.GetByID(ctx, projectID)
 	if err != nil {
@@ -100,13 +97,15 @@ func (f *FakeRepository) AddUserToProject(ctx context.Context, userID int64, pro
 	return nil
 }
 
-func (f *FakeRepository) ListUsers(ctx context.Context, projectID int64) ([]sqlc.ListUsersInProjectRow, error) {
-	var res []sqlc.ListUsersInProjectRow
+func (f *FakeRepository) ListUsersInProject(ctx context.Context, projectID int64) ([]ProjectMember, error) {
+	var res []ProjectMember
 	for _, pu := range f.projectUsers {
 		if pu.ProjectID == projectID {
-			res = append(res, sqlc.ListUsersInProjectRow{
-				ID:   pu.UserID,
-				Role: pgtype.Text{String: pu.Role, Valid: true},
+			// mapping to clean domain struct
+			res = append(res, ProjectMember{
+				ID:    pu.UserID,
+				Email: "fake@example.com",
+				Role:  pu.Role,
 			})
 		}
 	}
@@ -121,4 +120,8 @@ func (f *FakeRepository) RemoveUserFromProject(ctx context.Context, projectID in
 		}
 	}
 	return errors.New("user not found in project")
+}
+
+func (f *FakeRepository) UsersShareProject(ctx context.Context, userA, userB int64) (bool, error) {
+	return true, nil
 }

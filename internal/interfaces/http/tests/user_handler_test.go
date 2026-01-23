@@ -17,8 +17,8 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// setupHandler returns both the UserHandler and the underlying FakeRepository
-// clean way to get empty FakeRepository for every test so that one test doesnt affect another
+// setupHandler returns both the UserHandler and the underlying fakerepo
+// clean way to get empty fakerepo for every test so that one test doesnt affect another
 func setupHandler() (*handlers.UserHandler, *user.FakeRepository) {
 	fakeRepo := user.NewFakeRepository()
 	service := user.NewService(fakeRepo)
