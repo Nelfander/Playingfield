@@ -37,10 +37,19 @@ type Task struct {
 	ProjectID   int64
 	Title       string
 	Description pgtype.Text
-	Status      pgtype.Text
+	Status      string
 	AssignedTo  pgtype.Int8
 	CreatedAt   pgtype.Timestamptz
 	UpdatedAt   pgtype.Timestamptz
+}
+
+type TaskActivity struct {
+	ID        int64
+	TaskID    int64
+	UserID    int64
+	Action    string
+	Details   pgtype.Text
+	CreatedAt pgtype.Timestamptz
 }
 
 type User struct {

@@ -1,7 +1,7 @@
 -- name: CreateTask :one
 INSERT INTO tasks (project_id, title, description, status, assigned_to)
 VALUES ($1, $2, $3, $4, $5)
-RETURNING id, project_id, title, description, status, assigned_to, created_at, updated_at;
+RETURNING *;
 
 -- name: UpdateTask :one
 UPDATE tasks
@@ -11,18 +11,33 @@ SET title = $2,
     assigned_to = $5,
     updated_at = NOW()
 WHERE id = $1
-RETURNING id, project_id, title, description, status, assigned_to, created_at, updated_at;
+RETURNING *;
 
 -- name: DeleteTask :exec
 DELETE FROM tasks
 WHERE id = $1;
 
+-- name: GetTaskByID :one
+SELECT * FROM tasks WHERE id = $1;
+
 -- name: ListTasksForProject :many
-SELECT *
-FROM tasks
-WHERE project_id = $1
-ORDER BY created_at ASC;
+SELECT 
+    t.*, 
+    u.email as assignee_email
+FROM tasks t
+LEFT JOIN users u ON t.assigned_to = u.id
+WHERE t.project_id = $1
+ORDER BY t.created_at ASC;
 
+-- name: RecordTaskActivity :exec
+INSERT INTO task_activities (task_id, user_id, action, details)
+VALUES ($1, $2, $3, $4);
 
-
-
+-- name: GetTaskHistory :many
+SELECT 
+    ta.*, 
+    u.email as user_email
+FROM task_activities ta
+JOIN users u ON ta.user_id = u.id
+WHERE ta.task_id = $1
+ORDER BY ta.created_at DESC;

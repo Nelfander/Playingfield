@@ -21,7 +21,7 @@ type CreateTaskParams struct {
 	ProjectID   int64
 	Title       string
 	Description pgtype.Text
-	Status      pgtype.Text
+	Status      string
 	AssignedTo  pgtype.Int8
 }
 
@@ -57,31 +57,63 @@ func (q *Queries) DeleteTask(ctx context.Context, id int64) error {
 	return err
 }
 
-const listTasksForProject = `-- name: ListTasksForProject :many
-SELECT id, project_id, title, description, status, assigned_to, created_at, updated_at
-FROM tasks
-WHERE project_id = $1
-ORDER BY created_at ASC
+const getTaskByID = `-- name: GetTaskByID :one
+SELECT id, project_id, title, description, status, assigned_to, created_at, updated_at FROM tasks WHERE id = $1
 `
 
-func (q *Queries) ListTasksForProject(ctx context.Context, projectID int64) ([]Task, error) {
-	rows, err := q.db.Query(ctx, listTasksForProject, projectID)
+func (q *Queries) GetTaskByID(ctx context.Context, id int64) (Task, error) {
+	row := q.db.QueryRow(ctx, getTaskByID, id)
+	var i Task
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectID,
+		&i.Title,
+		&i.Description,
+		&i.Status,
+		&i.AssignedTo,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getTaskHistory = `-- name: GetTaskHistory :many
+SELECT 
+    ta.id, ta.task_id, ta.user_id, ta.action, ta.details, ta.created_at, 
+    u.email as user_email
+FROM task_activities ta
+JOIN users u ON ta.user_id = u.id
+WHERE ta.task_id = $1
+ORDER BY ta.created_at DESC
+`
+
+type GetTaskHistoryRow struct {
+	ID        int64
+	TaskID    int64
+	UserID    int64
+	Action    string
+	Details   pgtype.Text
+	CreatedAt pgtype.Timestamptz
+	UserEmail string
+}
+
+func (q *Queries) GetTaskHistory(ctx context.Context, taskID int64) ([]GetTaskHistoryRow, error) {
+	rows, err := q.db.Query(ctx, getTaskHistory, taskID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Task
+	var items []GetTaskHistoryRow
 	for rows.Next() {
-		var i Task
+		var i GetTaskHistoryRow
 		if err := rows.Scan(
 			&i.ID,
-			&i.ProjectID,
-			&i.Title,
-			&i.Description,
-			&i.Status,
-			&i.AssignedTo,
+			&i.TaskID,
+			&i.UserID,
+			&i.Action,
+			&i.Details,
 			&i.CreatedAt,
-			&i.UpdatedAt,
+			&i.UserEmail,
 		); err != nil {
 			return nil, err
 		}
@@ -91,6 +123,80 @@ func (q *Queries) ListTasksForProject(ctx context.Context, projectID int64) ([]T
 		return nil, err
 	}
 	return items, nil
+}
+
+const listTasksForProject = `-- name: ListTasksForProject :many
+SELECT 
+    t.id, t.project_id, t.title, t.description, t.status, t.assigned_to, t.created_at, t.updated_at, 
+    u.email as assignee_email
+FROM tasks t
+LEFT JOIN users u ON t.assigned_to = u.id
+WHERE t.project_id = $1
+ORDER BY t.created_at ASC
+`
+
+type ListTasksForProjectRow struct {
+	ID            int64
+	ProjectID     int64
+	Title         string
+	Description   pgtype.Text
+	Status        string
+	AssignedTo    pgtype.Int8
+	CreatedAt     pgtype.Timestamptz
+	UpdatedAt     pgtype.Timestamptz
+	AssigneeEmail pgtype.Text
+}
+
+func (q *Queries) ListTasksForProject(ctx context.Context, projectID int64) ([]ListTasksForProjectRow, error) {
+	rows, err := q.db.Query(ctx, listTasksForProject, projectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListTasksForProjectRow
+	for rows.Next() {
+		var i ListTasksForProjectRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ProjectID,
+			&i.Title,
+			&i.Description,
+			&i.Status,
+			&i.AssignedTo,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.AssigneeEmail,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const recordTaskActivity = `-- name: RecordTaskActivity :exec
+INSERT INTO task_activities (task_id, user_id, action, details)
+VALUES ($1, $2, $3, $4)
+`
+
+type RecordTaskActivityParams struct {
+	TaskID  int64
+	UserID  int64
+	Action  string
+	Details pgtype.Text
+}
+
+func (q *Queries) RecordTaskActivity(ctx context.Context, arg RecordTaskActivityParams) error {
+	_, err := q.db.Exec(ctx, recordTaskActivity,
+		arg.TaskID,
+		arg.UserID,
+		arg.Action,
+		arg.Details,
+	)
+	return err
 }
 
 const updateTask = `-- name: UpdateTask :one
@@ -108,7 +214,7 @@ type UpdateTaskParams struct {
 	ID          int64
 	Title       string
 	Description pgtype.Text
-	Status      pgtype.Text
+	Status      string
 	AssignedTo  pgtype.Int8
 }
 

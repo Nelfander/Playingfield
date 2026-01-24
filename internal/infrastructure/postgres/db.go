@@ -15,7 +15,7 @@ type DBAdapter struct {
 
 // Constructor
 func NewDBAdapter(pool *pgxpool.Pool) *DBAdapter {
-	return &DBAdapter{pool: pool} // use lowercase 'pool'
+	return &DBAdapter{pool: pool}
 }
 
 // QueryRow wrapper
