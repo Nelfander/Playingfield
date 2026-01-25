@@ -9,6 +9,7 @@ import (
 	echomiddleware "github.com/labstack/echo/v4/middleware"
 	"github.com/nelfander/Playingfield/internal/domain/messages"
 	"github.com/nelfander/Playingfield/internal/domain/projects"
+	"github.com/nelfander/Playingfield/internal/domain/tasks"
 	"github.com/nelfander/Playingfield/internal/domain/user"
 	"github.com/nelfander/Playingfield/internal/infrastructure/auth"
 	"github.com/nelfander/Playingfield/internal/infrastructure/postgres"
@@ -59,6 +60,11 @@ func Run() {
 	projectsService := projects.NewService(projectsRepo, hub)
 	projectHandler := handlers.NewProjectHandler(projectsService)
 
+	// --- Task repo + service + handler ---
+	taskRepo := postgres.NewTaskRepository(db)
+	taskService := tasks.NewService(taskRepo, projectsRepo, hub)
+	taskHandler := handlers.NewTaskHandler(taskService)
+
 	// --- Chat/Messages repo + service + handler ---
 	messageRepo := postgres.NewMessageRepository(db)
 	chatService := messages.NewService(messageRepo, projectsRepo, hub)
@@ -106,6 +112,10 @@ func Run() {
 	r := e.Group("/projects")
 	r.Use(middleware.JWTMiddleware(jwtManager))
 
+	// a group for specific task actions
+	t := e.Group("/tasks")
+	t.Use(middleware.JWTMiddleware(jwtManager))
+
 	// --- Routes ---
 	e.POST("/register", userHandler.Register)
 	e.GET("/admin", userHandler.Admin, middleware.RequireRole(jwtManager, "admin"))
@@ -114,6 +124,7 @@ func Run() {
 	e.GET("/health", func(c echo.Context) error {
 		return c.JSON(stdhttp.StatusOK, map[string]string{"status": "ok"})
 	})
+
 	// project routes
 	r.POST("", projectHandler.Create)
 	r.PUT("/:id", projectHandler.Update)
@@ -123,7 +134,16 @@ func Run() {
 	r.POST("/users", projectHandler.AddUserToProject)
 	r.GET("/users", projectHandler.ListUsersInProject)
 	r.DELETE("/users", projectHandler.RemoveUserFromProject)
-	// Project Chat History: /projects/:id/messages
+
+	// task routes
+	t.POST("", taskHandler.CreateTask)
+	t.PUT("/:id", taskHandler.UpdateTask)
+	t.DELETE("/:id", taskHandler.DeleteTask)
+	t.GET("/:id/history", taskHandler.GetTaskHistory)
+
+	// project task list: /projects/:id/tasks
+	r.GET("/:id/tasks", taskHandler.ListTaskByProject)
+	// project chat history: /projects/:id/messages
 	r.GET("/:id/messages", chatHandler.GetProjectHistory)
 
 	// websocket route

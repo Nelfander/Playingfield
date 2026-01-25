@@ -33,7 +33,7 @@ Built with **Go (Echo framework)**, **PostgreSQL (Neon)**, and a **React (TypeSc
 * **Communication:** REST API for state + WebSockets for reactivity.
 
 ## Future Goals
-* Implement **Task creation from the UI**.
+* Implement **Task creation from the UI**. Mostly Done
 * Improve **error handling and logging** further.
 * Implement **user role management** (admin vs regular users).
 * Add **unit and integration tests** for the project domain.   Mostly Done
@@ -155,7 +155,32 @@ Invoke-RestMethod -Method GET -Uri http://localhost:880/projects -Headers @{ Aut
 ---------------
 </details>
 
-🛠 <b>Development History</b>
+**🛠 <b>Development History</b>**
+
+<details>
+<summary><b>Jan 25, 2026: Task Management Backend completion!</b> (Click to expand) 🏗️</summary>
+- **Task Management System**: Full CRUD for tasks with project-level authorization.
+- **Activity Logging**: Every task creation and update is now automatically logged in a `task_activities` audit trail.
+- **RESTful Task Routing**: Implemented nested resource routing for projects and direct task access.
+
+## 🛠 API Progress (Tasks)
+
+### Projects & Tasks
+| Method | Endpoint | Description | Auth |
+| :--- | :--- | :--- | :--- |
+| GET | `/projects/:id/tasks` | List all tasks in a project | JWT (Member) |
+| POST | `/tasks` | Create a new task | JWT (Owner) |
+| PUT | `/tasks/:id` | Update task details/status | JWT (Owner/Assignee) |
+| DELETE | `/tasks/:id` | Delete a task | JWT (Owner) |
+| GET | `/tasks/:id/history` | View audit log for a task | JWT (Member) |
+
+### Real-time Updates
+- `TASK_CREATED:{project_id}`
+- `TASK_UPDATED:{project_id}:{task_id}`
+- `TASK_DELETED:{project_id}:{task_id}`
+
+</details>
+
 <details>
 <summary><b>Jan 24, 2026: Task Management & Audit Infrastructure</b> (Click to expand) 🏗️</summary>
 

@@ -31,10 +31,11 @@ type TaskActivity struct {
 type Repository interface {
 	CreateTask(ctx context.Context, task *Task) (*Task, error)
 	UpdateTask(ctx context.Context, task *Task) (*Task, error)
+	DeleteTask(ctx context.Context, id int64) error
 	GetTaskByID(ctx context.Context, id int64) (*Task, error)
-	ListByProject(ctx context.Context, projectID int64) ([]*Task, error)
+	ListTaskByProject(ctx context.Context, projectID int64) ([]*Task, error)
 
 	// History methods
-	RecordActivity(ctx context.Context, activity *TaskActivity) error
-	GetHistory(ctx context.Context, taskID int64) ([]*TaskActivity, error)
+	RecordTaskActivity(ctx context.Context, activity *TaskActivity) error
+	GetTaskHistory(ctx context.Context, taskID int64) ([]*TaskActivity, error)
 }
