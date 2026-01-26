@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import ProjectUsers, { type UserInProject } from './ProjectUsers';
 import AddMemberSection from './AddMemberSection';
-import { useWebSockets } from '../hooks/useWebSockets';
+import TaskBoard from './TaskBoard';
+
 
 interface Project {
     id: number;
@@ -16,7 +17,10 @@ interface ProjectListProps {
     currentUserId: number;
     showProjects: boolean;
     projectUsersMap: Record<number, UserInProject[]>;
+    showUsersMap: Record<number, boolean>;
     showTasksMap: Record<number, boolean>;
+    // CHANGED: Simple number instead of Record
+    taskRefreshTick: number;
     toggleProjectUsers: (id: number) => void;
     toggleTasks: (id: number) => void;
     removeUser: (projectId: number, userId: number) => void;
@@ -27,7 +31,6 @@ interface ProjectListProps {
     onUserRemoved: (projectId: number, userId: number) => void;
     onSelectProject: (projectId: number) => void;
     onStartDM: (userId: number, userEmail: string) => void;
-    // Added a callback to refresh the list after update
     onProjectUpdated: () => void;
 }
 
@@ -36,15 +39,14 @@ const ProjectList: React.FC<ProjectListProps> = ({
     currentUserId,
     showProjects,
     projectUsersMap,
+    showUsersMap,
     showTasksMap,
+    taskRefreshTick,
     toggleProjectUsers,
     toggleTasks,
     removeUser,
     handleAddMember,
     onDeleteProject,
-    onUserAdded,
-    onProjectCreated,
-    onUserRemoved,
     onSelectProject,
     onStartDM,
     onProjectUpdated
@@ -54,16 +56,6 @@ const ProjectList: React.FC<ProjectListProps> = ({
     const [editForm, setEditForm] = useState({ name: '', description: '' });
 
     const token = localStorage.getItem('token');
-
-    useWebSockets(
-        token,
-        (id) => onDeleteProject(id),
-        (projectId, userId, role) => onUserAdded(projectId, userId, role),
-        () => onProjectCreated(),
-        (projectId, userId) => onUserRemoved(projectId, userId),
-        // ADD THIS LINE HERE:
-        () => onProjectUpdated()
-    );
 
     if (!showProjects) return null;
 
@@ -84,7 +76,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
 
             if (response.ok) {
                 setEditingProjectId(null);
-                onProjectUpdated(); // Refresh the list
+                onProjectUpdated();
             } else {
                 const errorData = await response.json();
                 alert(`Update failed: ${errorData.error || 'Unknown error'}`);
@@ -202,13 +194,13 @@ const ProjectList: React.FC<ProjectListProps> = ({
 
                         <div className="accordion-section">
                             <button className="full-width" onClick={() => toggleProjectUsers(project.id)}>
-                                {projectUsersMap[project.id] ? "Hide Members" : "Show Members"}
+                                {showUsersMap[project.id] ? "Hide Members" : "Show Members"}
                             </button>
 
-                            {projectUsersMap[project.id] && (
+                            {showUsersMap[project.id] && (
                                 <div className="accordion-content">
                                     <ProjectUsers
-                                        users={projectUsersMap[project.id]}
+                                        users={projectUsersMap[project.id] || []}
                                         onRemove={isOwner ? (uId) => removeUser(project.id, uId) : undefined}
                                         onMessage={onStartDM}
                                     />
@@ -216,9 +208,25 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                         <AddMemberSection
                                             projectId={project.id}
                                             onAdd={handleAddMember}
-                                            excludeIds={projectUsersMap[project.id].map(u => u.id)}
+                                            excludeIds={(projectUsersMap[project.id] || []).map(u => u.id)}
                                         />
                                     )}
+                                </div>
+                            )}
+
+                            <button className="full-width" onClick={() => toggleTasks(project.id)} style={{ marginTop: '5px', backgroundColor: '#52c41a', color: 'white' }}>
+                                {showTasksMap[project.id] ? "Hide Tasks" : "Show Tasks"}
+                            </button>
+
+                            {showTasksMap[project.id] && (
+                                <div className="accordion-content">
+                                    <TaskBoard
+                                        projectId={project.id}
+                                        // CHANGED: Use the simple number directly
+                                        refreshTick={taskRefreshTick}
+                                        isOwner={isOwner}
+                                        members={projectUsersMap[project.id] || []}
+                                    />
                                 </div>
                             )}
                         </div>

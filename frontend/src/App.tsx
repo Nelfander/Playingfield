@@ -5,6 +5,7 @@ import CreateProjectModal from "./components/CreateProjectModal";
 import { ChatBox } from "./components/ChatBox";
 import { DirectMessageBox } from "./components/DirectMessageBox";
 import { type UserInProject } from "./components/ProjectUsers";
+import { useWebSockets } from "./hooks/useWebSockets";
 import "./App.css";
 
 type Project = {
@@ -20,7 +21,12 @@ function App() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [showProjects, setShowProjects] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  // projectUsersMap holds the ACTUAL DATA (emails/ids)
   const [projectUsersMap, setProjectUsersMap] = useState<Record<number, UserInProject[]>>({});
+
+  // UI state for accordions
+  const [showUsersMap, setShowUsersMap] = useState<Record<number, boolean>>({});
   const [showTasksMap, setShowTasksMap] = useState<Record<number, boolean>>({});
 
   const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
@@ -30,6 +36,41 @@ function App() {
   const token = localStorage.getItem("token");
   const currentUserId = Number(localStorage.getItem("userId")) || 0;
 
+  // This simple number triggers refreshes across all task boards
+  const [taskRefreshTick, setTaskRefreshTick] = useState(0);
+
+  // --- WebSocket Handlers ---
+  const handleTaskSignal = (projectId: number) => {
+    console.log(`WS Signal: Task change in project ${projectId}`);
+    // Incrementing the number forces a re-render/re-fetch in children
+    setTaskRefreshTick(prev => prev + 1);
+  };
+
+  useWebSockets(
+    token,
+    (id) => handleDeleteProjectState(id),
+    (pId, uId, role) => handleLiveUserAdded(pId, uId, role),
+    () => handleLiveProjectCreated(),
+    (pId, uId) => handleLiveUserRemoved(pId, uId),
+    () => fetchProjects(),
+    (pId) => handleTaskSignal(pId), // Created
+    (pId) => handleTaskSignal(pId), // Updated
+    (pId) => handleTaskSignal(pId)  // Deleted
+  );
+
+  async function fetchUsersData(projectId: number) {
+    if (!token) return;
+    try {
+      const res = await fetch(`http://localhost:880/projects/users?project_id=${projectId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      setProjectUsersMap(prev => ({ ...prev, [projectId]: data || [] }));
+    } catch (err) {
+      console.error(`Error fetching users for project ${projectId}:`, err);
+    }
+  }
+
   async function fetchProjects() {
     if (!token) return;
     try {
@@ -37,7 +78,12 @@ function App() {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
-      setProjects(data || []);
+      const projectData: Project[] = data || [];
+      setProjects(projectData);
+
+      // Fetch members for ALL projects immediately so TaskBoard always has them
+      projectData.forEach(p => fetchUsersData(p.id));
+
     } catch (err) {
       console.error("Fetch projects error:", err);
     }
@@ -56,13 +102,6 @@ function App() {
   }
 
   async function handleLiveProjectCreated() {
-    console.log("WS Signal: New project created. Updating state...");
-    await fetchProjects();
-  }
-
-  // --- NEW: Handle Real-time Update signal ---
-  async function handleLiveProjectUpdated() {
-    console.log("WS Signal: Project updated. Refreshing list...");
     await fetchProjects();
   }
 
@@ -82,18 +121,7 @@ function App() {
       fetchProjects();
       setShowProjects(true);
     } else {
-      if (!token) return;
-      fetch(`http://localhost:880/projects/users?project_id=${projectId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-        .then(res => res.json())
-        .then(data => {
-          setProjectUsersMap(prev => ({
-            ...prev,
-            [projectId]: data || []
-          }));
-        })
-        .catch(err => console.error("Live sync fetch error:", err));
+      fetchUsersData(projectId);
     }
   }
 
@@ -113,7 +141,7 @@ function App() {
     }
   }
 
-  async function handleAddMember(projectId: number, userId: number) {
+  async function addMemberToMap(projectId: number, userId: number) {
     if (!token) return;
     const confirmAdd = window.confirm("Are you sure you want to add this member?");
     if (!confirmAdd) return;
@@ -129,12 +157,7 @@ function App() {
       });
 
       if (res.ok) {
-        setProjectUsersMap(prev => {
-          const n = { ...prev };
-          delete n[projectId];
-          return n;
-        });
-        toggleProjectUsers(projectId);
+        fetchUsersData(projectId);
       } else {
         const err = await res.json();
         alert(err.error || "Failed to add member");
@@ -142,22 +165,14 @@ function App() {
     } catch (err) { console.error(err); }
   }
 
-  async function toggleProjectUsers(projectID: number) {
-    if (projectUsersMap[projectID]) {
-      setProjectUsersMap(prev => {
-        const n = { ...prev };
-        delete n[projectID];
-        return n;
-      });
-      return;
+  async function toggleProjectUsers(projectId: number) {
+    if (!projectUsersMap[projectId]) {
+      await fetchUsersData(projectId);
     }
-    try {
-      const res = await fetch(`http://localhost:880/projects/users?project_id=${projectID}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      setProjectUsersMap(prev => ({ ...prev, [projectID]: data || [] }));
-    } catch (err) { console.error(err); }
+    setShowUsersMap(prev => ({
+      ...prev,
+      [projectId]: !prev[projectId]
+    }));
   }
 
   async function removeUser(projectID: number, userID: number) {
@@ -190,7 +205,6 @@ function App() {
         <LoginForm message={message} setMessage={setMessage} />
       ) : (
         <div className="main-layout" style={{ display: 'flex', gap: '20px', padding: '20px' }}>
-
           <div className="project-list-container" style={{ flex: 1 }}>
             <h1>My Projects</h1>
             <div className="button-group">
@@ -214,19 +228,20 @@ function App() {
               currentUserId={currentUserId}
               showProjects={showProjects}
               projectUsersMap={projectUsersMap}
+              showUsersMap={showUsersMap}
               showTasksMap={showTasksMap}
               toggleProjectUsers={toggleProjectUsers}
               toggleTasks={(id) => setShowTasksMap(p => ({ ...p, [id]: !p[id] }))}
               removeUser={removeUser}
-              handleAddMember={handleAddMember}
+              handleAddMember={addMemberToMap}
               onDeleteProject={handleDeleteProjectState}
               onUserAdded={handleLiveUserAdded}
               onProjectCreated={handleLiveProjectCreated}
               onUserRemoved={handleLiveUserRemoved}
               onSelectProject={(id) => setSelectedProjectId(id)}
               onStartDM={handleStartDM}
-              // --- PLUGGED IN HERE ---
               onProjectUpdated={fetchProjects}
+              taskRefreshTick={taskRefreshTick} // Corrected syntax here
             />
           </div>
 
@@ -265,6 +280,7 @@ function App() {
                 setProjects(p => [...p, newP]);
                 setIsModalOpen(false);
                 setShowProjects(true);
+                fetchUsersData(newP.id);
               } catch (err) { console.error(err); }
             }}
           />

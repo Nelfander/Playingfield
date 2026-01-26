@@ -41,7 +41,7 @@ func (h *TaskHandler) CreateTask(c echo.Context) error {
 		ProjectID:   req.ProjectID,
 		Title:       req.Title,
 		Description: req.Description,
-		Status:      req.Status,
+		Status:      "TODO",
 		AssignedTo:  req.AssignedTo,
 	}
 
@@ -68,6 +68,7 @@ func (h *TaskHandler) UpdateTask(c echo.Context) error {
 		Description string `json:"description"`
 		Status      string `json:"status"`
 		AssignedTo  *int64 `json:"assigned_to"`
+		Message     string `json:"message"`
 	}
 
 	if err := c.Bind(&req); err != nil {
@@ -84,7 +85,7 @@ func (h *TaskHandler) UpdateTask(c echo.Context) error {
 		AssignedTo:  req.AssignedTo,
 	}
 
-	updated, err := h.service.UpdateTask(c.Request().Context(), claims.UserID, task)
+	updated, err := h.service.UpdateTask(c.Request().Context(), claims.UserID, task, req.Message)
 	if err != nil {
 		if strings.Contains(err.Error(), "unauthorized") {
 			return c.JSON(http.StatusForbidden, echo.Map{"error": err.Error()})
@@ -134,16 +135,19 @@ func (h *TaskHandler) DeleteTask(c echo.Context) error {
 
 // GET /tasks/:id/history
 func (h *TaskHandler) GetTaskHistory(c echo.Context) error {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	taskID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, echo.Map{"error": "invalid task id"})
 	}
 
 	claims := c.Get("user").(*auth.Claims)
 
-	history, err := h.service.GetTaskHistory(c.Request().Context(), claims.UserID, id)
+	history, err := h.service.GetTaskHistory(c.Request().Context(), claims.UserID, taskID)
 	if err != nil {
-		return c.JSON(http.StatusForbidden, echo.Map{"error": err.Error()})
+		if strings.Contains(err.Error(), "unauthorized") {
+			return c.JSON(http.StatusForbidden, echo.Map{"error": err.Error()})
+		}
+		return c.JSON(http.StatusInternalServerError, echo.Map{"error": "failed to fetch history"})
 	}
 
 	return c.JSON(http.StatusOK, history)

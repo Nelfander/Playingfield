@@ -1,7 +1,7 @@
 # Playingfield
 
-A real-time, lightweight project management platform.
-Built with **Go (Echo framework)**, **PostgreSQL (Neon)**, and a **React (TypeScript)** frontend.
+A real-time, collaborative project and task management application,
+built with **Go (Echo framework)**, **PostgreSQL (Neon)**, and a **React (TypeScript)** frontend.
 
 ---
 
@@ -13,16 +13,24 @@ Built with **Go (Echo framework)**, **PostgreSQL (Neon)**, and a **React (TypeSc
 * **Live Timestamps:** Every message is stamped with a human-readable time (e.g., 14:05) for better context.
 * **History Persistence:** New members can see previous project discussions instantly upon joining.
 
+### 📋 Collaborative Task Management
+* **Kanban-Style Organization:** High-visibility board layout grouping tasks into `To Do`, `In Progress`, and `Done` columns for clear project tracking.
+* **Granular Task Ownership:** Ability to create tasks with specific descriptions and assign them to any verified project member.
+* **Signal-Driven Refresh:** Leverages a lightweight "Pulse" synchronization logic where task changes trigger instant UI re-validation across all collaborator screens via WebSockets.
+* **Role-Based Task Control:** Strict authorization logic ensuring only Project Owners can create or delete tasks, while allowing assigned members to update task status.
+* **Persistent History:** Every task is backed by a robust database schema, ensuring assignments and statuses are preserved across sessions.
+
 ### ⚡ Real-Time Synchronization (WebSockets)
 * **Global Hub:** A custom WebSocket Hub manages concurrent client connections and room-based broadcasting.
-* **Live Dashboard Updates:** * **Project Membership:** Projects appear/vanish from your dashboard instantly when you are added or removed by an owner.
-    * **Global Deletion:** If an owner deletes a project, it is wiped from every member's screen in real-time.
+* **Live Dashboard Updates:** * **Project/Task Membership:** Projects/Tasks appear/vanish from your dashboard instantly when you are added or removed by an owner.
+    * **Global Deletion:** If an owner deletes a project/task, it is wiped from every member's screen in real-time.
 * **Automatic Member Sync:** Live updates to member lists without requiring page refreshes.
 
 ### 🔐 Authentication & Security
 * **JWT-Based Auth:** Secure registration and login with token-based identity.
 * **Identity Integrity:** Handlers derive `user_id` exclusively from verified JWT claims, preventing "ID Spoofing."
-* **Ownership Enforcement:** Destructive actions (deleting projects, removing members) are restricted to the project owner via backend middleware.
+* **Ownership Enforcement:** Destructive actions (deleting projects/tasks, removing members) are restricted to the project owner via backend middleware.
+Updating actions are the same.
 
 ---
 
@@ -155,7 +163,31 @@ Invoke-RestMethod -Method GET -Uri http://localhost:880/projects -Headers @{ Aut
 ---------------
 </details>
 
-**🛠 <b>Development History</b>**
+* 🛠 <b>Development History</b>
+<details>
+<summary><b>Jan 26, 2026: Real-Time Task Infrastructure & Collaborative UI</b> (Click to expand) </summary>
+
+### Phase 1: Task Board Frontend Architecture
+* **Componentized Kanban System**: Developed a full-scale `TaskBoard` and `TaskColumn` infrastructure. Implemented logical grouping of tasks by status (`To Do`, `In Progress`, `Done`) with dynamic filtering.
+* **Member-Aware Assignment UI**: Integrated project member data into the task creation flow, allowing for real-id assignment and visual tracking of task owners within the board.
+
+### Phase 2: Reactive State Synchronization (The "Tick" System)
+* **Signal-Based Update Architecture**: Implemented a lightweight "Pulse" mechanism (`taskRefreshTick`) for real-time updates. Rather than pushing heavy data payloads over WebSockets, the backend emits a versioning signal that triggers optimized client-side re-validation.
+* **WebSocket Event Consolidation**: Standardized broadcast logic for `TASK_CREATED`, `TASK_UPDATED`, and `TASK_DELETED`. All mutation events now feed into a unified "Signal" bus, ensuring all collaborators maintain a synchronized view without manual polling.
+
+### Phase 3: Project Ownership & RBAC Hardening
+* **Verified Mutation Gates**: Hardened the Project controller to enforce strict **Project Owner** authorization. "Edit" and "Delete" operations now perform server-side verification against JWT claims before executing database writes.
+* **Idempotent Update Service**: Refined the `PUT /projects/:id` endpoint to handle partial updates, ensuring metadata changes are persisted without disrupting established project-member relationships.
+
+### Phase 4: Optimized Domain Hydration & UI Logic
+* **On-Demand Membership Mapping**: Implemented a lazy-loading strategy for project metadata. Member lists and task boards are now hydrated only when the domain section is activated, significantly reducing initial payload size.
+* **Global Interaction Layer**: Developed a universal UI feedback system using CSS filters and transforms, providing tactile hover states and "lift" effects for all interactive elements to improve the demo's professional feel.
+
+### Phase 5: Full-Stack Interface Alignment
+* **Type-Safe Contract Synchronization**: Aligned backend DTOs with Frontend TypeScript interfaces, ensuring strict compile-time safety across the network boundary.
+* **Unified Response Formatting**: Standardized error and success handling across the Project and Task services for predictable UI notification behavior.
+
+</details>
 
 <details>
 <summary><b>Jan 25, 2026: Task Management Backend completion!</b> (Click to expand) 🏗️</summary>

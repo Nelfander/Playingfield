@@ -50,11 +50,10 @@ func (s *Service) CreateTask(ctx context.Context, requesterID int64, t Task) (*T
 	// task can have no "assignedTo" in the moment of their creation,
 	// a project owner might make the project and create the tasks needed but decide
 	// to assign them to project members later on
-	details := "Task created"
+	details := "Initial task creation"
 	if t.AssignedTo != nil {
-		details = fmt.Sprintf("Task created and assigned to user %d", *t.AssignedTo)
+		details = "Task created and assigned to team member"
 	}
-
 	//  Record Activity (STRICT: fail if this fails).
 	activity := &TaskActivity{
 		TaskID:  createdTask.ID,
@@ -76,7 +75,7 @@ func (s *Service) CreateTask(ctx context.Context, requesterID int64, t Task) (*T
 	return createdTask, nil
 }
 
-func (s *Service) UpdateTask(ctx context.Context, requesterID int64, t Task) (*Task, error) {
+func (s *Service) UpdateTask(ctx context.Context, requesterID int64, t Task, commitMsg string) (*Task, error) {
 	// Fetch the existing task to see who is assigned and which project it belongs to.
 	existingTask, err := s.repo.GetTaskByID(ctx, t.ID)
 	if err != nil {
@@ -88,6 +87,7 @@ func (s *Service) UpdateTask(ctx context.Context, requesterID int64, t Task) (*T
 	if err != nil {
 		return nil, fmt.Errorf("failed to verify project ownership: %w", err)
 	}
+
 	// Authorization Check: Is requester the Owner OR the Assignee?
 	isOwner := project.OwnerID == requesterID
 	isAssignee := existingTask.AssignedTo != nil && *existingTask.AssignedTo == requesterID
@@ -95,17 +95,19 @@ func (s *Service) UpdateTask(ctx context.Context, requesterID int64, t Task) (*T
 	if !isOwner && !isAssignee {
 		return nil, fmt.Errorf("unauthorized: you are not the owner or the assigned member")
 	}
+
 	// Perform the update.
 	updatedTask, err := s.repo.UpdateTask(ctx, &t)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update task: %w", err)
 	}
+
 	// Record Activity (Log what happened).
 	activity := &TaskActivity{
 		TaskID:  updatedTask.ID,
 		UserID:  requesterID,
 		Action:  "UPDATED",
-		Details: fmt.Sprintf("Task updated by user %d. New Status: %s", requesterID, updatedTask.Status),
+		Details: fmt.Sprintf("[%s] %s", updatedTask.Status, commitMsg),
 	}
 	err = s.repo.RecordTaskActivity(ctx, activity)
 	if err != nil {

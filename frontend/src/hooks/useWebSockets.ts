@@ -4,8 +4,12 @@ type OnProjectDeleted = (id: number) => void;
 type OnUserAdded = (projectId: number, userId: number, role: string) => void;
 type OnProjectCreated = () => void;
 type OnUserRemoved = (projectId: number, userId: number) => void;
-// 1. Add the new type
 type OnProjectUpdated = (id: number) => void;
+
+// Task Types
+type OnTaskCreated = (projectId: number) => void;
+type OnTaskUpdated = (projectId: number, taskId: number) => void;
+type OnTaskDeleted = (projectId: number, taskId: number) => void;
 
 export const useWebSockets = (
     token: string | null,
@@ -13,15 +17,21 @@ export const useWebSockets = (
     onUserAdded: OnUserAdded,
     onProjectCreated: OnProjectCreated,
     onUserRemoved: OnUserRemoved,
-    // 2. Add to parameters
-    onProjectUpdated: OnProjectUpdated
+    onProjectUpdated: OnProjectUpdated,
+    // Task Parameters
+    onTaskCreated: OnTaskCreated,
+    onTaskUpdated: OnTaskUpdated,
+    onTaskDeleted: OnTaskDeleted
 ) => {
     const callbacks = useRef({
         onProjectDeleted,
         onUserAdded,
         onProjectCreated,
         onUserRemoved,
-        onProjectUpdated
+        onProjectUpdated,
+        onTaskCreated,
+        onTaskUpdated,
+        onTaskDeleted
     });
 
     useEffect(() => {
@@ -30,9 +40,21 @@ export const useWebSockets = (
             onUserAdded,
             onProjectCreated,
             onUserRemoved,
-            onProjectUpdated
+            onProjectUpdated,
+            onTaskCreated,
+            onTaskUpdated,
+            onTaskDeleted
         };
-    }, [onProjectDeleted, onUserAdded, onProjectCreated, onUserRemoved, onProjectUpdated]);
+    }, [
+        onProjectDeleted,
+        onUserAdded,
+        onProjectCreated,
+        onUserRemoved,
+        onProjectUpdated,
+        onTaskCreated,
+        onTaskUpdated,
+        onTaskDeleted
+    ]);
 
     useEffect(() => {
         if (!token) return;
@@ -42,10 +64,10 @@ export const useWebSockets = (
         socket.onmessage = (event: MessageEvent) => {
             const data: string = event.data;
 
+            // --- Project & User Logic ---
             if (data === "PROJECT_CREATED") {
                 callbacks.current.onProjectCreated();
             }
-            // 3. Logic to handle the update signal
             else if (data.startsWith("PROJECT_UPDATED:")) {
                 const id = parseInt(data.split(":")[1], 10);
                 if (!isNaN(id)) {
@@ -73,6 +95,29 @@ export const useWebSockets = (
 
                 if (!isNaN(projectId) && !isNaN(userId)) {
                     callbacks.current.onUserRemoved(projectId, userId);
+                }
+            }
+            // --- Task Logic ---
+            else if (data.startsWith("TASK_CREATED:")) {
+                const projectId = parseInt(data.split(":")[1], 10);
+                if (!isNaN(projectId)) {
+                    callbacks.current.onTaskCreated(projectId);
+                }
+            }
+            else if (data.startsWith("TASK_UPDATED:")) {
+                const parts = data.split(":");
+                const projectId = parseInt(parts[1], 10);
+                const taskId = parseInt(parts[2], 10);
+                if (!isNaN(projectId) && !isNaN(taskId)) {
+                    callbacks.current.onTaskUpdated(projectId, taskId);
+                }
+            }
+            else if (data.startsWith("TASK_DELETED:")) {
+                const parts = data.split(":");
+                const projectId = parseInt(parts[1], 10);
+                const taskId = parseInt(parts[2], 10);
+                if (!isNaN(projectId) && !isNaN(taskId)) {
+                    callbacks.current.onTaskDeleted(projectId, taskId);
                 }
             }
         };

@@ -79,10 +79,15 @@ func (q *Queries) GetTaskByID(ctx context.Context, id int64) (Task, error) {
 
 const getTaskHistory = `-- name: GetTaskHistory :many
 SELECT 
-    ta.id, ta.task_id, ta.user_id, ta.action, ta.details, ta.created_at, 
-    u.email as user_email
+    ta.id, 
+    ta.task_id, 
+    ta.user_id, 
+    u.email as user_email, -- Add this
+    ta.action, 
+    ta.details, 
+    ta.created_at
 FROM task_activities ta
-JOIN users u ON ta.user_id = u.id
+JOIN users u ON ta.user_id = u.id -- Add this join
 WHERE ta.task_id = $1
 ORDER BY ta.created_at DESC
 `
@@ -91,10 +96,10 @@ type GetTaskHistoryRow struct {
 	ID        int64
 	TaskID    int64
 	UserID    int64
+	UserEmail string
 	Action    string
 	Details   pgtype.Text
 	CreatedAt pgtype.Timestamptz
-	UserEmail string
 }
 
 func (q *Queries) GetTaskHistory(ctx context.Context, taskID int64) ([]GetTaskHistoryRow, error) {
@@ -110,10 +115,10 @@ func (q *Queries) GetTaskHistory(ctx context.Context, taskID int64) ([]GetTaskHi
 			&i.ID,
 			&i.TaskID,
 			&i.UserID,
+			&i.UserEmail,
 			&i.Action,
 			&i.Details,
 			&i.CreatedAt,
-			&i.UserEmail,
 		); err != nil {
 			return nil, err
 		}

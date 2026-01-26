@@ -11,6 +11,30 @@ body {
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
 }
 
+/* --- UNIVERSAL BUTTON HOVER LOGIC --- */
+button {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  /* Professional "snappy" transition */
+  cursor: pointer;
+  outline: none;
+}
+
+button:hover {
+  filter: brightness(1.15) saturate(1.1);
+  /* Makes the button "glow" */
+  transform: translateY(-2px);
+  /* Subtle lift */
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+  /* Deepens the shadow */
+}
+
+button:active {
+  transform: translateY(0px);
+  /* Returns to normal on click */
+  filter: brightness(0.9);
+  /* Dims slightly on click */
+}
+
 * {
   box-sizing: border-box;
 }

@@ -35,9 +35,14 @@ VALUES ($1, $2, $3, $4);
 
 -- name: GetTaskHistory :many
 SELECT 
-    ta.*, 
-    u.email as user_email
+    ta.id, 
+    ta.task_id, 
+    ta.user_id, 
+    u.email as user_email, -- Add this
+    ta.action, 
+    ta.details, 
+    ta.created_at
 FROM task_activities ta
-JOIN users u ON ta.user_id = u.id
+JOIN users u ON ta.user_id = u.id -- Add this join
 WHERE ta.task_id = $1
 ORDER BY ta.created_at DESC;
