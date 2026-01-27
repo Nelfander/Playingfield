@@ -23,14 +23,14 @@ built with **Go (Echo framework)**, **PostgreSQL (Neon)**, and a **React (TypeSc
 ### ⚡ Real-Time Synchronization (WebSockets)
 * **Global Hub:** A custom WebSocket Hub manages concurrent client connections and room-based broadcasting.
 * **Live Dashboard Updates:** * **Project/Task Membership:** Projects/Tasks appear/vanish from your dashboard instantly when you are added or removed by an owner.
-    * **Global Deletion:** If an owner deletes a project/task, it is wiped from every member's screen in real-time.
+ * **Global Deletion/Creation:** If an owner creates/deletes/updates a project/task, it is edited from every member's screen in real-time.
 * **Automatic Member Sync:** Live updates to member lists without requiring page refreshes.
 
 ### 🔐 Authentication & Security
 * **JWT-Based Auth:** Secure registration and login with token-based identity.
 * **Identity Integrity:** Handlers derive `user_id` exclusively from verified JWT claims, preventing "ID Spoofing."
 * **Ownership Enforcement:** Destructive actions (deleting projects/tasks, removing members) are restricted to the project owner via backend middleware.
-Updating actions are the same.
+Updating or creating actions are the same.
 
 ---
 
@@ -40,10 +40,12 @@ Updating actions are the same.
 * **Database:** PostgreSQL (Hosted on Neon.tech).
 * **Communication:** REST API for state + WebSockets for reactivity.
 
+---
+
 ## Future Goals
-* Implement **Task creation from the UI**. Mostly Done
+* Implement **Task creation from the UI**. DONE
 * Improve **error handling and logging** further.
-* Implement **user role management** (admin vs regular users).
+* Implement **user role management** (admin vs regular users). 
 * Add **unit and integration tests** for the project domain.   Mostly Done
 * Add **Project group chats and 1 on 1 individual project member chat feature**. DONE
 
@@ -87,12 +89,13 @@ Invoke-RestMethod -Method POST -Uri http://localhost:880/projects -Headers @{ Au
 Invoke-RestMethod -Method GET -Uri http://localhost:880/projects -Headers @{ Authorization = "Bearer $token" }
 ```
 
----
 </details>
 
+---
 
 <details>
 <summary><b>Code Structure</b> (Click to expand)</summary>
+
 * `internal/domain/user` – domain model, repository interfaces.
 * `internal/domain/projects` – project domain, service, repository interface.
 * `internal/infrastructure/postgres` – SQLC-based repository implementation, DB adapter.
@@ -162,8 +165,11 @@ Invoke-RestMethod -Method GET -Uri http://localhost:880/projects -Headers @{ Aut
    
 ---------------
 </details>
+---------------
 
-* 🛠 <b>Development History</b>
+## 🛠 <b>Development History</b>
+<details>
+
 <details>
 <summary><b>Jan 26, 2026: Real-Time Task Infrastructure & Collaborative UI</b> (Click to expand) </summary>
 
@@ -384,6 +390,7 @@ JWT Claims: Security checks enforced using role-based claims within the JWT.
 
 </details>
 
+---
 
 ## 🧪 Testing  (Will add all of the tests here in the future)
 
