@@ -93,8 +93,9 @@ Invoke-RestMethod -Method GET -Uri http://localhost:880/projects -Headers @{ Aut
 
 ---
 
+## Code Structure
 <details>
-<summary><b>Code Structure</b> (Click to expand)</summary>
+<summary>(Click to expand)</summary>
 
 * `internal/domain/user` – domain model, repository interfaces.
 * `internal/domain/projects` – project domain, service, repository interface.
@@ -104,8 +105,9 @@ Invoke-RestMethod -Method GET -Uri http://localhost:880/projects -Headers @{ Aut
 ---
 </details>
 
+## Known Issues & How I Solved Them
 <details>
-<summary><b>Known Issues & How I Solved Them</b> (Click to expand)</summary>
+<summary>(Click to expand)</summary>
 
 ### 1. Users created with empty role/status
 
@@ -163,9 +165,10 @@ Invoke-RestMethod -Method GET -Uri http://localhost:880/projects -Headers @{ Aut
     * Fixed a "Silent Bug" regarding parameter ordering (`userID` vs `projectID`) identified during unit testing.
 
    
----------------
+
 </details>
----------------
+
+---
 
 ## 🛠 <b>Development History</b>
 <details>
@@ -388,6 +391,7 @@ Ownership Logic: Only project owners are permitted to remove users.
 
 JWT Claims: Security checks enforced using role-based claims within the JWT.
 
+</details>
 </details>
 
 ---
