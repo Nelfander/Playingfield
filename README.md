@@ -18,7 +18,7 @@ built with **Go (Echo framework)**, **PostgreSQL (Neon)**, and a **React (TypeSc
 * **Granular Task Ownership:** Ability to create tasks with specific descriptions and assign them to any verified project member.
 * **Signal-Driven Refresh:** Leverages a lightweight "Pulse" synchronization logic where task changes trigger instant UI re-validation across all collaborator screens via WebSockets.
 * **Role-Based Task Control:** Strict authorization logic ensuring only Project Owners can create or delete tasks, while allowing assigned members to update task status.
-* **Persistent History:** Every task is backed by a robust database schema, ensuring assignments and statuses are preserved across sessions.
+* **Persistent History:** Every task is backed by a robust database schema, ensuring assignments and statuses are preserved across sessions. Kind of like a github commit. (Members can see what was changed, when it was changed).
 
 ### ⚡ Real-Time Synchronization (WebSockets)
 * **Global Hub:** A custom WebSocket Hub manages concurrent client connections and room-based broadcasting.
