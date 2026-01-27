@@ -171,7 +171,7 @@ Invoke-RestMethod -Method GET -Uri http://localhost:880/projects -Headers @{ Aut
 ---
 
 ## 🛠 <b>Development History</b>
-<details><summary>(Click to expand)</suummary>
+<details><summary>(Click to expand)</summary>
 
 <details>
 <summary><b>Jan 26, 2026: Real-Time Task Infrastructure & Collaborative UI</b> (Click to expand) </summary>
@@ -546,6 +546,7 @@ This suite focuses on the mutation of existing project resources and the verific
 
 </details>
 
+---
 
 ## Architecture & Flow Diagram
 <details>
