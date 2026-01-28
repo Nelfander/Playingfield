@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strconv" // Added for string conversion
+	"strconv"
 
 	"github.com/gorilla/websocket"
 	"github.com/labstack/echo/v4"
@@ -69,7 +69,7 @@ func (h *WSHandler) HandleConnection(c echo.Context) error {
 		return err
 	}
 
-	// We include the ProjectID so the Hub knows where to route messages
+	// include the ProjectID so the Hub knows where to route messages
 	client := &ws.Client{
 		UserID:    claims.UserID,
 		ProjectID: projectID,
