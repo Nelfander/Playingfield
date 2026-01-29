@@ -164,7 +164,33 @@ Invoke-RestMethod -Method GET -Uri http://localhost:880/projects -Headers @{ Aut
     * Implemented **Object-Level Authorization**: The service now fetches the project and compares the `OwnerID` against the `requesterID` before performing any mutations.
     * Fixed a "Silent Bug" regarding parameter ordering (`userID` vs `projectID`) identified during unit testing.
 
-   
+### 9. Race Conditions on `client.Send`
+* **Issue**: The hub was closing `client.Send` directly during `Unregister`, while the handler’s writer goroutine could still be sending, causing potential `panic: send on closed channel`.  
+* **Solution**:  
+    * Introduced a `done` channel owned by `Client`.  
+    * Writer goroutine now listens on `done` and closes `Send` itself.  
+    * Hub signals shutdown by closing `done` instead of `Send`.  
+    * Encapsulation maintained by keeping `done` unexported and exposing only a getter method.
+
+### 10. Handler Owning Connection Logic
+* **Issue**: The handler managed both reading from the websocket and writing to it, forcing export of internal channels and complicating lifecycle management.  
+* **Solution**:  
+    * Writer goroutine remains in the handler for now, handling writes safely via the `done` channel.  
+    * Handler upgrades the connection, creates the client, registers it with the hub, and starts the writer.  
+    * Lifecycle management and connection cleanup are coordinated with the hub and `done` signaling.
+
+### 11. Hub Coupled to Transport
+* **Issue**: The hub contained logic that could block or panic when writing to clients directly. It also tracked websocket details unnecessarily.  
+* **Solution**:  
+    * Hub now only routes messages, adds/removes clients from rooms, and signals shutdown.  
+    * Writes are fully handled by the handler’s writer goroutine; the hub uses non-blocking sends to prevent backpressure issues.  
+
+### 12. Unsafe Channel Access Across Packages
+* **Issue**: Accessing `done` directly from the handler required exporting the channel, which could allow accidental closure from external code.  
+* **Solution**:  
+    * Added `Client.DoneChan()` getter, providing read-only access for select statements in the handler.  
+    * Maintained internal ownership, ensuring only the writer closes channels and prevents panics.  
+
 
 </details>
 
@@ -172,6 +198,16 @@ Invoke-RestMethod -Method GET -Uri http://localhost:880/projects -Headers @{ Aut
 
 ## 🛠 <b>Development History</b>
 <details><summary>(Click to expand)</summary>
+
+<details>
+<summary><b>Jan 29, 2026: Key Architectural Achievements in WebSocket Refactor</b> (Click to expand) 🌟🌟</summary>
+
+* **Safe Channel Ownership:** Introduced a `done` channel (unexported) in `Client` to signal shutdown safely. Writer goroutine owns the `Send` channel, preventing "send on closed channel" panics.  
+* **Minimal Handler Refactor:** The WebSocket handler now only wires the connection, registers the client, and starts the writer goroutine. No direct channel or goroutine management is required in the hub.  
+* **Getter Method for Lifecycle Signaling:** Added `Client.DoneChan()` to allow other packages (like the handler) to listen for shutdown signals without exposing internal channels, maintaining encapsulation.  
+* **Buffered Send Channel & Non-blocking Writes:** All writes to `Send` use select with default to avoid blocking the hub when a client is slow. This prevents hub-level blocking and ensures smooth broadcast even under load.  
+* **Robust Project Room Management:** Clients are added/removed from project rooms safely with mutex protection, and empty rooms are cleaned up automatically, preventing memory leaks.
+</details>
 
 <details>
 <summary><b>Jan 26, 2026: Real-Time Task Infrastructure & Collaborative UI</b> (Click to expand) </summary>
@@ -548,9 +584,22 @@ This suite focuses on the mutation of existing project resources and the verific
 
 ---
 
+## WebSocket Flow
+<details>
+1. **Handler** upgrades HTTP connection, creates `Client`, and registers it with the `Hub`.
+2. **Writer Goroutine** (currently in the handler) listens on `Client.Send` and `Client.DoneChan()`.
+3. **Read Loop** reads websocket messages and forwards them to the hub or services.
+4. **Hub** routes messages to clients or project rooms, using non-blocking sends to avoid blocking slow clients.
+5. **Shutdown**: Hub signals client via `done` channel; writer goroutine closes `Send` and websocket safely.
+
+</details>
+
+---
+
 ## Architecture & Flow Diagram
 <details>
 <summary>(Click to expand)</summary>
+
 
 ```text
                         ┌───────────────┐
@@ -602,6 +651,9 @@ This suite focuses on the mutation of existing project resources and the verific
                      │ - users      │
                      │ - projects   │
                      └──────────────┘
+
+
+
 
 
 

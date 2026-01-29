@@ -81,13 +81,18 @@ func (h *WSHandler) HandleConnection(c echo.Context) error {
 
 	// This goroutine listens to the Hub and pushes messages to the browser
 	go func() {
+		defer conn.Close()
 		for {
-			message, ok := <-client.Send
-			if !ok {
-				return
-			}
-			err := conn.WriteMessage(websocket.TextMessage, message)
-			if err != nil {
+			select {
+			case message, ok := <-client.Send:
+				if !ok {
+					return
+				}
+				if err := conn.WriteMessage(websocket.TextMessage, message); err != nil {
+					return
+				}
+			case <-client.DoneChan(): // safe read-only access
+				close(client.Send)
 				return
 			}
 		}
@@ -96,7 +101,6 @@ func (h *WSHandler) HandleConnection(c echo.Context) error {
 	// Cleanup
 	defer func() {
 		h.hub.Unregister <- client
-		conn.Close()
 	}()
 
 	// The Read Loop (The "Ear")
