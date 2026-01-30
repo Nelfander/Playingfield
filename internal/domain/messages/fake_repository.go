@@ -2,10 +2,12 @@ package messages
 
 import (
 	"context"
+	"sync"
 	"time"
 )
 
 type FakeRepository struct {
+	mu       sync.RWMutex
 	messages []Message
 	nextID   int64
 }
@@ -18,6 +20,8 @@ func NewFakeRepository() *FakeRepository {
 }
 
 func (f *FakeRepository) Create(ctx context.Context, m Message) (*Message, error) {
+	f.mu.Lock() //  Lock for writing
+	defer f.mu.Unlock()
 	m.ID = f.nextID
 	f.nextID++
 	m.CreatedAt = time.Now()
@@ -29,6 +33,8 @@ func (f *FakeRepository) Create(ctx context.Context, m Message) (*Message, error
 }
 
 func (f *FakeRepository) GetByProject(ctx context.Context, projectID int64) ([]Message, error) {
+	f.mu.RLock() // Lock for reading (multiple people can read at once)
+	defer f.mu.RUnlock()
 	var res []Message
 	for _, m := range f.messages {
 		if m.ProjectID != nil && *m.ProjectID == projectID {
@@ -39,6 +45,8 @@ func (f *FakeRepository) GetByProject(ctx context.Context, projectID int64) ([]M
 }
 
 func (f *FakeRepository) GetDirectMessages(ctx context.Context, userA, userB int64) ([]Message, error) {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
 	var res []Message
 	for _, m := range f.messages {
 		if m.ReceiverID == nil {

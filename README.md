@@ -453,6 +453,18 @@ The project employs a tiered testing strategy using Go's native toolchain and th
 
 ---
 
+### 🏎️ Concurrency & Race Safety
+The entire suite is verified using the **Go Race Detector** to ensure thread-safety in high-concurrency environments (like WebSockets).
+
+* **CGO Enabled:** Configured with MinGW-w64 to support runtime memory analysis.
+* **Thread-Safe Fakes:** Repositories utilize `sync.RWMutex` to prevent data races during parallel test execution.
+* **Verification:** Run the full race-detection suite with:
+  ```bash
+  $env:CGO_ENABLED = "1"; go test -race ./...
+
+---
+
+
 ### 🧩 Domain & Unit Testing (Logic Layer)
 These tests focus on core business rules in isolation. They sit within the domain packages to verify that the "brain" of the application works correctly.
 
