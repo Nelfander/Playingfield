@@ -36,7 +36,17 @@ func NewHub() *Hub {
 	}
 }
 
-// Getter for safe external access
+func NewClient(userID, projectID int64, conn *websocket.Conn) *Client {
+	return &Client{
+		UserID:    userID,
+		ProjectID: projectID,
+		Conn:      conn,
+		Send:      make(chan []byte, 256),
+		done:      make(chan struct{}), // initialized internally
+	}
+}
+
+// Getter for safe external access,( actually not needed now since i implemented the newclient constructor )
 func (c *Client) DoneChan() <-chan struct{} {
 	return c.done
 }

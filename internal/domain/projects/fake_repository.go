@@ -123,5 +123,20 @@ func (f *FakeRepository) RemoveUserFromProject(ctx context.Context, projectID in
 }
 
 func (f *FakeRepository) UsersShareProject(ctx context.Context, userA, userB int64) (bool, error) {
-	return true, nil
+	// Track which projects each user belongs to
+	userAProjects := make(map[int64]bool)
+
+	for _, pu := range f.projectUsers {
+		if pu.UserID == userA {
+			userAProjects[pu.ProjectID] = true
+		}
+	}
+
+	for _, pu := range f.projectUsers {
+		if pu.UserID == userB && userAProjects[pu.ProjectID] {
+			return true, nil
+		}
+	}
+
+	return false, nil
 }

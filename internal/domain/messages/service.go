@@ -70,12 +70,14 @@ func (s *Service) SendProjectMessage(ctx context.Context, senderID int64, projec
 	}
 
 	// broadcast via websocket hub
-	broadcastData := map[string]interface{}{
-		"type": "new_project_message",
-		"data": saved,
+	if s.hub != nil {
+		broadcastData := map[string]interface{}{
+			"type": "new_project_message",
+			"data": saved,
+		}
+		payload, _ := json.Marshal(broadcastData)
+		s.hub.BroadcastToProject(projectID, payload)
 	}
-	payload, _ := json.Marshal(broadcastData)
-	s.hub.BroadcastToProject(projectID, payload)
 
 	return saved, nil
 }
@@ -102,14 +104,18 @@ func (s *Service) SendDirectMessage(ctx context.Context, senderID, receiverID in
 	if err != nil {
 		return nil, err
 	}
-	broadcastData := map[string]interface{}{
-		"type": "new_direct_message",
-		"data": saved,
-	}
-	payload, _ := json.Marshal(broadcastData)
+	if s.hub != nil {
+		broadcastData := map[string]interface{}{
+			"type": "new_direct_message",
+			"data": saved,
+		}
 
-	s.hub.SendToUser(receiverID, payload)
-	s.hub.SendToUser(senderID, payload)
+		payload, err := json.Marshal(broadcastData)
+		if err == nil {
+			s.hub.SendToUser(receiverID, payload)
+			s.hub.SendToUser(senderID, payload)
+		}
+	}
 
 	return saved, nil
 }

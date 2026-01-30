@@ -200,6 +200,21 @@ Invoke-RestMethod -Method GET -Uri http://localhost:880/projects -Headers @{ Aut
 <details><summary>(Click to expand)</summary>
 
 <details>
+<summary><b>Jan 30, 2026: Domain-Driven Message Testing Infrastructure</b> (Click to expand) 🧪</summary>
+
+### Phase 1: Stateful Fake Repository Implementation
+* **In-Memory Logic Simulation**: Developed `FakeRepository` for the Messaging domain using stateful Go slices. This allows tests to simulate database persistence, chronological message retrieval, and bi-directional DM history without a live PostgreSQL instance.
+* **Complex Relationship Mocking**: Enhanced the Projects Fake Repository to support real-time membership lookups, enabling the test suite to verify "Shared Project" constraints for private communications.
+
+### Phase 2: Service Layer Authorization Testing
+* **Logic Gate Validation**: Implemented comprehensive unit tests for `SendProjectMessage` and `SendDirectMessage`. Verified that unauthorized users are strictly blocked from project channels and that direct messages are restricted to verified project collaborators.
+* **Nil-Pointer Resilience**: Hardened the Service layer with proactive nil-checks for the WebSocket Hub, ensuring the application remains stable during testing environments or partial infrastructure failures.
+
+### Phase 3: Integration with WebSocket Hub
+* **Real-time Path Execution**: Integrated the `ws.Hub` into the test suite using background goroutines. This ensures that the message "broadcast" logic is actually executed and exercised during tests, providing higher confidence in the real-time delivery pipeline.
+</details>
+
+<details>
 <summary><b>Jan 29, 2026: Key Architectural Achievements in WebSocket Refactor</b> (Click to expand) 🌟🌟</summary>
 
 * **Safe Channel Ownership:** Introduced a `done` channel (unexported) in `Client` to signal shutdown safely. Writer goroutine owns the `Send` channel, preventing "send on closed channel" panics.  
@@ -432,160 +447,85 @@ JWT Claims: Security checks enforced using role-based claims within the JWT.
 
 ---
 
-## 🧪 Testing  (Will add all of the tests here in the future)
+## 🧪 Testing Strategy
 
-The project utilizes Go's native testing toolchain and testify/assert to validate system integrity. I'm using Fake Repositories to ensure tests are fast and run without a live database.
+The project employs a tiered testing strategy using Go's native toolchain and the `testify/assert` library. By utilizing **Stateful Fake Repositories**, the suite ensures high execution speed and 100% data consistency without the overhead of a live database.
 
-<details> <summary> <b> Middleware & Security Testing </b> (Click to expand) </summary>
+---
 
-This suite verifies that the security layers correctly identify users and enforce access rules.
+### 🧩 Domain & Unit Testing (Logic Layer)
+These tests focus on core business rules in isolation. They sit within the domain packages to verify that the "brain" of the application works correctly.
 
-### What it tests:
-1. **Authentication (JWT)**: Ensures the JWTMiddleware correctly extracts and validates tokens from the Authorization header.
-2. **Context Injection**: Verifies that user claims (ID, Email, Role) are correctly injected into the Echo context for use by handlers.
-3. **RBAC (Role-Based Access Control)**: Validates that the RequireRole middleware allows admin access while returning 403 Forbidden for standard users.
-4. **Failure Handling**: Ensures malformed tokens or missing headers result in proper 401 Unauthorized responses.
+<details>
+<summary><b>💬 Messaging & Authorization Logic</b></summary>
 
-### Files:
+Validated within `internal/domain/messages/`.
 
- internal/interfaces/http/middleware/test/required_role_test.go
- internal/interfaces/http/tests/auth_middleware_test.go
+* **Logic Gates:** Verifies that project messages are only accepted from verified members.
+* **Social Constraints:** Ensures Direct Messages (DMs) are restricted to users who share at least one project.
+* **Stateful Persistence:** Uses a `FakeRepository` to simulate message storage and chronological retrieval.
+* **Nil-Resilience:** Validates that service methods handle infrastructure (WebSocket Hub) availability gracefully.
+* **Execution:** `go test -v ./internal/domain/messages`
 </details>
 
-<details> <summary> <b> API Handler & Integration Testing </b> (Click to expand) </summary> 
-These tests verify the "Social" integration between the HTTP layer, Business Services, and the Repository.
+<details>
+<summary><b>🏗️ Project Lifecycle & Ownership</b></summary>
 
-### What it tests:
-1. **User Registration**: Validates the flow from JSON request to the hashing of passwords and final storage.
-2. **Login Logic**: Verifies that the system correctly checks credentials and account status (active vs. inactive).
-3. **Repository Interfacing**: Uses a FakeRepository to simulate database behavior (auto-incrementing IDs, duplicate email checks) in memory.
-4. **Data Integrity**: Ensures that the /me endpoint correctly retrieves the authenticated user's profile information.
+Validated within `internal/domain/projects/`.
 
-### Usage:
-
-1. Run all backend integration tests using:
-   ```bash
-   go test ./internal/interfaces/http/tests/... -v
-   
+* **Ownership Guardrails:** Ensures only the project creator can delete resources or manage members.
+* **Auto-Provisioning:** Validates that the system correctly assigns roles upon project creation.
+* **Member Management:** Tests the "Join Table" logic in-memory to ensure member lists are accurate.
+* **Execution:** `go test -v ./internal/domain/projects`
 </details>
 
-<details> <summary> <b> WebSocket Integration Testing </b> (Click to expand) </summary>
+---
 
-This directory contains utility scripts to verify the real-time communication engine of the Playingfield API.
+### 🌐 HTTP & Integration Testing (API Layer)
 
-## Chat Tester (`test_chat.go`)
+These tests verify the "Social" integration between the HTTP layer, Middleware, and the Service layer.
 
-This script performs a full end-to-end integration test of the WebSocket flow. It bypasses the need for a browser to verify that the "plumbing" of the backend is sound.
+<details>
+<summary><b>🔐 Middleware & Security</b></summary>
 
-### What it tests:
-1. **Authentication**: Performs a standard HTTP Login to retrieve a JWT.
-2. **Upgrade**: Connects to the `/ws` endpoint and upgrades the connection.
-3. **Registration**: Verifies the Hub correctly maps the User ID to the active connection.
-4. **Authorization**: Attempts to send a message to a specific project.
-5. **Persistence**: The server must save the message to Postgres before broadcasting.
-6. **Targeted Broadcast**: Verifies the Hub routes the notification back to the sender (and other members).
+Validated within `internal/interfaces/http/middleware/`.
 
-### Usage:
-1. Ensure the server is running (`go run cmd/app/main.go`).
-2. Update the `testEmail` and `testPass` constants in the script to match a valid user.
-3. Run the script:
-   ```bash
-   go run scripts/test_chat.go
-
+* **JWT Integrity:** Ensures `JWTMiddleware` correctly extracts and validates tokens from headers.
+* **Context Injection:** Verifies that user identity (ID, Role) is correctly passed to the internal logic.
+* **RBAC Enforcement:** Validates that `RequireRole` blocks unauthorized access to sensitive routes.
+* **Execution:** `go test -v ./internal/interfaces/http/middleware/...`
 </details>
 
-<details> <summary> <b> Project Management & Domain Testing </b> (Click to expand) </summary>
+<details>
+<summary><b>🚀 API Handler Endpoints</b></summary>
 
-This suite validates the project lifecycle and ensures that resource ownership is strictly enforced at the service level.
+Validated within `internal/interfaces/http/tests/`.
 
-### What it tests:
-1. **Ownership Enforcement**: Verifies that the DeleteProject and RemoveUserFromProject actions correctly identify the requester and block unauthorized users with appropriate errors.
-2. **Automated Provisioning**: Ensures that when a project is created, the system automatically assigns the creator as the "Owner" and sets up initial permissions.
-3. **Repository Abstraction**: Utilizes a fully implemented FakeRepository to simulate complex database operations (like fetching project details and verifying ownership) without requiring a Postgres instance.
-4. **Clean Architecture Mapping**: Validates that data is correctly translated from infrastructure-specific types (like pgtype.Text) into clean Domain models before reaching the HTTP layer.
-5. **Real-time Event Triggers**: Checks that successful project modifications (creation, deletion, or adding members) correctly trigger broadcasts to the WebSocket Hub.
-
-### Files:
-internal/interfaces/http/tests/project_handler_test.go
-internal/domain/projects/fake_repository.go
-
-###Usage:
-1. Run all project-related tests:  
-   ```bash
-   go test ./internal/interfaces/http/tests/ -v -run Project
-
+* **Request/Response Flow:** Validates JSON binding, status codes, and error formatting for User and Project routes.
+* **End-to-End Persistence:** Tests the full flow from an HTTP request through the Service layer into the Fake Repository.
+* **Execution:** `go test -v ./internal/interfaces/http/tests/...`
 </details>
 
-<details> <summary> <b> Project Membership & State Verification </b> (Click to expand) </summary> 
+---
 
-These tests ensure that project collaboration logic is sound and that data persists correctly through the service layers.
+### ⚡ Real-Time Integration (WebSocket)
+Testing for the communication engine, verifying that messages are not only saved but correctly routed.
 
-### What it tests:
-1. **Member Invitation**: Validates that a project owner can successfully add new users to a project with specific roles.
-2. **Stateful Mocking**: Uses an upgraded `FakeRepository` that simulates a SQL "Join Table" in-memory, allowing tests to verify that data was actually stored.
-3. **Authorization Context**: Verifies that the system correctly identifies the project owner using JWT claims before allowing membership changes.
-4. **Side-Effect Verification**: Instead of just checking HTTP status codes, these tests perform "Deep Verification" by querying the repository state after the API call.
+<details>
+<summary><b>📡 WebSocket Hub & Chat Tester</b></summary>
 
-### Files:
-- `internal/interfaces/http/tests/project_handler_test.go`
-- `internal/domain/projects/fake_repository.go`
-
-### Usage:
-1. Run the specific membership test:
-   ```bash
-   go test ./internal/interfaces/http/tests/ -v -run TestAddUserToProject
-
-</details>
-
-<details> <summary> <b> Project Membership & Security Enforcement </b> (Click to expand) </summary> 
-
-This suite validates the collaborative lifecycle of projects and ensures that resource modifications are strictly guarded by ownership rules.
-
-### What it tests:
-1. **Member Management**: Verifies that owners can successfully add and remove members, ensuring the "Join Table" state in the repository is updated correctly.
-2. **Unauthorized Access (Sad Path)**: Ensures that users who are NOT the project owner are blocked with a `403 Forbidden` when attempting to add or remove members.
-3. **State Consistency**: Uses "Before-and-After" assertions to verify that data is only modified when authorized, and remains untouched when a request is rejected.
-4. **Context-Aware Security**: Validates that the handler correctly extracts the requester's identity from JWT claims to make authorization decisions in the service layer.
-
-### Files:
-- `internal/interfaces/http/tests/project_handler_test.go`
-- `internal/domain/projects/fake_repository.go`
-- `internal/domain/projects/service.go`
-
-### Usage:
-1. Run all membership security tests:
-   ```bash
-   go test ./internal/interfaces/http/tests/ -v -run Project
-
-</details>
-
-<details> 
-<summary><b>Project Lifecycle & Real-time Update Validation</b> (Click to expand)</summary> 
-
-This suite focuses on the mutation of existing project resources and the verification of the real-time broadcast system.
-
-### What it tests:
-1. **Authorized Project Updates**: Verifies that project owners can modify the name and description, and that these changes are correctly persisted via `sqlc`-generated repository methods.
-2. **Ownership Guardrails**: Confirms that the system correctly identifies unauthorized update attempts and rejects them, maintaining the integrity of project data.
-3. **Event Broadcasting**: Validates that a successful update triggers the expected WebSocket signal through the `Hub`, which is essential for the "Zero-Refresh" frontend experience.
-4. **Interface Integrity**: Uses the `FakeRepository` to simulate a real database environment, allowing for rapid testing of the service-to-repository interaction without requiring a live Postgres instance.
-
-### Files:
-- `internal/interfaces/http/tests/project_handler_test.go`
-- `internal/domain/projects/service.go`
-- `internal/infrastructure/postgres/sqlc/` (Generated Models)
-
-### Usage:
-1. Run the project lifecycle and update tests:
-   ```bash
-   go test ./internal/interfaces/http/tests/ -v -run TestUpdateProject
-
+* **Connection Mapping:** Verifies the `Hub` correctly maps User IDs to active WebSocket connections.
+* **Targeted Broadcasting:** Validates that messages sent to a project are routed strictly to that project's members.
+* **Direct Messaging (P2P):** Ensures private messages are routed strictly to the sender and receiver.
+* **E2E Script:** A dedicated utility (`scripts/test_chat.go`) to verify the full "Plumbing" from Auth -> Upgrade -> Broadcast.
+* **Execution:** `go run scripts/test_chat.go`
 </details>
 
 ---
 
 ## WebSocket Flow
 <details>
+
 1. **Handler** upgrades HTTP connection, creates `Client`, and registers it with the `Hub`.
 2. **Writer Goroutine** (currently in the handler) listens on `Client.Send` and `Client.DoneChan()`.
 3. **Read Loop** reads websocket messages and forwards them to the hub or services.

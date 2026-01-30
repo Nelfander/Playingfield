@@ -70,12 +70,7 @@ func (h *WSHandler) HandleConnection(c echo.Context) error {
 	}
 
 	// include the ProjectID so the Hub knows where to route messages
-	client := &ws.Client{
-		UserID:    claims.UserID,
-		ProjectID: projectID,
-		Conn:      conn,
-		Send:      make(chan []byte, 256),
-	}
+	client := ws.NewClient(claims.UserID, projectID, conn)
 
 	h.hub.Register <- client
 
