@@ -4,9 +4,20 @@ FROM projects
 WHERE id = $1;
 
 -- name: CreateProject :one
-INSERT INTO projects (name, description, owner_id)
-VALUES ($1, $2, $3)
-RETURNING id, name, description, owner_id, created_at;
+WITH inserted AS (
+    INSERT INTO projects (name, description, owner_id)
+    VALUES ($1, $2, $3)
+    RETURNING id, name, description, owner_id, created_at
+)
+SELECT 
+    i.id, 
+    i.name, 
+    i.description, 
+    i.owner_id, 
+    i.created_at,
+    u.email AS owner_name
+FROM inserted i
+JOIN users u ON i.owner_id = u.id;
 
 -- name: UpdateProject :exec
 UPDATE projects

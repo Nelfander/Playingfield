@@ -200,6 +200,28 @@ Invoke-RestMethod -Method GET -Uri http://localhost:880/projects -Headers @{ Aut
 <details><summary>(Click to expand)</summary>
 
 <details>
+<summary><b>Jan 31, 2026: Graceful Shutdown</b> (Click to expand) 🛡️</summary>
+
+### 🏗️ Infrastructure & Database Mapping
+
+- **Type-Safe Data Access**: Migrated from manual row scanning to **SQLC**. This ensures compile-time safety for all Postgres queries and automatically handles complex PostgreSQL types using `pgtype`.
+- **Relational Data Loading**: Optimized `Create` operations for Projects and Messages using **SQL CTEs (Common Table Expressions)** with `RETURNING` joins. This allows the API to return "rich" entities (e.g., including sender emails or owner names) in a single database round-trip.
+
+### 🛡️ System Stability & Lifecycle
+
+- **Graceful Shutdown**: Implemented a robust server lifecycle management system using Go `channels` and `os/signal`. 
+  - The server now listens for `SIGINT` and `SIGTERM` signals.
+  - Uses `context.WithTimeout` to allow active HTTP requests 10 seconds to "drain" before the process exits.
+- **WebSocket Hub Management**: Added a coordinated shutdown sequence for the WebSocket Hub.
+  - When the server stops, the Hub executes a `cleanup()` routine to gracefully close all active client connections and clear memory-resident "Project Rooms."
+  - Prevents goroutine leaks and dangling TCP connections.
+
+### 🛠️ Technical Stack Additions
+
+- **Concurrency Patterns**: Utilized the "Signal Channel" and "Stop Channel" patterns to manage background worker loops.
+</details>
+
+<details>
 <summary><b>Jan 30, 2026: Domain-Driven Message Testing Infrastructure</b> (Click to expand) 🧪</summary>
 
 ### Phase 1: Stateful Fake Repository Implementation

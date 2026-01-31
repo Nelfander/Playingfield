@@ -124,7 +124,7 @@ func (s *Service) AddUserToProject(ctx context.Context, requesterID int64, proje
 		return fmt.Errorf("unauthorized: user %d is not the owner of project %d", requesterID, projectID)
 	}
 
-	// --- NEW: DUPLICATE CHECK ---
+	// duplicate check
 	members, err := s.repo.ListUsersInProject(ctx, projectID)
 	if err == nil {
 		for _, m := range members {

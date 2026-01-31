@@ -12,9 +12,20 @@ import (
 )
 
 const createProject = `-- name: CreateProject :one
-INSERT INTO projects (name, description, owner_id)
-VALUES ($1, $2, $3)
-RETURNING id, name, description, owner_id, created_at
+WITH inserted AS (
+    INSERT INTO projects (name, description, owner_id)
+    VALUES ($1, $2, $3)
+    RETURNING id, name, description, owner_id, created_at
+)
+SELECT 
+    i.id, 
+    i.name, 
+    i.description, 
+    i.owner_id, 
+    i.created_at,
+    u.email AS owner_name
+FROM inserted i
+JOIN users u ON i.owner_id = u.id
 `
 
 type CreateProjectParams struct {
@@ -23,15 +34,25 @@ type CreateProjectParams struct {
 	OwnerID     int64
 }
 
-func (q *Queries) CreateProject(ctx context.Context, arg CreateProjectParams) (Project, error) {
+type CreateProjectRow struct {
+	ID          int64
+	Name        string
+	Description pgtype.Text
+	OwnerID     int64
+	CreatedAt   pgtype.Timestamptz
+	OwnerName   string
+}
+
+func (q *Queries) CreateProject(ctx context.Context, arg CreateProjectParams) (CreateProjectRow, error) {
 	row := q.db.QueryRow(ctx, createProject, arg.Name, arg.Description, arg.OwnerID)
-	var i Project
+	var i CreateProjectRow
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
 		&i.Description,
 		&i.OwnerID,
 		&i.CreatedAt,
+		&i.OwnerName,
 	)
 	return i, err
 }

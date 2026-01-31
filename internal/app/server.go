@@ -4,6 +4,10 @@ import (
 	"context"
 	"log"
 	stdhttp "net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/labstack/echo/v4"
 	echomiddleware "github.com/labstack/echo/v4/middleware"
@@ -149,9 +153,35 @@ func Run() {
 	// websocket route
 	e.GET("/ws", wsHandler.HandleConnection)
 
-	// --- Start server ---
-	logger.Println("starting HTTP server on :" + cfg.Port)
-	if err := e.Start(":" + cfg.Port); err != nil {
-		logger.Println("server stopped:", err)
+	// --- Graceful shutdown prep---
+	quitCh := make(chan os.Signal, 1)
+
+	signal.Notify(quitCh, os.Interrupt, syscall.SIGTERM)
+
+	// --- Start server in a goroutine---
+	go func() {
+		logger.Println("starting HTTP server on :" + cfg.Port)
+		if err := e.Start(":" + cfg.Port); err != nil && err != stdhttp.ErrServerClosed {
+			logger.Printf("error starting server: %v", err)
+		}
+	}()
+
+	// stop everything and wait for the signal ( ctrl + c)
+	<-quitCh
+	logger.Println("🚀 Shutdown signal received")
+
+	// stop broadcasting and cleanup clients
+	hub.Stop()
+
+	// "Deadline" 10 secs
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel() //  prevent memory leaks
+
+	// stop accepting new requests and finish
+	// current requests(up until the 10s deadline).
+	if err := e.Shutdown(ctx); err != nil {
+		logger.Fatalf("❌ Server Shutdown Failed: %+v", err)
 	}
+
+	logger.Println("👋 Server exited gracefully")
 }

@@ -38,6 +38,7 @@ func (r *ProjectRepository) CreateProject(ctx context.Context, p projects.Projec
 		Description: res.Description.String,
 		OwnerID:     res.OwnerID,
 		CreatedAt:   res.CreatedAt.Time,
+		OwnerName:   res.OwnerName,
 	}, nil
 }
 

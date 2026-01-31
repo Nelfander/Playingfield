@@ -5,105 +5,112 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/nelfander/Playingfield/internal/domain/messages"
+	"github.com/nelfander/Playingfield/internal/infrastructure/postgres/sqlc"
 )
 
 type MessageRepository struct {
-	db *DBAdapter
+	db      *DBAdapter
+	queries *sqlc.Queries
 }
 
 func NewMessageRepository(db *DBAdapter) *MessageRepository {
-	return &MessageRepository{db: db}
+	return &MessageRepository{
+		db:      db,
+		queries: sqlc.New(db),
+	}
 }
 
-// i should name this createmessage later for more clarity
 func (r *MessageRepository) Create(ctx context.Context, m messages.Message) (*messages.Message, error) {
-	var pID, rID pgtype.Int8
-
-	if m.ProjectID != nil {
-		pID = pgtype.Int8{Int64: *m.ProjectID, Valid: true}
-	}
-	if m.ReceiverID != nil {
-		rID = pgtype.Int8{Int64: *m.ReceiverID, Valid: true}
-	}
-
-	row := r.db.QueryRow(ctx,
-		`WITH inserted AS (
-            INSERT INTO messages (sender_id, content, project_id, receiver_id)
-            VALUES ($1, $2, $3, $4)
-            RETURNING id, sender_id, created_at
-         )
-         SELECT i.id, i.created_at, u.email 
-         FROM inserted i
-         JOIN users u ON i.sender_id = u.id`,
-		m.SenderID, m.Content, pID, rID,
-	)
-
-	var created messages.Message = m
-
-	if err := row.Scan(&created.ID, &created.CreatedAt, &created.SenderEmail); err != nil {
-		return nil, err
+	// Prepare parameters
+	params := sqlc.CreateMessageParams{
+		SenderID: m.SenderID,
+		Content:  m.Content,
+		ProjectID: pgtype.Int8{
+			Int64: func() int64 {
+				if m.ProjectID != nil {
+					return *m.ProjectID
+				}
+				return 0
+			}(),
+			Valid: m.ProjectID != nil,
+		},
+		ReceiverID: pgtype.Int8{
+			Int64: func() int64 {
+				if m.ReceiverID != nil {
+					return *m.ReceiverID
+				}
+				return 0
+			}(),
+			Valid: m.ReceiverID != nil,
+		},
 	}
 
-	return &created, nil
-}
-
-func (r *MessageRepository) GetByProject(ctx context.Context, projectID int64) ([]messages.Message, error) {
-	rows, err := r.db.Query(ctx,
-		`SELECT m.id, m.sender_id, m.content, m.project_id, m.created_at, u.email
-		 FROM messages m
-		 JOIN users u ON m.sender_id = u.id
-		 WHERE m.project_id = $1
-		 ORDER BY m.created_at ASC`,
-		projectID,
-	)
+	res, err := r.queries.CreateMessage(ctx, params)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+
+	// Map back to domain model
+	return &messages.Message{
+		ID:          res.ID,
+		SenderID:    res.SenderID,
+		Content:     res.Content,
+		CreatedAt:   res.CreatedAt.Time,
+		SenderEmail: res.SenderEmail,
+		ProjectID:   m.ProjectID,
+		ReceiverID:  m.ReceiverID,
+	}, nil
+}
+
+func (r *MessageRepository) GetByProject(ctx context.Context, projectID int64) ([]messages.Message, error) {
+	rows, err := r.queries.GetProjectMessages(ctx, pgtype.Int8{Int64: projectID, Valid: true})
+	if err != nil {
+		return nil, err
+	}
 
 	var list []messages.Message
-	for rows.Next() {
-		var m messages.Message
-		var pID pgtype.Int8
-		if err := rows.Scan(&m.ID, &m.SenderID, &m.Content, &pID, &m.CreatedAt, &m.SenderEmail); err != nil {
-			return nil, err
+	for _, row := range rows {
+		msg := messages.Message{
+			ID:          row.ID,
+			SenderID:    row.SenderID,
+			Content:     row.Content,
+			CreatedAt:   row.CreatedAt.Time,
+			SenderEmail: row.SenderEmail,
 		}
-		if pID.Valid {
-			val := pID.Int64
-			m.ProjectID = &val
+		if row.ProjectID.Valid {
+			val := row.ProjectID.Int64
+			msg.ProjectID = &val
 		}
-		list = append(list, m)
+		list = append(list, msg)
 	}
 	return list, nil
 }
 
 func (r *MessageRepository) GetDirectMessages(ctx context.Context, userA, userB int64) ([]messages.Message, error) {
-	rows, err := r.db.Query(ctx,
-		`SELECT m.id, m.sender_id, m.content, m.receiver_id, m.created_at, u.email
-		 FROM messages m
-		 JOIN users u ON m.sender_id = u.id
-		 WHERE (m.sender_id = $1 AND m.receiver_id = $2)
-		    OR (m.sender_id = $2 AND m.receiver_id = $1)
-		 ORDER BY m.created_at ASC`,
-		userA, userB,
-	)
+	params := sqlc.GetDirectMessagesParams{
+		SenderID:   userA,
+		ReceiverID: pgtype.Int8{Int64: userB, Valid: true},
+	}
+
+	rows, err := r.queries.GetDirectMessages(ctx, params)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 
 	var list []messages.Message
-	for rows.Next() {
-		var m messages.Message
-		var rID pgtype.Int8
-		if err := rows.Scan(&m.ID, &m.SenderID, &m.Content, &rID, &m.CreatedAt, &m.SenderEmail); err != nil {
-			return nil, err
+	for _, row := range rows {
+		msg := messages.Message{
+			ID:          row.ID,
+			SenderID:    row.SenderID,
+			Content:     row.Content,
+			CreatedAt:   row.CreatedAt.Time,
+			SenderEmail: row.SenderEmail,
 		}
-		if rID.Valid {
-			val := rID.Int64
-			m.ReceiverID = &val
+		if row.ReceiverID.Valid {
+			val := row.ReceiverID.Int64
+			msg.ReceiverID = &val
 		}
-		list = append(list, m)
+		list = append(list, msg)
 	}
 	return list, nil
 }

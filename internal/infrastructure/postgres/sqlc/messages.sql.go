@@ -12,9 +12,14 @@ import (
 )
 
 const createMessage = `-- name: CreateMessage :one
-INSERT INTO messages (sender_id, content, project_id, receiver_id)
-VALUES ($1, $2, $3, $4)
-RETURNING id, sender_id, content, project_id, receiver_id, created_at
+WITH inserted AS (
+    INSERT INTO messages (sender_id, content, project_id, receiver_id)
+    VALUES ($1, $2, $3, $4)
+    RETURNING id, sender_id, content, project_id, receiver_id, created_at
+)
+SELECT i.id, i.sender_id, i.content, i.project_id, i.receiver_id, i.created_at, u.email as sender_email
+FROM inserted i
+JOIN users u ON i.sender_id = u.id
 `
 
 type CreateMessageParams struct {
@@ -24,14 +29,24 @@ type CreateMessageParams struct {
 	ReceiverID pgtype.Int8
 }
 
-func (q *Queries) CreateMessage(ctx context.Context, arg CreateMessageParams) (Message, error) {
+type CreateMessageRow struct {
+	ID          int64
+	SenderID    int64
+	Content     string
+	ProjectID   pgtype.Int8
+	ReceiverID  pgtype.Int8
+	CreatedAt   pgtype.Timestamptz
+	SenderEmail string
+}
+
+func (q *Queries) CreateMessage(ctx context.Context, arg CreateMessageParams) (CreateMessageRow, error) {
 	row := q.db.QueryRow(ctx, createMessage,
 		arg.SenderID,
 		arg.Content,
 		arg.ProjectID,
 		arg.ReceiverID,
 	)
-	var i Message
+	var i CreateMessageRow
 	err := row.Scan(
 		&i.ID,
 		&i.SenderID,
@@ -39,6 +54,7 @@ func (q *Queries) CreateMessage(ctx context.Context, arg CreateMessageParams) (M
 		&i.ProjectID,
 		&i.ReceiverID,
 		&i.CreatedAt,
+		&i.SenderEmail,
 	)
 	return i, err
 }

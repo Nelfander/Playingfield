@@ -2,6 +2,7 @@ package ws
 
 import (
 	"fmt"
+	"log"
 	"sync"
 
 	"github.com/gorilla/websocket"
@@ -23,7 +24,8 @@ type Hub struct {
 	Broadcast    chan []byte
 	Register     chan *Client
 	Unregister   chan *Client
-	mu           sync.RWMutex // mutex to protect the clients map
+	mu           sync.RWMutex  // mutex to protect the clients map
+	stop         chan struct{} // empty struct 0 bytes(thx anthony ^_^)
 }
 
 func NewHub() *Hub {
@@ -33,6 +35,7 @@ func NewHub() *Hub {
 		Unregister:   make(chan *Client),
 		clients:      make(map[int64]*Client),
 		ProjectRooms: make(map[int64]map[*Client]bool),
+		stop:         make(chan struct{}),
 	}
 }
 
@@ -46,9 +49,40 @@ func NewClient(userID, projectID int64, conn *websocket.Conn) *Client {
 	}
 }
 
-// Getter for safe external access,( actually not needed now since i implemented the newclient constructor )
+// getter for safe external access,( actually not needed now since i implemented the newclient constructor )
 func (c *Client) DoneChan() <-chan struct{} {
 	return c.done
+}
+
+func (h *Hub) Stop() {
+	close(h.stop) // this broadcasts to the Hub's loop to stop
+}
+
+func (h *Hub) cleanup() {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	for _, client := range h.clients {
+		// close the Send channel so the client's writePump stops
+		close(client.Send)
+
+		// close the actual WebSocket connection
+		client.Conn.Close()
+
+		// signal the client's internal handlers to stop
+		// and check if it's already closed to avoid a panic
+		select {
+		case <-client.done:
+		default:
+			close(client.done)
+		}
+
+		delete(h.clients, client.UserID)
+	}
+
+	// clear the rooms map too
+	h.ProjectRooms = make(map[int64]map[*Client]bool)
+	log.Println("✅ Hub cleanup complete: all connections closed.")
 }
 
 func (h *Hub) Run() {
@@ -58,7 +92,7 @@ func (h *Hub) Run() {
 			h.mu.Lock()
 			h.clients[client.UserID] = client
 
-			//  Add client to their specific project room
+			//  add client to their specific project room
 			if client.ProjectID != 0 {
 				if h.ProjectRooms[client.ProjectID] == nil {
 					h.ProjectRooms[client.ProjectID] = make(map[*Client]bool)
@@ -100,6 +134,12 @@ func (h *Hub) Run() {
 				}
 			}
 			h.mu.RUnlock()
+
+		case <-h.stop:
+			log.Println("Hub stopping: closing all client connections")
+			h.cleanup() // A helper function to kick everyone out politely
+			return      // Exit the loop and the goroutine
+
 			/* old unsafe version i leave it here to compare
 			case message := <-h.Broadcast:
 				h.mu.RLock()
@@ -129,7 +169,7 @@ func (h *Hub) SendToProjectMembers(userIDs []int64, message []byte) {
 		if client, ok := h.clients[id]; ok {
 			select {
 			case client.Send <- message:
-			default: // advoids blocking
+			default:
 			}
 		}
 	}
@@ -142,7 +182,7 @@ func (h *Hub) BroadcastToProject(projectID int64, message []byte) {
 		for client := range clients {
 			select {
 			case client.Send <- message:
-			default: // advoids blocking
+			default:
 				continue
 			}
 		}
