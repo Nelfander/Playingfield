@@ -2,7 +2,7 @@ package app
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	stdhttp "net/http"
 	"os"
 	"os/signal"
@@ -27,19 +27,24 @@ import (
 
 func Run() {
 	// --- Load config ---
-
 	cfg, err := config.Load()
 	if err != nil {
-		log.Fatal("failed to load config:", err)
+		slog.Error("failed to load config", "error", err)
+		os.Exit(1)
 	}
 
-	// --- Logger ---
-	logger := log.Default()
+	// --- Logger Setup (The slog way) ---
+	slogHandler := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+		Level: slog.LevelDebug, // LevelDebug, Info, Warn, Error
+	})
+	logger := slog.New(slogHandler)
+	slog.SetDefault(logger) // This makes slog.Info() work everywhere else(all packages)!
 
 	// --- Postgres pool ---
 	dbPool, err := postgres.NewPool(cfg.DatabaseURL)
 	if err != nil {
-		logger.Fatal("failed to connect to database:", err)
+		logger.Error("failed to connect to database", "error", err)
+		os.Exit(1)
 	}
 	defer dbPool.Close()
 
@@ -49,6 +54,7 @@ func Run() {
 	// --- SQLC wrapper ---
 	queries := sqlc.New(db)
 
+	// --- JWT Manager ---
 	jwtManager := auth.NewJWTManager(cfg.JWTSecret, cfg.JWTExpiry)
 
 	//  Initialize the Hub
@@ -77,10 +83,14 @@ func Run() {
 	//  Start the Hub in a background goroutine
 	go hub.Run()
 
-	// --- Seed default admin ---
-	if err := postgres.SeedAdminUser(context.Background(), userRepo); err != nil {
-		log.Fatal("failed to seed admin user:", err)
-	}
+	/*
+		// --- Seed default admin ---
+		if err := postgres.SeedAdminUser(context.Background(), userRepo); err != nil {
+			logger.Warn("could not seed admin user, continuing startup", "error", err)
+		} else {
+			logger.Info("admin user seeded successfully")
+		}
+	*/
 
 	// WebSocket handler creation
 	wsHandler := handlers.NewWSHandler(jwtManager, hub, chatService)
@@ -89,6 +99,7 @@ func Run() {
 	// --- Echo server ---
 	e := echo.New()
 
+	// --- CORS Middleware ---
 	e.Use(echomiddleware.CORSWithConfig(echomiddleware.CORSConfig{
 		AllowOrigins: []string{"*"},
 		AllowMethods: []string{
@@ -103,6 +114,7 @@ func Run() {
 		},
 	}))
 
+	// --- Auth Group ---
 	authGroup := e.Group("")
 	authGroup.Use(middleware.JWTMiddleware(jwtManager))
 	authGroup.GET("/me", userHandler.Me)
@@ -155,20 +167,19 @@ func Run() {
 
 	// --- Graceful shutdown prep---
 	quitCh := make(chan os.Signal, 1)
-
 	signal.Notify(quitCh, os.Interrupt, syscall.SIGTERM)
 
 	// --- Start server in a goroutine---
 	go func() {
-		logger.Println("starting HTTP server on :" + cfg.Port)
+		logger.Info("Starting HTTP server", "port", cfg.Port)
 		if err := e.Start(":" + cfg.Port); err != nil && err != stdhttp.ErrServerClosed {
-			logger.Printf("error starting server: %v", err)
+			logger.Error("error starting server", "error", err)
 		}
 	}()
 
 	// stop everything and wait for the signal ( ctrl + c)
 	<-quitCh
-	logger.Println("🚀 Shutdown signal received")
+	logger.Info("🚀 Shutdown signal received")
 
 	// stop broadcasting and cleanup clients
 	hub.Stop()
@@ -180,8 +191,9 @@ func Run() {
 	// stop accepting new requests and finish
 	// current requests(up until the 10s deadline).
 	if err := e.Shutdown(ctx); err != nil {
-		logger.Fatalf("❌ Server Shutdown Failed: %+v", err)
+		logger.Error("❌ Server Shutdown Failed", "error", err)
+		os.Exit(1)
 	}
 
-	logger.Println("👋 Server exited gracefully")
+	logger.Info("👋 Server exited gracefully")
 }

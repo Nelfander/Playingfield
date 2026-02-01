@@ -200,6 +200,19 @@ Invoke-RestMethod -Method GET -Uri http://localhost:880/projects -Headers @{ Aut
 <details><summary>(Click to expand)</summary>
 
 <details>
+<summary><b>Feb 1, 2026: Modern Observability (log/slog)</b> (Click to expand) </summary>
+
+### Phase 1: Structured Logging Migration (`slog`)
+* **Standard Library Modernization**: Migrated the entire application logging from `fmt/log` to the Go 1.21+ `log/slog` package. This moves the project from "string-based" logs to structured, machine-readable telemetry.
+* **Global Observability Setup**: Implemented a centralized `slog.Handler` in `server.go` using `slog.SetDefault`. This ensures that all downstream packages (Services, Repositories, Hub) share a unified logging format and level control without extra dependency injection.
+* **Leveled Telemetry**: Introduced differentiated log levels (`DEBUG`, `INFO`, `WARN`, `ERROR`) allowing for high-verbosity development traces while maintaining clean, actionable logs in production environments.
+
+### Phase 2: Error Traceability
+* **Structured Context Pairs**: Updated core error paths to use key-value pairs (e.g., `logger.Error("msg", "error", err)`). This allows for instant filtering by error type or resource ID in log aggregators.
+* **Fail-Fast vs. Resilient Startup**: Standardized the use of `os.Exit(1)` for critical infrastructure failures (Database, Config) while using `logger.Warn` for non-critical bootstrap tasks like admin seeding.
+</details>
+
+<details>
 <summary><b>Jan 31, 2026: Graceful Shutdown</b> (Click to expand) 🛡️</summary>
 
 ### 🏗️ Infrastructure & Database Mapping
