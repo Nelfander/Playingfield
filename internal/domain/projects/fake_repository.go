@@ -2,7 +2,6 @@ package projects
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 )
@@ -28,18 +27,23 @@ func NewFakeRepository() *FakeRepository {
 }
 
 func (f *FakeRepository) CreateProject(ctx context.Context, p Project) (*Project, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("fake repo: %w", err)
+	}
 	p.ID = f.nextID
 	f.nextID++
 	p.CreatedAt = time.Now()
 	p.UpdatedAt = time.Now()
 
 	f.projects = append(f.projects, p)
-
 	// return a pointer to the version actually stored in the slice
 	return &f.projects[len(f.projects)-1], nil
 }
 
 func (f *FakeRepository) Update(ctx context.Context, p Project) (*Project, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("fake repo: %w", err)
+	}
 	//  find the existing project by id
 	for i, proj := range f.projects {
 		if proj.ID == p.ID {
@@ -48,10 +52,13 @@ func (f *FakeRepository) Update(ctx context.Context, p Project) (*Project, error
 			return &f.projects[i], nil
 		}
 	}
-	return nil, fmt.Errorf("project not found in fake repo")
+	return nil, fmt.Errorf("project %d not found", p.ID)
 }
 
 func (f *FakeRepository) GetAllByOwner(ctx context.Context, ownerID int64) ([]Project, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("fake repo: %w", err)
+	}
 	var res []Project
 	for _, p := range f.projects {
 		if p.OwnerID == ownerID {
@@ -62,16 +69,22 @@ func (f *FakeRepository) GetAllByOwner(ctx context.Context, ownerID int64) ([]Pr
 }
 
 func (f *FakeRepository) GetByID(ctx context.Context, id int64) (*Project, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("fake repo: %w", err)
+	}
 	for i := range f.projects {
 		if f.projects[i].ID == id {
 			// return a pointer to the actual element in the slice
 			return &f.projects[i], nil
 		}
 	}
-	return nil, errors.New("project not found")
+	return nil, fmt.Errorf("project %d not found", id)
 }
 
 func (f *FakeRepository) DeleteProject(ctx context.Context, id int64, ownerID int64) error {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("fake repo: %w", err)
+	}
 	for i, p := range f.projects {
 		if p.ID == id && p.OwnerID == ownerID {
 			// Remove the project from the slice
@@ -79,14 +92,16 @@ func (f *FakeRepository) DeleteProject(ctx context.Context, id int64, ownerID in
 			return nil
 		}
 	}
-	return errors.New("project not found")
+	return fmt.Errorf("cannot delete: project %d not found or unauthorized", id)
 }
 
 func (f *FakeRepository) AddUserToProject(ctx context.Context, projectID int64, userID int64, role string) error {
-	// Optional: Check if project exists first to be realistic
-	_, err := f.GetByID(ctx, projectID)
-	if err != nil {
-		return err
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("fake repo: %w", err)
+	}
+	// Verify project existence
+	if _, err := f.GetByID(ctx, projectID); err != nil {
+		return fmt.Errorf("failed to add user: %w", err)
 	}
 
 	f.projectUsers = append(f.projectUsers, projectUserEntry{
@@ -98,6 +113,9 @@ func (f *FakeRepository) AddUserToProject(ctx context.Context, projectID int64, 
 }
 
 func (f *FakeRepository) ListUsersInProject(ctx context.Context, projectID int64) ([]ProjectMember, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("fake repo: %w", err)
+	}
 	var res []ProjectMember
 	for _, pu := range f.projectUsers {
 		if pu.ProjectID == projectID {
@@ -113,17 +131,23 @@ func (f *FakeRepository) ListUsersInProject(ctx context.Context, projectID int64
 }
 
 func (f *FakeRepository) RemoveUserFromProject(ctx context.Context, projectID int64, userID int64) error {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("fake repo: %w", err)
+	}
 	for i, pu := range f.projectUsers {
 		if pu.ProjectID == projectID && pu.UserID == userID {
 			f.projectUsers = append(f.projectUsers[:i], f.projectUsers[i+1:]...)
 			return nil
 		}
 	}
-	return errors.New("user not found in project")
+	return fmt.Errorf("user %d not found in project %d", userID, projectID)
 }
 
 func (f *FakeRepository) UsersShareProject(ctx context.Context, userA, userB int64) (bool, error) {
-	// Track which projects each user belongs to
+	if err := ctx.Err(); err != nil {
+		return false, fmt.Errorf("fake repo: %w", err)
+	}
+	// track which projects each user belongs to
 	userAProjects := make(map[int64]bool)
 
 	for _, pu := range f.projectUsers {

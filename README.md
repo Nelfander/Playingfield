@@ -32,6 +32,12 @@ built with **Go (Echo framework)**, **PostgreSQL (Neon)**, and a **React (TypeSc
 * **Ownership Enforcement:** Destructive actions (deleting projects/tasks, removing members) are restricted to the project owner via backend middleware.
 Updating or creating actions are the same.
 
+### 🛠️ Reliability & Observability
+* **Structured Telemetry (slog):** The system uses machine-readable JSON logging in production. It follows a "Leveled" approach where low-level database traces are hidden by default, and only actionable WARN or ERROR events trigger alerts.
+* **Recursive Error Wrapping:** Using Go's %w verb to wrap errors as they move up the stack. This preserves the original error (like a DB connection timeout) while adding "Domain Context" (like 'failed to register user').
+* **Defensive Mapping:** Data is strictly mapped between the Database (Postgres/sqlc) and the Domain (Go structs). This "Anti-Corruption Layer" ensures that database changes never break business rules.
+* **Ownership Enforcement:** The system performs "Deep Validation" on every request. Beyond just checking if a user is logged in, the backend verifies ownership before allowing any Updates, Deletions, or Member Management actions.
+
 ---
 
 ## 🛠 Tech Stack
@@ -198,6 +204,19 @@ Invoke-RestMethod -Method GET -Uri http://localhost:880/projects -Headers @{ Aut
 
 ## 🛠 <b>Development History</b>
 <details><summary>(Click to expand)</summary>
+
+<details>
+<summary><b>Feb 2, 2026: Persistence Layer & Production-Grade Mapping</b> (Click to expand) </summary>
+
+### Phase 1: Infrastructure & Repository Refactoring
+* **The "Senior" Repository Pattern**: Refactored Postgres repositories to act as a strict bridge between `sqlc` generated code and the Domain layer. Implemented manual mapping to ensure database-specific types (like `pgtype.Text` or `pgtype.Int8`) never leak into the business logic.
+* **Contextual Persistence**: Standardized `context.Context` propagation across the entire stack (Postgres and Mock repositories). This enables system-wide query cancellation, deadline enforcement, and consistent request tracing.
+* **Smart Mapping & Nil Safety**: Developed robust mapping functions to handle nullable database columns, transforming them into safe Go pointers to prevent `nil` dereference panics during runtime.
+
+### Phase 2: High-Volume Observability
+* **Log Level Strategy**: Implemented a "Value-Based" logging strategy. High-frequency events (Messages) are relegated to `DEBUG` to prevent disk-thrashing, while high-value events (Project Creation, User Registration) are promoted to `INFO`.
+* **Error Wrapping (%w)**: Integrated `fmt.Errorf("db: description: %w", err)` across all repository methods. This creates a "breadcrumb trail" in logs, making it instantly clear if a failure originated in the database, the service, or the handler.
+</details>
 
 <details>
 <summary><b>Feb 1, 2026: Modern Observability (log/slog)</b> (Click to expand) </summary>

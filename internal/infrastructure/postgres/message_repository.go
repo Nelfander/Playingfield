@@ -2,6 +2,8 @@ package postgres
 
 import (
 	"context"
+	"fmt"
+	"log/slog"
 
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/nelfander/Playingfield/internal/domain/messages"
@@ -20,35 +22,39 @@ func NewMessageRepository(db *DBAdapter) *MessageRepository {
 	}
 }
 
+// helper function
+func int64Value(v *int64) int64 {
+	if v == nil {
+		return 0
+	}
+	return *v
+}
+
 func (r *MessageRepository) Create(ctx context.Context, m messages.Message) (*messages.Message, error) {
-	// Prepare parameters
+	// Prepare parameters with clean mapping
 	params := sqlc.CreateMessageParams{
 		SenderID: m.SenderID,
 		Content:  m.Content,
 		ProjectID: pgtype.Int8{
-			Int64: func() int64 {
-				if m.ProjectID != nil {
-					return *m.ProjectID
-				}
-				return 0
-			}(),
+			Int64: int64Value(m.ProjectID),
 			Valid: m.ProjectID != nil,
 		},
 		ReceiverID: pgtype.Int8{
-			Int64: func() int64 {
-				if m.ReceiverID != nil {
-					return *m.ReceiverID
-				}
-				return 0
-			}(),
+			Int64: int64Value(m.ReceiverID),
 			Valid: m.ReceiverID != nil,
 		},
 	}
 
 	res, err := r.queries.CreateMessage(ctx, params)
 	if err != nil {
-		return nil, err
+		slog.Error("failed to persist message", "error", err)
+		return nil, fmt.Errorf("db: failed to create message: %w", err)
 	}
+
+	// debug and not info for messages, in a busy day it with info
+	// it can fil up pretty fast :p
+	// debug wont show in prod
+	slog.Debug("message persisted to db", "id", res.ID, "sender_id", res.SenderID)
 
 	// Map back to domain model
 	return &messages.Message{
@@ -65,7 +71,7 @@ func (r *MessageRepository) Create(ctx context.Context, m messages.Message) (*me
 func (r *MessageRepository) GetByProject(ctx context.Context, projectID int64) ([]messages.Message, error) {
 	rows, err := r.queries.GetProjectMessages(ctx, pgtype.Int8{Int64: projectID, Valid: true})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("db: failed to get project messages: %w", err)
 	}
 
 	var list []messages.Message
@@ -94,7 +100,7 @@ func (r *MessageRepository) GetDirectMessages(ctx context.Context, userA, userB 
 
 	rows, err := r.queries.GetDirectMessages(ctx, params)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("db: failed to get direct messages: %w", err)
 	}
 
 	var list []messages.Message

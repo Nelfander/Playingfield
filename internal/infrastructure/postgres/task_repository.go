@@ -2,6 +2,8 @@ package postgres
 
 import (
 	"context"
+	"fmt"
+	"log/slog"
 
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/nelfander/Playingfield/internal/domain/tasks"
@@ -21,58 +23,49 @@ func NewTaskRepository(db *DBAdapter) *TaskRepository {
 }
 
 func (r *TaskRepository) CreateTask(ctx context.Context, t *tasks.Task) (*tasks.Task, error) {
-	// assigned to can be empty when the task is beeing created. The project owner might make tasks which he still doesnt know which members to assign them to!
-	var assignedTo pgtype.Int8
-	if t.AssignedTo != nil {
-		assignedTo = pgtype.Int8{Int64: *t.AssignedTo, Valid: true}
-	} else {
-		assignedTo = pgtype.Int8{Valid: false}
-	}
-	// Map Domain -> SQLC Params
+	// assigned to can be empty when the task is beeing created,
+	// the project owner might make tasks which he still doesnt know which members to assign them to!
 	res, err := r.queries.CreateTask(ctx, sqlc.CreateTaskParams{
 		ProjectID:   t.ProjectID,
 		Title:       t.Title,
 		Description: pgtype.Text{String: t.Description, Valid: t.Description != ""},
 		Status:      t.Status,
-		AssignedTo:  assignedTo,
+		AssignedTo:  toPgInt8(t.AssignedTo),
 	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("db: create task: %w", err)
 	}
 
+	slog.Info("task created", "task_id", res.ID, "project_id", res.ProjectID)
 	return mapSQLCTaskToDomain(res), nil
 }
 
 func (r *TaskRepository) UpdateTask(ctx context.Context, t *tasks.Task) (*tasks.Task, error) {
-	var assignedTo pgtype.Int8
-	if t.AssignedTo != nil {
-		assignedTo = pgtype.Int8{Int64: *t.AssignedTo, Valid: true}
-	} else {
-		assignedTo = pgtype.Int8{Valid: false}
-	}
-
 	res, err := r.queries.UpdateTask(ctx, sqlc.UpdateTaskParams{
 		ID:          t.ID,
 		Title:       t.Title,
 		Description: pgtype.Text{String: t.Description, Valid: t.Description != ""},
 		Status:      t.Status,
-		AssignedTo:  assignedTo,
+		AssignedTo:  toPgInt8(t.AssignedTo),
 	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("db: update task: %w", err)
 	}
 
 	return mapSQLCTaskToDomain(res), nil
 }
 
 func (r *TaskRepository) DeleteTask(ctx context.Context, id int64) error {
-	return r.queries.DeleteTask(ctx, id)
+	if err := r.queries.DeleteTask(ctx, id); err != nil {
+		return fmt.Errorf("db: delete task: %w", err)
+	}
+	return nil
 }
 
 func (r *TaskRepository) GetTaskByID(ctx context.Context, id int64) (*tasks.Task, error) {
 	res, err := r.queries.GetTaskByID(ctx, id)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("db: get task by id: %w", err)
 	}
 	return mapSQLCTaskToDomain(res), nil
 }
@@ -80,7 +73,7 @@ func (r *TaskRepository) GetTaskByID(ctx context.Context, id int64) (*tasks.Task
 func (r *TaskRepository) ListTaskByProject(ctx context.Context, projectID int64) ([]*tasks.Task, error) {
 	rows, err := r.queries.ListTasksForProject(ctx, projectID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("db: list tasks by project: %w", err)
 	}
 
 	var list []*tasks.Task
@@ -107,18 +100,22 @@ func (r *TaskRepository) ListTaskByProject(ctx context.Context, projectID int64)
 }
 
 func (r *TaskRepository) RecordTaskActivity(ctx context.Context, a *tasks.TaskActivity) error {
-	return r.queries.RecordTaskActivity(ctx, sqlc.RecordTaskActivityParams{
+	err := r.queries.RecordTaskActivity(ctx, sqlc.RecordTaskActivityParams{
 		TaskID:  a.TaskID,
 		UserID:  a.UserID,
 		Action:  a.Action,
 		Details: pgtype.Text{String: a.Details, Valid: a.Details != ""},
 	})
+	if err != nil {
+		return fmt.Errorf("db: record task activity: %w", err)
+	}
+	return nil
 }
 
 func (r *TaskRepository) GetTaskHistory(ctx context.Context, taskID int64) ([]*tasks.TaskActivity, error) {
 	rows, err := r.queries.GetTaskHistory(ctx, taskID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("db: get task history: %w", err)
 	}
 
 	var history []*tasks.TaskActivity
@@ -154,4 +151,21 @@ func mapSQLCTaskToDomain(row sqlc.Task) *tasks.Task {
 		CreatedAt:   row.CreatedAt.Time,
 		UpdatedAt:   row.UpdatedAt.Time,
 	}
+}
+
+// helper: toPgInt8 converts a nullable *int64 to a pgtype.Int8
+func toPgInt8(i *int64) pgtype.Int8 {
+	if i == nil {
+		return pgtype.Int8{Valid: false}
+	}
+	return pgtype.Int8{Int64: *i, Valid: true}
+}
+
+// helper: fromPgInt8 converts a pgtype.Int8 to a nullable *int64
+func fromPgInt8(p pgtype.Int8) *int64 {
+	if !p.Valid {
+		return nil
+	}
+	val := p.Int64
+	return &val
 }

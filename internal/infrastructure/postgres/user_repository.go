@@ -2,6 +2,8 @@ package postgres
 
 import (
 	"context"
+	"fmt"
+	"log/slog"
 
 	"github.com/nelfander/Playingfield/internal/domain/user"
 
@@ -21,7 +23,7 @@ func NewUserRepository(db *DBAdapter, q *sqlc.Queries) *UserRepository {
 func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*user.User, error) {
 	row, err := r.queries.GetUserByEmail(ctx, email)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("db: get user by email: %w", err)
 	}
 
 	return &user.User{
@@ -43,8 +45,10 @@ func (r *UserRepository) Create(ctx context.Context, u user.User) (*user.User, e
 		Status:       u.Status,
 	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("db: create user: %w", err)
 	}
+
+	slog.Info("database: user record created", "user_id", res.ID, "email", res.Email)
 
 	// map the database result back to your Domain User
 	return &user.User{
@@ -60,7 +64,7 @@ func (r *UserRepository) Create(ctx context.Context, u user.User) (*user.User, e
 func (r *UserRepository) ListUsers(ctx context.Context) ([]user.UserListRow, error) {
 	rows, err := r.queries.ListUsers(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("db: list users: %w", err)
 	}
 
 	var result []user.UserListRow

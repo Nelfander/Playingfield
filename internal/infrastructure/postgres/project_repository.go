@@ -2,6 +2,8 @@ package postgres
 
 import (
 	"context"
+	"fmt"
+	"log/slog"
 
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/nelfander/Playingfield/internal/domain/projects"
@@ -28,8 +30,11 @@ func (r *ProjectRepository) CreateProject(ctx context.Context, p projects.Projec
 		OwnerID:     p.OwnerID,
 	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("db: create project: %w", err)
 	}
+
+	// info because projects are significant events!
+	slog.Info("new project created", "project_id", res.ID, "name", res.Name, "owner_id", res.OwnerID)
 
 	// map it back to /domain/project
 	return &projects.Project{
@@ -52,7 +57,7 @@ func (r *ProjectRepository) Update(ctx context.Context, p projects.Project) (*pr
 		},
 	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("db: update project: %w", err)
 	}
 	return &p, nil
 }
@@ -61,7 +66,7 @@ func (r *ProjectRepository) Update(ctx context.Context, p projects.Project) (*pr
 func (r *ProjectRepository) GetAllByOwner(ctx context.Context, ownerID int64) ([]projects.Project, error) {
 	rows, err := r.queries.ListProjectsByOwner(ctx, ownerID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("db: list projects by owner: %w", err)
 	}
 
 	// map the slice of SQLC rows to a slice of domain projects
@@ -82,19 +87,16 @@ func (r *ProjectRepository) GetAllByOwner(ctx context.Context, ownerID int64) ([
 func (r *ProjectRepository) GetByID(ctx context.Context, id int64) (*projects.Project, error) {
 	res, err := r.queries.GetProjectByID(ctx, id)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("db: get project by id: %w", err)
 	}
 
 	// MAP: Convert SQLC types to Domain types
 	return &projects.Project{
 		ID:   res.ID,
 		Name: res.Name,
-
 		// pgtype.Text -> string
 		Description: res.Description.String,
-
-		OwnerID: res.OwnerID,
-
+		OwnerID:     res.OwnerID,
 		// pgtype.Timestamp/Timestamptz -> time.Time
 		CreatedAt: res.CreatedAt.Time,
 	}, nil
@@ -103,15 +105,15 @@ func (r *ProjectRepository) GetByID(ctx context.Context, id int64) (*projects.Pr
 func (r *ProjectRepository) ListUsersInProject(ctx context.Context, projectID int64) ([]projects.ProjectMember, error) {
 	rows, err := r.queries.ListUsersInProject(ctx, projectID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("db: list users in project: %w", err)
 	}
 
 	var members []projects.ProjectMember
 	for _, row := range rows {
 		// Use type assertion .(string) to convert interface{} to string
-		roleStr, ok := row.Role.(string)
-		if !ok {
-			roleStr = "member" // fallback safety
+		roleStr, _ := row.Role.(string)
+		if roleStr == "" {
+			roleStr = "member"
 		}
 
 		members = append(members, projects.ProjectMember{
@@ -125,27 +127,37 @@ func (r *ProjectRepository) ListUsersInProject(ctx context.Context, projectID in
 }
 
 func (r *ProjectRepository) DeleteProject(ctx context.Context, id int64, ownerID int64) error {
-	return r.queries.DeleteProject(ctx, sqlc.DeleteProjectParams{
+	err := r.queries.DeleteProject(ctx, sqlc.DeleteProjectParams{
 		ID:      id,
 		OwnerID: ownerID,
 	})
+	if err != nil {
+		return fmt.Errorf("db: delete project: %w", err)
+	}
+	return nil
 }
 
 func (r *ProjectRepository) AddUserToProject(ctx context.Context, projectID int64, userID int64, role string) error {
-	// Uses the :one query you defined
 	_, err := r.queries.AddUserToProject(ctx, sqlc.AddUserToProjectParams{
 		ProjectID: projectID,
 		UserID:    userID,
 		Role:      pgtype.Text{String: role, Valid: true},
 	})
-	return err
+	if err != nil {
+		return fmt.Errorf("db: add user to project: %w", err)
+	}
+	return nil
 }
 
 func (r *ProjectRepository) RemoveUserFromProject(ctx context.Context, projectID int64, userID int64) error {
-	return r.queries.RemoveUserFromProject(ctx, sqlc.RemoveUserFromProjectParams{
+	err := r.queries.RemoveUserFromProject(ctx, sqlc.RemoveUserFromProjectParams{
 		ProjectID: projectID,
 		UserID:    userID,
 	})
+	if err != nil {
+		return fmt.Errorf("db: remove user from project: %w", err)
+	}
+	return nil
 }
 
 func (r *ProjectRepository) UsersShareProject(ctx context.Context, userA, userB int64) (bool, error) {
@@ -154,7 +166,7 @@ func (r *ProjectRepository) UsersShareProject(ctx context.Context, userA, userB 
 		ReceiverID: userB,
 	})
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("db: check shared project: %w", err)
 	}
 	return shared, nil
 }

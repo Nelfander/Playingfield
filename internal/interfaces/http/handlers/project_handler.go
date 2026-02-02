@@ -233,7 +233,7 @@ func (h *ProjectHandler) RemoveUserFromProject(c echo.Context) error {
 	}
 	requesterID := claims.UserID
 
-	err := h.service.RemoveUserFromProject(requesterID, req.ProjectID, req.UserID)
+	err := h.service.RemoveUserFromProject(c.Request().Context(), requesterID, req.ProjectID, req.UserID)
 	if err != nil {
 		return c.JSON(403, map[string]string{"error": err.Error()})
 	}

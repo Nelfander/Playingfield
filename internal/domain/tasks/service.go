@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 
 	"github.com/nelfander/Playingfield/internal/domain/projects"
 
@@ -38,6 +39,7 @@ func (s *Service) CreateTask(ctx context.Context, requesterID int64, t Task) (*T
 
 	// Security Check.
 	if project.OwnerID != requesterID {
+		slog.Warn("unauthorized task creation attempt", "project_id", t.ProjectID, "requester_id", requesterID)
 		return nil, ErrUnauthorized
 	}
 
@@ -61,10 +63,12 @@ func (s *Service) CreateTask(ctx context.Context, requesterID int64, t Task) (*T
 		Action:  "CREATED",
 		Details: details,
 	}
-	err = s.repo.RecordTaskActivity(ctx, activity)
-	if err != nil {
+	if err := s.repo.RecordTaskActivity(ctx, activity); err != nil {
+		slog.Error("failed to record task creation activity", "task_id", createdTask.ID, "error", err)
 		return nil, fmt.Errorf("task created but history log failed: %w", err)
 	}
+
+	slog.Info("task created", "task_id", createdTask.ID, "project_id", t.ProjectID)
 
 	//  Broadcast.
 	if s.hub != nil {
@@ -88,11 +92,12 @@ func (s *Service) UpdateTask(ctx context.Context, requesterID int64, t Task, com
 		return nil, fmt.Errorf("failed to verify project ownership: %w", err)
 	}
 
-	// Authorization Check: Is requester the Owner OR the Assignee?
+	// Authorization check: is requester the owner OR the assignee?
 	isOwner := project.OwnerID == requesterID
 	isAssignee := existingTask.AssignedTo != nil && *existingTask.AssignedTo == requesterID
 
 	if !isOwner && !isAssignee {
+		slog.Warn("unauthorized task update attempt", "task_id", t.ID, "requester_id", requesterID)
 		return nil, fmt.Errorf("unauthorized: you are not the owner or the assigned member")
 	}
 
@@ -109,10 +114,12 @@ func (s *Service) UpdateTask(ctx context.Context, requesterID int64, t Task, com
 		Action:  "UPDATED",
 		Details: fmt.Sprintf("[%s] %s", updatedTask.Status, commitMsg),
 	}
-	err = s.repo.RecordTaskActivity(ctx, activity)
-	if err != nil {
+	if err := s.repo.RecordTaskActivity(ctx, activity); err != nil {
+		slog.Error("failed to record task update activity", "task_id", updatedTask.ID, "error", err)
 		return nil, fmt.Errorf("task updated but history log failed: %w", err)
 	}
+
+	slog.Info("task updated", "task_id", updatedTask.ID, "status", updatedTask.Status)
 
 	if s.hub != nil {
 		notification := fmt.Sprintf("TASK_UPDATED:%d:%d", updatedTask.ProjectID, updatedTask.ID)
@@ -134,6 +141,7 @@ func (s *Service) DeleteTask(ctx context.Context, requesterID int64, taskID int6
 	}
 	// Security Check: Only the project owner can delete tasks
 	if project.OwnerID != requesterID {
+		slog.Warn("unauthorized task deletion attempt", "task_id", taskID, "requester_id", requesterID)
 		return fmt.Errorf("unauthorized: only the project owner can delete tasks")
 	}
 	// Delete the task
@@ -141,6 +149,9 @@ func (s *Service) DeleteTask(ctx context.Context, requesterID int64, taskID int6
 	if err != nil {
 		return fmt.Errorf("failed to delete task: %w", err)
 	}
+
+	slog.Info("task deleted", "task_id", taskID, "project_id", task.ProjectID)
+
 	// Broadcast deletion
 	if s.hub != nil {
 		notification := fmt.Sprintf("TASK_DELETED:%d:%d", task.ProjectID, taskID)

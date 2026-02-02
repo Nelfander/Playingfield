@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/nelfander/Playingfield/internal/infrastructure/ws"
@@ -35,17 +36,22 @@ func (s *Service) CreateProject(ctx context.Context, name, description string, o
 	project, err := s.repo.CreateProject(ctx, p)
 	if err != nil {
 		var pgErr *pgconn.PgError
+		// unique constraint check (Postgres code 23505)
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
 			return nil, fmt.Errorf("you already have a project with the name '%s'", name)
 		}
-		return nil, err
+		return nil, fmt.Errorf("failed to create project: %w", err)
 	}
 
 	// This will call the Fake in tests and the Real DB in production
 	err = s.repo.AddUserToProject(ctx, project.ID, ownerID, "owner")
 	if err != nil {
+		// projects have to have an owner so this should never happen
+		slog.Error("project created but owner assignment failed", "project_id", project.ID, "owner_id", ownerID, "error", err)
 		return nil, fmt.Errorf("project created but failed to assign ownership: %w", err)
 	}
+
+	slog.Info("project created successfully", "project_id", project.ID, "owner_id", ownerID)
 
 	// (a nil-check for the hub to prevent panics in tests)
 	if s.hub != nil {
@@ -63,6 +69,7 @@ func (s *Service) UpdateProject(ctx context.Context, requesterID, projectID int6
 
 	//  only owner can update
 	if project.OwnerID != requesterID {
+		slog.Warn("unauthorized update attempt", "project_id", projectID, "requester_id", requesterID)
 		return nil, fmt.Errorf("unauthorized: user %d is not the owner", requesterID)
 	}
 
@@ -73,10 +80,12 @@ func (s *Service) UpdateProject(ctx context.Context, requesterID, projectID int6
 	// update in the database
 	updatedProject, err := s.repo.Update(ctx, *project)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to update project: %w", err)
 	}
 
-	// broadcast the change to the Hub
+	slog.Info("project updated", "project_id", projectID, "requester_id", requesterID)
+
+	// broadcast the change to the hub
 	if s.hub != nil {
 		notification := fmt.Sprintf("PROJECT_UPDATED:%d", projectID)
 		s.hub.Broadcast <- []byte(notification)
@@ -96,14 +105,17 @@ func (s *Service) DeleteProject(ctx context.Context, projectID, ownerID int64) e
 	}
 
 	if project.OwnerID != ownerID {
+		slog.Warn("unauthorized delete attempt", "project_id", projectID, "requester_id", ownerID)
 		return fmt.Errorf("only the project owner can delete this project")
 	}
 
 	//  repo.DeleteProject (Safe for tests)
 	err = s.repo.DeleteProject(ctx, projectID, ownerID)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to delete project: %w", err)
 	}
+
+	slog.Info("project deleted", "project_id", projectID, "owner_id", ownerID)
 
 	if s.hub != nil {
 		notification := fmt.Sprintf("PROJECT_DELETED:%d", projectID)
@@ -121,6 +133,7 @@ func (s *Service) AddUserToProject(ctx context.Context, requesterID int64, proje
 
 	// only project owner can add members
 	if project.OwnerID != requesterID {
+		slog.Warn("unauthorized add member attempt", "project_id", projectID, "requester_id", requesterID)
 		return fmt.Errorf("unauthorized: user %d is not the owner of project %d", requesterID, projectID)
 	}
 
@@ -138,8 +151,10 @@ func (s *Service) AddUserToProject(ctx context.Context, requesterID int64, proje
 	// add the user
 	err = s.repo.AddUserToProject(ctx, projectID, userID, role)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to add user to project: %w", err)
 	}
+
+	slog.Info("user added to project", "project_id", projectID, "user_id", userID, "role", role)
 
 	// broadcast the change
 	if s.hub != nil {
@@ -150,20 +165,23 @@ func (s *Service) AddUserToProject(ctx context.Context, requesterID int64, proje
 	return nil
 }
 
-func (s *Service) RemoveUserFromProject(requesterID, projectID, userID int64) error {
-	project, err := s.repo.GetByID(context.Background(), projectID)
+func (s *Service) RemoveUserFromProject(ctx context.Context, requesterID, projectID, userID int64) error {
+	project, err := s.repo.GetByID(ctx, projectID)
 	if err != nil {
 		return fmt.Errorf("failed to fetch project: %w", err)
 	}
 
 	if project.OwnerID != requesterID {
+		slog.Warn("unauthorized remove member attempt", "project_id", projectID, "requester_id", requesterID)
 		return fmt.Errorf("only the project owner can remove users")
 	}
 
-	err = s.repo.RemoveUserFromProject(context.Background(), projectID, userID)
+	err = s.repo.RemoveUserFromProject(ctx, projectID, userID)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to remove user: %w from project %d", err, projectID)
 	}
+
+	slog.Info("user removed from project", "project_id", projectID, "removed_user_id", userID)
 
 	if s.hub != nil {
 		notification := fmt.Sprintf("USER_REMOVED:%d:%d", projectID, userID)

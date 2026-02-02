@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 
 	"github.com/nelfander/Playingfield/internal/domain/projects"
 	"github.com/nelfander/Playingfield/internal/infrastructure/ws"
@@ -54,6 +55,11 @@ func (s *Service) SendProjectMessage(ctx context.Context, senderID int64, projec
 	}
 
 	if !isAuthorized {
+		// Log the unauthorized attempt
+		slog.Warn("unauthorized project message attempt",
+			"sender_id", senderID,
+			"project_id", projectID,
+		)
 		return nil, fmt.Errorf("unauthorized: user %d is not a member of project %s", senderID, project.Name)
 	}
 
@@ -66,7 +72,7 @@ func (s *Service) SendProjectMessage(ctx context.Context, senderID int64, projec
 
 	saved, err := s.repo.Create(ctx, msg)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to save project message: %w", err)
 	}
 
 	// broadcast via websocket hub
@@ -75,8 +81,12 @@ func (s *Service) SendProjectMessage(ctx context.Context, senderID int64, projec
 			"type": "new_project_message",
 			"data": saved,
 		}
-		payload, _ := json.Marshal(broadcastData)
-		s.hub.BroadcastToProject(projectID, payload)
+		payload, err := json.Marshal(broadcastData)
+		if err != nil {
+			slog.Error("failed to marshal project message for broadcast", "error", err)
+		} else {
+			s.hub.BroadcastToProject(projectID, payload)
+		}
 	}
 
 	return saved, nil
@@ -93,6 +103,10 @@ func (s *Service) SendDirectMessage(ctx context.Context, senderID, receiverID in
 		return nil, fmt.Errorf("could not verify connection: %w", err)
 	}
 	if !shared {
+		slog.Warn("blocked DM attempt between unshared project users",
+			"sender_id", senderID,
+			"receiver_id", receiverID,
+		)
 		return nil, fmt.Errorf("you can only message users who share a project with you")
 	}
 	msg := Message{
@@ -102,7 +116,7 @@ func (s *Service) SendDirectMessage(ctx context.Context, senderID, receiverID in
 	}
 	saved, err := s.repo.Create(ctx, msg)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to save direct message: %w", err)
 	}
 	if s.hub != nil {
 		broadcastData := map[string]interface{}{
@@ -111,7 +125,9 @@ func (s *Service) SendDirectMessage(ctx context.Context, senderID, receiverID in
 		}
 
 		payload, err := json.Marshal(broadcastData)
-		if err == nil {
+		if err != nil {
+			slog.Error("failed to marshal DM for broadcast", "error", err)
+		} else {
 			s.hub.SendToUser(receiverID, payload)
 			s.hub.SendToUser(senderID, payload)
 		}
