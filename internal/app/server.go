@@ -99,6 +99,10 @@ func Run() {
 	// --- Echo server ---
 	e := echo.New()
 
+	// Override default error handler to centralize JSON formatting and slog logging.
+	// This prevents sensitive internal error leakage to the client.
+	e.HTTPErrorHandler = http.CustomHTTPErrorHandler
+
 	// --- CORS Middleware ---
 	e.Use(echomiddleware.CORSWithConfig(echomiddleware.CORSConfig{
 		AllowOrigins: []string{"*"},

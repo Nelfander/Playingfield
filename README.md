@@ -33,6 +33,7 @@ built with **Go (Echo framework)**, **PostgreSQL (Neon)**, and a **React (TypeSc
 Updating or creating actions are the same.
 
 ### 🛠️ Reliability & Observability
+* **Centralized Error Translation:** Implemented a Global Error Handler that acts as a bridge between internal domain errors and HTTP responses. It ensures that internal truths (like specific DB failures) are logged for developers while users receive clean, safe, and actionable error messages.
 * **Structured Telemetry (slog):** The system uses machine-readable JSON logging in production. It follows a "Leveled" approach where low-level database traces are hidden by default, and only actionable WARN or ERROR events trigger alerts.
 * **Recursive Error Wrapping:** Using Go's %w verb to wrap errors as they move up the stack. This preserves the original error (like a DB connection timeout) while adding "Domain Context" (like 'failed to register user').
 * **Defensive Mapping:** Data is strictly mapped between the Database (Postgres/sqlc) and the Domain (Go structs). This "Anti-Corruption Layer" ensures that database changes never break business rules.
@@ -204,6 +205,19 @@ Invoke-RestMethod -Method GET -Uri http://localhost:880/projects -Headers @{ Aut
 
 ## 🛠 <b>Development History</b>
 <details><summary>(Click to expand)</summary>
+
+<details>
+<summary><b>Feb 3, 2026: Global Error Translation & Handler Decoupling</b> (Click to expand) </summary>
+
+### Phase 1: Global Error Architecture
+* **The "Translator" Pattern**: Implemented a centralized `CustomHTTPErrorHandler` to decouple domain errors from HTTP status codes. This removed high-entropy `if/else` logic from handlers, allowing the service layer to define the "Internal Truth" while the translator manages the "External Persona."
+* **Security-Minded Responses**: Standardized API error responses to prevent account enumeration and data leaking. The system now maps specific internal failures (e.g., `wrong password`) to generic, safe public messages (`Invalid email or password`) while preserving technical detail in server-side logs.
+* **Echo Middleware Integration**: Fully integrated the error handler into the Echo framework's lifecycle, enabling automatic recovery and consistent JSON error formats across all endpoints, including the built-in binder and logger.
+
+### Phase 2: Test Suite Evolution
+* **Error-Aware Unit Testing**: Refactored the HTTP test suite to integrate with the global error handler. Transitioned tests from asserting on raw handler returns to validating the final "Translated" response, ensuring the baseline tests accurately reflect the production user experience.
+* **Enhanced Client-Side Debugging**: Improved `c.Bind` error propagation, providing frontend developers with detailed syntax offsets and unmarshalling errors rather than generic "invalid request" messages.
+</details>
 
 <details>
 <summary><b>Feb 2, 2026: Persistence Layer & Production-Grade Mapping</b> (Click to expand) </summary>

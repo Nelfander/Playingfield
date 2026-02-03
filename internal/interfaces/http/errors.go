@@ -1,0 +1,84 @@
+package http
+
+import (
+	"errors"
+	"fmt"
+	"log/slog"
+	"net/http"
+
+	"github.com/labstack/echo/v4"
+	"github.com/nelfander/Playingfield/internal/domain/tasks"
+	"github.com/nelfander/Playingfield/internal/domain/user"
+)
+
+// CustomHTTPErrorHandler handles errors globally across the Echo instance
+func CustomHTTPErrorHandler(err error, c echo.Context) {
+	// Default response
+	code := http.StatusInternalServerError
+	message := "Internal Server Error"
+
+	// Map Domain errors to HTTP status codes
+	// Switch through domain errors
+	switch {
+	// --- User domain ---
+	case errors.Is(err, user.ErrUserAlreadyExists):
+		code = http.StatusConflict
+		message = err.Error()
+
+	case errors.Is(err, user.ErrInvalidCredentials):
+		code = http.StatusUnauthorized
+		message = "Invalid email or password"
+		// The 'err' itself is already logged by slog, we see "wrong password"
+		// from the service log and "invalid credentials" from the translator. Awesome =)
+
+	case errors.Is(err, user.ErrInactiveAccount):
+		code = http.StatusForbidden
+		message = "Account is inactive"
+
+	// --- Task domain ---
+	case errors.Is(err, tasks.ErrTaskNotFound):
+		code = http.StatusNotFound
+		message = "Task not found"
+
+	case errors.Is(err, tasks.ErrUnauthorized):
+		code = http.StatusForbidden
+		message = "You do not have permission for this action"
+
+	// --- Echo and System errors! ---
+	default:
+		var he *echo.HTTPError
+		if errors.As(err, &he) {
+			code = he.Code
+			message = fmt.Sprintf("%v", he.Message)
+
+		}
+	}
+
+	// only log 500s as actual "Error" level.
+	// 400s are "Warn" or "Info" because they are usually the user's fault, not a system failure.
+	if code >= 500 {
+		slog.Error("server error",
+			"err", err,
+			"method", c.Request().Method,
+			"path", c.Path(),
+		)
+	} else {
+		slog.Warn("client error",
+			"code", code,
+			"err", err,
+			"path", c.Path(),
+		)
+	}
+
+	// send the response in a standardized JSON format
+	if !c.Response().Committed {
+		if c.Request().Method == http.MethodHead {
+			err = c.NoContent(code)
+		} else {
+			err = c.JSON(code, map[string]string{"error": message})
+		}
+		if err != nil {
+			slog.Error("failed to send error response", "err", err)
+		}
+	}
+}

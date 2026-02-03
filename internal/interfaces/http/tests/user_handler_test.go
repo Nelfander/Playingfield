@@ -12,6 +12,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/nelfander/Playingfield/internal/domain/user"
 	"github.com/nelfander/Playingfield/internal/infrastructure/auth"
+	custom "github.com/nelfander/Playingfield/internal/interfaces/http"
 	"github.com/nelfander/Playingfield/internal/interfaces/http/dto"
 	"github.com/nelfander/Playingfield/internal/interfaces/http/handlers"
 	"github.com/stretchr/testify/assert"
@@ -19,17 +20,19 @@ import (
 
 // setupHandler returns both the UserHandler and the underlying fakerepo
 // clean way to get empty fakerepo for every test so that one test doesnt affect another
-func setupHandler() (*handlers.UserHandler, *user.FakeRepository) {
+func setupHandler() (*handlers.UserHandler, *user.FakeRepository, *echo.Echo) {
+	e := echo.New()
+	e.HTTPErrorHandler = custom.CustomHTTPErrorHandler
+
 	fakeRepo := user.NewFakeRepository()
 	service := user.NewService(fakeRepo)
 	jwtManager := auth.NewJWTManager("test-secret", 24*time.Hour)
 	handler := handlers.NewUserHandler(service, jwtManager)
-	return handler, fakeRepo
+	return handler, fakeRepo, e
 }
 
 func TestUserRegistration(t *testing.T) {
-	handler, _ := setupHandler()
-	e := echo.New()
+	handler, _, e := setupHandler()
 
 	reqBody := `{"email":"test@example.com","password":"supersecret"}`
 	req := httptest.NewRequest(http.MethodPost, "/users", strings.NewReader(reqBody))
@@ -46,8 +49,7 @@ func TestUserRegistration(t *testing.T) {
 }
 
 func TestUserLogin(t *testing.T) {
-	handler, fakeRepo := setupHandler()
-	e := echo.New()
+	handler, fakeRepo, e := setupHandler()
 
 	// hash password manually to append in fake repo
 	password := "supersecret"
@@ -80,8 +82,7 @@ func TestUserLogin(t *testing.T) {
 }
 
 func TestUserLogin_InvalidCredentials(t *testing.T) {
-	handler, _ := setupHandler()
-	e := echo.New()
+	handler, _, e := setupHandler()
 
 	reqBody := `{"email":"invalid@example.com","password":"wrong"}`
 	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(reqBody))
@@ -89,17 +90,20 @@ func TestUserLogin_InvalidCredentials(t *testing.T) {
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 
-	handler.Login(c)
+	// Capture the error and pass it to Echo's error handler
+	err := handler.Login(c)
+	if err != nil {
+		e.HTTPErrorHandler(err, c)
+	}
 
 	assert.Equal(t, http.StatusUnauthorized, rec.Code)
 	var resp map[string]interface{}
 	assert.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
-	assert.Equal(t, "invalid credentials", resp["error"])
+	assert.Equal(t, "Invalid email or password", resp["error"])
 }
 
 func TestUserLogin_InactiveAccount(t *testing.T) {
-	handler, fakeRepo := setupHandler()
-	e := echo.New()
+	handler, fakeRepo, e := setupHandler()
 
 	password := "secret"
 	hashed, err := auth.HashPassword(password)
@@ -120,12 +124,15 @@ func TestUserLogin_InactiveAccount(t *testing.T) {
 	recLogin := httptest.NewRecorder()
 	cLogin := e.NewContext(reqLogin, recLogin)
 
-	handler.Login(cLogin)
+	err = handler.Login(cLogin)
+	if err != nil {
+		e.HTTPErrorHandler(err, cLogin)
+	}
 
 	assert.Equal(t, http.StatusForbidden, recLogin.Code)
 	var resp map[string]interface{}
 	assert.NoError(t, json.Unmarshal(recLogin.Body.Bytes(), &resp))
-	assert.Equal(t, "account is inactive or banned", resp["error"])
+	assert.Equal(t, "Account is inactive", resp["error"])
 }
 
 func TestMeEndpoint(t *testing.T) {

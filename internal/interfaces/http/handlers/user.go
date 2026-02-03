@@ -34,20 +34,17 @@ func NewUserHandler(service user.Service, auth *auth.JWTManager) *UserHandler {
 func (h *UserHandler) Register(c echo.Context) error {
 	var req dto.RegisterUserRequest
 	if err := c.Bind(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, echo.Map{"error": "invalid request"})
+		return err // The Translator will give the user a 400 with a detailed reason
 	}
 
 	hash, err := auth.HashPassword(req.Password)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, echo.Map{"error": "failed to hash password"})
+		return err // If hashing fails, it's a 500 error(translator handles it)
 	}
 
 	u, err := h.service.RegisterUser(c.Request().Context(), req.Email, hash)
 	if err != nil {
-		if err == user.ErrUserAlreadyExists {
-			return c.JSON(http.StatusConflict, echo.Map{"error": "user already exists"})
-		}
-		return c.JSON(http.StatusInternalServerError, echo.Map{"error": "internal error"})
+		return err // translator maps ErrUserAlreadyExists to 409 Conflict
 	}
 
 	resp := dto.UserResponse{
@@ -65,23 +62,19 @@ func (h *UserHandler) Register(c echo.Context) error {
 func (h *UserHandler) Login(c echo.Context) error {
 	var req dto.LoginRequest
 	if err := c.Bind(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, echo.Map{"error": "invalid request"})
+		return err
 	}
 
 	// call domain service
 	u, err := h.service.Login(c.Request().Context(), req.Email, req.Password)
 	if err != nil {
-		if err == user.ErrInactiveAccount {
-			return c.JSON(http.StatusForbidden, echo.Map{"error": err.Error()})
-		}
-		// all the other errors (wrong credentials, etc.)
-		return c.JSON(http.StatusUnauthorized, echo.Map{"error": "invalid credentials"})
+		return err // the translator will decide if this is a 401 or 403
 	}
 
 	// generate JWT
 	token, err := h.auth.GenerateToken(u.ID, u.Email, u.Role)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, echo.Map{"error": "failed to generate token"})
+		return err
 	}
 
 	// map domain User -> DTO
@@ -105,7 +98,7 @@ func (h *UserHandler) Me(c echo.Context) error {
 	// grab claims from context (set by JWT middleware)
 	claims, ok := c.Get("user").(*auth.Claims)
 	if !ok || claims == nil {
-		return c.JSON(http.StatusUnauthorized, echo.Map{"error": "unauthorized"})
+		return echo.NewHTTPError(http.StatusUnauthorized, "missing or invalid token")
 	}
 
 	resp := dto.UserResponse{
@@ -129,7 +122,7 @@ func (h *UserHandler) Admin(c echo.Context) error {
 func (h *UserHandler) List(c echo.Context) error {
 	users, err := h.service.ListAllUsers(c.Request().Context())
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, echo.Map{"error": "failed to fetch users"})
+		return err
 	}
 
 	return c.JSON(http.StatusOK, users)
