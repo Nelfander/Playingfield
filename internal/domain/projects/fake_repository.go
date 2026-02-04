@@ -30,6 +30,15 @@ func (f *FakeRepository) CreateProject(ctx context.Context, p Project) (*Project
 	if err := ctx.Err(); err != nil {
 		return nil, fmt.Errorf("fake repo: %w", err)
 	}
+
+	// Simulation of Unique Constraint (Name check)
+	for _, existing := range f.projects {
+		if existing.Name == p.Name && existing.OwnerID == p.OwnerID {
+			// return ErrDuplicateProject so the Service can wrap it with %w
+			return nil, ErrDuplicateProject
+		}
+	}
+
 	p.ID = f.nextID
 	f.nextID++
 	p.CreatedAt = time.Now()
@@ -52,7 +61,7 @@ func (f *FakeRepository) Update(ctx context.Context, p Project) (*Project, error
 			return &f.projects[i], nil
 		}
 	}
-	return nil, fmt.Errorf("project %d not found", p.ID)
+	return nil, ErrProjectNotFound
 }
 
 func (f *FakeRepository) GetAllByOwner(ctx context.Context, ownerID int64) ([]Project, error) {
@@ -78,7 +87,7 @@ func (f *FakeRepository) GetByID(ctx context.Context, id int64) (*Project, error
 			return &f.projects[i], nil
 		}
 	}
-	return nil, fmt.Errorf("project %d not found", id)
+	return nil, ErrProjectNotFound
 }
 
 func (f *FakeRepository) DeleteProject(ctx context.Context, id int64, ownerID int64) error {
@@ -92,7 +101,7 @@ func (f *FakeRepository) DeleteProject(ctx context.Context, id int64, ownerID in
 			return nil
 		}
 	}
-	return fmt.Errorf("cannot delete: project %d not found or unauthorized", id)
+	return ErrProjectNotFound
 }
 
 func (f *FakeRepository) AddUserToProject(ctx context.Context, projectID int64, userID int64, role string) error {
@@ -101,7 +110,7 @@ func (f *FakeRepository) AddUserToProject(ctx context.Context, projectID int64, 
 	}
 	// Verify project existence
 	if _, err := f.GetByID(ctx, projectID); err != nil {
-		return fmt.Errorf("failed to add user: %w", err)
+		return err // will be ErrProjectNotFound
 	}
 
 	f.projectUsers = append(f.projectUsers, projectUserEntry{

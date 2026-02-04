@@ -10,6 +10,13 @@ import (
 	"github.com/nelfander/Playingfield/internal/infrastructure/ws"
 )
 
+var (
+	ErrProjectNotFound  = errors.New("project not found")
+	ErrUnauthorized     = errors.New("unauthorized: only the project owner can perform this action")
+	ErrDuplicateProject = errors.New("a project with this name already exists")
+	ErrAlreadyMember    = errors.New("user is already a member of this project")
+)
+
 type Service struct {
 	repo Repository
 	hub  *ws.Hub
@@ -37,18 +44,18 @@ func (s *Service) CreateProject(ctx context.Context, name, description string, o
 	if err != nil {
 		var pgErr *pgconn.PgError
 		// unique constraint check (Postgres code 23505)
-		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-			return nil, fmt.Errorf("you already have a project with the name '%s'", name)
+		if errors.Is(err, ErrDuplicateProject) || (errors.As(err, &pgErr) && pgErr.Code == "23505") {
+			return nil, fmt.Errorf("%w: '%s'", ErrDuplicateProject, name)
 		}
-		return nil, fmt.Errorf("failed to create project: %w", err)
+		return nil, err
 	}
 
 	// This will call the Fake in tests and the Real DB in production
 	err = s.repo.AddUserToProject(ctx, project.ID, ownerID, "owner")
 	if err != nil {
-		// projects have to have an owner so this should never happen
+		// projects must have an owner so this should never happen
 		slog.Error("project created but owner assignment failed", "project_id", project.ID, "owner_id", ownerID, "error", err)
-		return nil, fmt.Errorf("project created but failed to assign ownership: %w", err)
+		return nil, err
 	}
 
 	slog.Info("project created successfully", "project_id", project.ID, "owner_id", ownerID)
@@ -64,13 +71,13 @@ func (s *Service) UpdateProject(ctx context.Context, requesterID, projectID int6
 	// get current project to check ownership
 	project, err := s.repo.GetByID(ctx, projectID)
 	if err != nil {
-		return nil, fmt.Errorf("project not found: %w", err)
+		return nil, ErrProjectNotFound
 	}
 
 	//  only owner can update
 	if project.OwnerID != requesterID {
 		slog.Warn("unauthorized update attempt", "project_id", projectID, "requester_id", requesterID)
-		return nil, fmt.Errorf("unauthorized: user %d is not the owner", requesterID)
+		return nil, ErrUnauthorized
 	}
 
 	// update the fields
@@ -101,12 +108,12 @@ func (s *Service) ListProjects(ctx context.Context, ownerID int64) ([]Project, e
 func (s *Service) DeleteProject(ctx context.Context, projectID, ownerID int64) error {
 	project, err := s.repo.GetByID(ctx, projectID)
 	if err != nil {
-		return fmt.Errorf("failed to fetch project: %w", err)
+		return ErrProjectNotFound
 	}
 
 	if project.OwnerID != ownerID {
 		slog.Warn("unauthorized delete attempt", "project_id", projectID, "requester_id", ownerID)
-		return fmt.Errorf("only the project owner can delete this project")
+		return ErrUnauthorized
 	}
 
 	//  repo.DeleteProject (Safe for tests)
@@ -128,13 +135,13 @@ func (s *Service) DeleteProject(ctx context.Context, projectID, ownerID int64) e
 func (s *Service) AddUserToProject(ctx context.Context, requesterID int64, projectID int64, userID int64, role string) error {
 	project, err := s.repo.GetByID(ctx, projectID)
 	if err != nil {
-		return fmt.Errorf("project not found: %w", err)
+		return ErrProjectNotFound
 	}
 
 	// only project owner can add members
 	if project.OwnerID != requesterID {
 		slog.Warn("unauthorized add member attempt", "project_id", projectID, "requester_id", requesterID)
-		return fmt.Errorf("unauthorized: user %d is not the owner of project %d", requesterID, projectID)
+		return ErrUnauthorized
 	}
 
 	// duplicate check
@@ -142,7 +149,7 @@ func (s *Service) AddUserToProject(ctx context.Context, requesterID int64, proje
 	if err == nil {
 		for _, m := range members {
 			if m.ID == userID {
-				return fmt.Errorf("user is already a member of this project")
+				return ErrAlreadyMember
 			}
 		}
 
@@ -168,12 +175,12 @@ func (s *Service) AddUserToProject(ctx context.Context, requesterID int64, proje
 func (s *Service) RemoveUserFromProject(ctx context.Context, requesterID, projectID, userID int64) error {
 	project, err := s.repo.GetByID(ctx, projectID)
 	if err != nil {
-		return fmt.Errorf("failed to fetch project: %w", err)
+		return ErrProjectNotFound
 	}
 
 	if project.OwnerID != requesterID {
 		slog.Warn("unauthorized remove member attempt", "project_id", projectID, "requester_id", requesterID)
-		return fmt.Errorf("only the project owner can remove users")
+		return ErrUnauthorized
 	}
 
 	err = s.repo.RemoveUserFromProject(ctx, projectID, userID)
