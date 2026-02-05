@@ -51,7 +51,7 @@ func (r *MessageRepository) Create(ctx context.Context, m messages.Message) (*me
 		return nil, fmt.Errorf("db: failed to create message: %w", err)
 	}
 
-	// debug and not info for messages, in a busy day it with info
+	// debug and not info for messages, in a busy day with info
 	// it can fil up pretty fast :p
 	// debug wont show in prod
 	slog.Debug("message persisted to db", "id", res.ID, "sender_id", res.SenderID)
@@ -71,6 +71,7 @@ func (r *MessageRepository) Create(ctx context.Context, m messages.Message) (*me
 func (r *MessageRepository) GetByProject(ctx context.Context, projectID int64) ([]messages.Message, error) {
 	rows, err := r.queries.GetProjectMessages(ctx, pgtype.Int8{Int64: projectID, Valid: true})
 	if err != nil {
+		slog.Error("database query failed", "op", "GetByProject", "err", err)
 		return nil, fmt.Errorf("db: failed to get project messages: %w", err)
 	}
 
@@ -100,8 +101,11 @@ func (r *MessageRepository) GetDirectMessages(ctx context.Context, userA, userB 
 
 	rows, err := r.queries.GetDirectMessages(ctx, params)
 	if err != nil {
+		slog.Error("database query failed", "op", "GetDirectMessages", "userA", userA, "userB", userB, "err", err)
 		return nil, fmt.Errorf("db: failed to get direct messages: %w", err)
 	}
+
+	slog.Debug("fetched direct messages", "count", len(rows), "userA", userA, "userB", userB)
 
 	var list []messages.Message
 	for _, row := range rows {

@@ -33,10 +33,10 @@ func (r *TaskRepository) CreateTask(ctx context.Context, t *tasks.Task) (*tasks.
 		AssignedTo:  toPgInt8(t.AssignedTo),
 	})
 	if err != nil {
+		slog.Error("database: create task failed", "project_id", t.ProjectID, "title", t.Title, "error", err)
 		return nil, fmt.Errorf("db: create task: %w", err)
 	}
 
-	slog.Info("task created", "task_id", res.ID, "project_id", res.ProjectID)
 	return mapSQLCTaskToDomain(res), nil
 }
 
@@ -49,6 +49,7 @@ func (r *TaskRepository) UpdateTask(ctx context.Context, t *tasks.Task) (*tasks.
 		AssignedTo:  toPgInt8(t.AssignedTo),
 	})
 	if err != nil {
+		slog.Error("database: update task failed", "task_id", t.ID, "error", err)
 		return nil, fmt.Errorf("db: update task: %w", err)
 	}
 
@@ -57,6 +58,7 @@ func (r *TaskRepository) UpdateTask(ctx context.Context, t *tasks.Task) (*tasks.
 
 func (r *TaskRepository) DeleteTask(ctx context.Context, id int64) error {
 	if err := r.queries.DeleteTask(ctx, id); err != nil {
+		slog.Error("database: delete task failed", "task_id", id, "error", err)
 		return fmt.Errorf("db: delete task: %w", err)
 	}
 	return nil
@@ -65,6 +67,7 @@ func (r *TaskRepository) DeleteTask(ctx context.Context, id int64) error {
 func (r *TaskRepository) GetTaskByID(ctx context.Context, id int64) (*tasks.Task, error) {
 	res, err := r.queries.GetTaskByID(ctx, id)
 	if err != nil {
+		slog.Error("database: get task by id failed", "task_id", id, "error", err)
 		return nil, fmt.Errorf("db: get task by id: %w", err)
 	}
 	return mapSQLCTaskToDomain(res), nil
@@ -73,6 +76,7 @@ func (r *TaskRepository) GetTaskByID(ctx context.Context, id int64) (*tasks.Task
 func (r *TaskRepository) ListTaskByProject(ctx context.Context, projectID int64) ([]*tasks.Task, error) {
 	rows, err := r.queries.ListTasksForProject(ctx, projectID)
 	if err != nil {
+		slog.Error("database: list tasks by project failed", "project_id", projectID, "error", err)
 		return nil, fmt.Errorf("db: list tasks by project: %w", err)
 	}
 
@@ -107,6 +111,7 @@ func (r *TaskRepository) RecordTaskActivity(ctx context.Context, a *tasks.TaskAc
 		Details: pgtype.Text{String: a.Details, Valid: a.Details != ""},
 	})
 	if err != nil {
+		slog.Error("database: record task activity failed", "task_id", a.TaskID, "action", a.Action, "error", err)
 		return fmt.Errorf("db: record task activity: %w", err)
 	}
 	return nil
@@ -115,6 +120,7 @@ func (r *TaskRepository) RecordTaskActivity(ctx context.Context, a *tasks.TaskAc
 func (r *TaskRepository) GetTaskHistory(ctx context.Context, taskID int64) ([]*tasks.TaskActivity, error) {
 	rows, err := r.queries.GetTaskHistory(ctx, taskID)
 	if err != nil {
+		slog.Error("database: get task history failed", "task_id", taskID, "error", err)
 		return nil, fmt.Errorf("db: get task history: %w", err)
 	}
 
@@ -159,13 +165,4 @@ func toPgInt8(i *int64) pgtype.Int8 {
 		return pgtype.Int8{Valid: false}
 	}
 	return pgtype.Int8{Int64: *i, Valid: true}
-}
-
-// helper: fromPgInt8 converts a pgtype.Int8 to a nullable *int64
-func fromPgInt8(p pgtype.Int8) *int64 {
-	if !p.Valid {
-		return nil
-	}
-	val := p.Int64
-	return &val
 }

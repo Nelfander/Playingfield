@@ -141,7 +141,7 @@ func Run() {
 	e.GET("/admin", userHandler.Admin, middleware.RequireRole(jwtManager, "admin"))
 	e.POST("/users", userHandler.Register) // for now i leave it public to allow user creation
 	e.POST("/login", userHandler.Login)
-	e.GET("/health", func(c echo.Context) error {
+	e.GET("/health", func(c echo.Context) error { // so AWS can verify the container is running.
 		return c.JSON(stdhttp.StatusOK, map[string]string{"status": "ok"})
 	})
 

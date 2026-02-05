@@ -207,6 +207,23 @@ Invoke-RestMethod -Method GET -Uri http://localhost:880/projects -Headers @{ Aut
 <details><summary>(Click to expand)</summary>
 
 <details>
+<summary><b>Feb 5, 2026: Logging Standardization & Architecture Polish</b> (Click to expand) </summary>
+
+### Phase 1: Observability & Technical Context
+* **Structured Logging (Slog) Implementation**: Standardized all repositories (User, Project, Task, Message) with `slog.Error`. This ensures every database-level failure is logged with structured metadata (IDs, Emails, Actions) for precise debugging without cluttering the business logic.
+* **Separation of Concerns (Logging)**: Established a clear logging hierarchy:
+    * **Repositories**: Log technical/infrastructure failures (e.g., SQL timeouts, connection loss).
+    * **Services**: Log high-value business events (e.g., successful project creation) and security warnings.
+    * **Handlers**: Remain "log-silent" for standard HTTP, leveraging the global translator for cleaner terminal output.
+* **Error Context Wrapping**: Refactored Repository methods to use `fmt.Errorf` with the `%w` verb. This preserves the "Technical Context" (where the DB failed) while allowing the Service layer to perform business-level error translation.
+
+### Phase 2: WebSocket & Infrastructure Hardening
+* **WS Lifecycle Management**: Modernized the `WSHandler` and `Hub` to use `slog`. Implemented structured connect/disconnect logging to track real-time user activity without using legacy `fmt.Printf` or `log.Println`.
+* **Zero-Allocation Signaling**: Finalized the Hub's shutdown logic using `chan struct{}` for 0-byte signaling, ensuring an efficient, thread-safe cleanup of all active client connections during server shutdown.
+* **Redundancy Cleanup**: Conducted a global audit to remove "Double Logging." Optimized the flow so a single event generates exactly one relevant log entry, ensuring production logs remain readable and searchable.
+</details>
+
+<details>
 <summary><b>Feb 4, 2026: Sentinel Errors & Repository Alignment</b> (Click to expand) </summary>
 
 ### Phase 1: Domain-Driven Error Architecture

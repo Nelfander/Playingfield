@@ -23,6 +23,7 @@ func NewUserRepository(db *DBAdapter, q *sqlc.Queries) *UserRepository {
 func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*user.User, error) {
 	row, err := r.queries.GetUserByEmail(ctx, email)
 	if err != nil {
+		slog.Error("database: get user by email failed", "email", email, "error", err)
 		return nil, fmt.Errorf("db: get user by email: %w", err)
 	}
 
@@ -45,10 +46,9 @@ func (r *UserRepository) Create(ctx context.Context, u user.User) (*user.User, e
 		Status:       u.Status,
 	})
 	if err != nil {
+		slog.Error("database: user creation failed", "email", u.Email, "error", err)
 		return nil, fmt.Errorf("db: create user: %w", err)
 	}
-
-	slog.Info("database: user record created", "user_id", res.ID, "email", res.Email)
 
 	// map the database result back to your Domain User
 	return &user.User{
@@ -64,6 +64,7 @@ func (r *UserRepository) Create(ctx context.Context, u user.User) (*user.User, e
 func (r *UserRepository) ListUsers(ctx context.Context) ([]user.UserListRow, error) {
 	rows, err := r.queries.ListUsers(ctx)
 	if err != nil {
+		slog.Error("database: list users failed", "error", err)
 		return nil, fmt.Errorf("db: list users: %w", err)
 	}
 

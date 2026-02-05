@@ -30,11 +30,13 @@ func (r *ProjectRepository) CreateProject(ctx context.Context, p projects.Projec
 		OwnerID:     p.OwnerID,
 	})
 	if err != nil {
+		slog.Error("database: project creation failed",
+			"name", p.Name,
+			"owner_id", p.OwnerID,
+			"error", err,
+		)
 		return nil, fmt.Errorf("db: create project: %w", err)
 	}
-
-	// info because projects are significant events!
-	slog.Info("new project created", "project_id", res.ID, "name", res.Name, "owner_id", res.OwnerID)
 
 	// map it back to /domain/project
 	return &projects.Project{
@@ -57,6 +59,7 @@ func (r *ProjectRepository) Update(ctx context.Context, p projects.Project) (*pr
 		},
 	})
 	if err != nil {
+		slog.Error("database: update project failed", "project_id", p.ID, "error", err)
 		return nil, fmt.Errorf("db: update project: %w", err)
 	}
 	return &p, nil
@@ -66,6 +69,7 @@ func (r *ProjectRepository) Update(ctx context.Context, p projects.Project) (*pr
 func (r *ProjectRepository) GetAllByOwner(ctx context.Context, ownerID int64) ([]projects.Project, error) {
 	rows, err := r.queries.ListProjectsByOwner(ctx, ownerID)
 	if err != nil {
+		slog.Error("database: list projects by owner failed", "owner_id", ownerID, "error", err)
 		return nil, fmt.Errorf("db: list projects by owner: %w", err)
 	}
 
@@ -87,6 +91,7 @@ func (r *ProjectRepository) GetAllByOwner(ctx context.Context, ownerID int64) ([
 func (r *ProjectRepository) GetByID(ctx context.Context, id int64) (*projects.Project, error) {
 	res, err := r.queries.GetProjectByID(ctx, id)
 	if err != nil {
+		slog.Error("database: get project by id failed", "project_id", id, "error", err)
 		return nil, fmt.Errorf("db: get project by id: %w", err)
 	}
 
@@ -105,6 +110,7 @@ func (r *ProjectRepository) GetByID(ctx context.Context, id int64) (*projects.Pr
 func (r *ProjectRepository) ListUsersInProject(ctx context.Context, projectID int64) ([]projects.ProjectMember, error) {
 	rows, err := r.queries.ListUsersInProject(ctx, projectID)
 	if err != nil {
+		slog.Error("database: list users in project failed", "project_id", projectID, "error", err)
 		return nil, fmt.Errorf("db: list users in project: %w", err)
 	}
 
@@ -132,6 +138,7 @@ func (r *ProjectRepository) DeleteProject(ctx context.Context, id int64, ownerID
 		OwnerID: ownerID,
 	})
 	if err != nil {
+		slog.Error("database: delete project failed", "project_id", id, "owner_id", ownerID, "error", err)
 		return fmt.Errorf("db: delete project: %w", err)
 	}
 	return nil
@@ -144,6 +151,7 @@ func (r *ProjectRepository) AddUserToProject(ctx context.Context, projectID int6
 		Role:      pgtype.Text{String: role, Valid: true},
 	})
 	if err != nil {
+		slog.Error("database: add user to project failed", "project_id", projectID, "user_id", userID, "error", err)
 		return fmt.Errorf("db: add user to project: %w", err)
 	}
 	return nil
@@ -155,6 +163,7 @@ func (r *ProjectRepository) RemoveUserFromProject(ctx context.Context, projectID
 		UserID:    userID,
 	})
 	if err != nil {
+		slog.Error("database: remove user from project failed", "project_id", projectID, "user_id", userID, "error", err)
 		return fmt.Errorf("db: remove user from project: %w", err)
 	}
 	return nil
@@ -166,6 +175,7 @@ func (r *ProjectRepository) UsersShareProject(ctx context.Context, userA, userB 
 		ReceiverID: userB,
 	})
 	if err != nil {
+		slog.Error("database: check shared project failed", "userA", userA, "userB", userB, "error", err)
 		return false, fmt.Errorf("db: check shared project: %w", err)
 	}
 	return shared, nil

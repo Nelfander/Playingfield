@@ -3,7 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
-	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
 
@@ -44,7 +44,7 @@ var upgrader = websocket.Upgrader{
 func (h *WSHandler) HandleConnection(c echo.Context) error {
 	tokenStr := c.QueryParam("token")
 	if tokenStr == "" {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"message": "missing token"})
+		return echo.NewHTTPError(http.StatusUnauthorized, "missing token")
 	}
 
 	// This identifies which project "room" the user is joining
@@ -60,7 +60,7 @@ func (h *WSHandler) HandleConnection(c echo.Context) error {
 	//  Validate user
 	claims, err := h.jwtManager.VerifyToken(tokenStr)
 	if err != nil {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"message": "invalid or expired token"})
+		return echo.NewHTTPError(http.StatusUnauthorized, "invalid or expired token")
 	}
 
 	// Upgrade to WebSocket
@@ -73,6 +73,8 @@ func (h *WSHandler) HandleConnection(c echo.Context) error {
 	client := ws.NewClient(claims.UserID, projectID, conn)
 
 	h.hub.Register <- client
+
+	slog.Info("ws client connected", "user_id", claims.UserID, "project_id", projectID)
 
 	// This goroutine listens to the Hub and pushes messages to the browser
 	go func() {
@@ -96,6 +98,7 @@ func (h *WSHandler) HandleConnection(c echo.Context) error {
 	// Cleanup
 	defer func() {
 		h.hub.Unregister <- client
+		slog.Info("ws client disconnected", "user_id", claims.UserID)
 	}()
 
 	// The Read Loop (The "Ear")
@@ -120,13 +123,13 @@ func (h *WSHandler) HandleConnection(c echo.Context) error {
 		case "direct_message":
 			_, chatErr = h.chatService.SendDirectMessage(ctx, claims.UserID, msg.ReceiverID, msg.Content)
 		default:
-			fmt.Printf("Unknown message type: %s\n", msg.Type)
+			slog.Warn("ws unknown message type", "type", msg.Type, "user_id", claims.UserID)
 			continue
 		}
 
 		if chatErr != nil {
-			fmt.Printf("Chat error: %v\n", chatErr)
-			h.sendWSError(conn, chatErr.Error())
+			slog.Error("ws chat processing failed", "user_id", claims.UserID, "error", chatErr)
+			h.sendWSError(conn, "Could not send message")
 			continue
 		}
 	}

@@ -1,8 +1,7 @@
 package ws
 
 import (
-	"fmt"
-	"log"
+	"log/slog"
 	"sync"
 
 	"github.com/gorilla/websocket"
@@ -82,7 +81,7 @@ func (h *Hub) cleanup() {
 
 	// clear the rooms map too
 	h.ProjectRooms = make(map[int64]map[*Client]bool)
-	log.Println("✅ Hub cleanup complete: all connections closed.")
+	slog.Info("hub cleanup complete", "status", "all connections closed")
 }
 
 func (h *Hub) Run() {
@@ -98,9 +97,9 @@ func (h *Hub) Run() {
 					h.ProjectRooms[client.ProjectID] = make(map[*Client]bool)
 				}
 				h.ProjectRooms[client.ProjectID][client] = true
-				fmt.Printf("✅ Chat Room: User %d joined Project %d\n", client.UserID, client.ProjectID)
+				//	fmt.Printf("✅ Chat Room: User %d joined Project %d\n", client.UserID, client.ProjectID)
 			} else {
-				fmt.Printf("ℹ️ Global Hub: User %d connected\n", client.UserID)
+				//	fmt.Printf("ℹ️ Global Hub: User %d connected\n", client.UserID)
 			}
 
 			h.mu.Unlock()
@@ -130,23 +129,15 @@ func (h *Hub) Run() {
 				select {
 				case client.Send <- message:
 				default:
-					// drop message or mark client as slow
 				}
 			}
 			h.mu.RUnlock()
 
 		case <-h.stop:
-			log.Println("Hub stopping: closing all client connections")
+			slog.Info("hub stopping", "action", "closing all client connections")
 			h.cleanup() // A helper function to kick everyone out politely
 			return      // Exit the loop and the goroutine
 
-			/* old unsafe version i leave it here to compare
-			case message := <-h.Broadcast:
-				h.mu.RLock()
-				for _, client := range h.clients {
-					client.Send <- message
-				}
-				h.mu.RUnlock() */
 		}
 	}
 }

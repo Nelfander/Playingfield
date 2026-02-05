@@ -64,7 +64,7 @@ func (s *Service) CreateTask(ctx context.Context, requesterID int64, t Task) (*T
 		Details: details,
 	}
 	if err := s.repo.RecordTaskActivity(ctx, activity); err != nil {
-		slog.Error("failed to record task creation activity", "task_id", createdTask.ID, "error", err)
+		// no slog.Error here because the Repo already has it!
 		return nil, fmt.Errorf("task created but history log failed: %w", err)
 	}
 
@@ -115,7 +115,7 @@ func (s *Service) UpdateTask(ctx context.Context, requesterID int64, t Task, com
 		Details: fmt.Sprintf("[%s] %s", updatedTask.Status, commitMsg),
 	}
 	if err := s.repo.RecordTaskActivity(ctx, activity); err != nil {
-		slog.Error("failed to record task update activity", "task_id", updatedTask.ID, "error", err)
+		// slogged again on repo side
 		return nil, fmt.Errorf("task updated but history log failed: %w", err)
 	}
 

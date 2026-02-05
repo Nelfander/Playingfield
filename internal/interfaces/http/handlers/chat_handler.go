@@ -21,12 +21,12 @@ func NewChatHandler(service messages.ChatService) *ChatHandler {
 func (h *ChatHandler) GetProjectHistory(c echo.Context) error {
 	projectID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, echo.Map{"error": "invalid project id"})
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid project id")
 	}
 
 	history, err := h.service.GetProjectHistory(c.Request().Context(), projectID)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
+		return err // translator will handle it
 	}
 
 	return c.JSON(http.StatusOK, history)
@@ -36,18 +36,18 @@ func (h *ChatHandler) GetProjectHistory(c echo.Context) error {
 func (h *ChatHandler) GetDMHistory(c echo.Context) error {
 	claims, ok := c.Get("user").(*auth.Claims)
 	if !ok || claims == nil {
-		return c.JSON(http.StatusUnauthorized, echo.Map{"error": "unauthorized"})
+		return echo.ErrUnauthorized
 	}
 	myID := claims.UserID
 
 	otherUserID, err := strconv.ParseInt(c.Param("other_id"), 10, 64)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, echo.Map{"error": "invalid user id"})
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid user id")
 	}
 
 	history, err := h.service.GetDMHistory(c.Request().Context(), myID, otherUserID)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
+		return err
 	}
 
 	return c.JSON(http.StatusOK, history)
