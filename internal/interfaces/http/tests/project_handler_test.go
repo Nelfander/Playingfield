@@ -81,6 +81,7 @@ func TestUpdateProject(t *testing.T) {
 	c := e.NewContext(req, rec)
 
 	// url param to match the route /projects/:id
+	// mimics how Echo's router identifies which project to update.
 	c.SetPath("/projects/:id")
 	c.SetParamNames("id")
 	c.SetParamValues(fmt.Sprintf("%d", p.ID))
@@ -204,6 +205,7 @@ func TestAddUserToProject(t *testing.T) {
 
 func TestAddUserToProjectUnauthorized(t *testing.T) {
 	handler, fakeRepo, e := setupProjectHandler()
+	svc := projects.NewService(fakeRepo, nil)
 
 	// 3 users , 1 owner , 1 hacker and 1 target
 	ownerID := int64(100)
@@ -211,10 +213,7 @@ func TestAddUserToProjectUnauthorized(t *testing.T) {
 	hackerID := int64(666)
 
 	// create a project owned by user 100(ownerid)
-	p, _ := fakeRepo.CreateProject(context.Background(), projects.Project{
-		Name:    "is 666 considered evil?",
-		OwnerID: ownerID,
-	})
+	p, _ := svc.CreateProject(context.Background(), "Secure Project", "Desc", ownerID)
 
 	// prepare the json payload to add user 200
 	input := map[string]interface{}{
@@ -223,7 +222,6 @@ func TestAddUserToProjectUnauthorized(t *testing.T) {
 		"role":       "member",
 	}
 	body, _ := json.Marshal(input)
-
 	req := httptest.NewRequest(http.MethodPost, "/projects/members", strings.NewReader(string(body)))
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec := httptest.NewRecorder()
@@ -239,11 +237,12 @@ func TestAddUserToProjectUnauthorized(t *testing.T) {
 		e.HTTPErrorHandler(err, c)
 	}
 
-	assert.Equal(t, http.StatusForbidden, rec.Code, "Expected 403 for unauthorized member addition")
+	assert.Equal(t, http.StatusForbidden, rec.Code)
 
-	// verify that the repository remains empty
+	// VERIFICATION: Members count should still be 1 (only the owner)
 	members, _ := fakeRepo.ListUsersInProject(context.Background(), p.ID)
-	assert.Equal(t, 0, len(members), "the hacker should not have been able to add any members")
+	assert.Equal(t, 1, len(members), "Only the owner should be in the project")
+	assert.Equal(t, ownerID, members[0].ID)
 
 }
 
@@ -341,18 +340,16 @@ func TestRemoveUserFromProject_Unauthorized(t *testing.T) {
 
 func TestAddUserToProject_Duplicate(t *testing.T) {
 	handler, fakeRepo, e := setupProjectHandler()
+	svc := projects.NewService(fakeRepo, nil)
 
 	ownerID := int64(100)
 	targetUserID := int64(200)
 
 	// create project
-	p, _ := fakeRepo.CreateProject(context.Background(), projects.Project{
-		Name:    "Duplicate Test Project",
-		OwnerID: ownerID,
-	})
+	p, _ := svc.CreateProject(context.Background(), "Duplicate Test", "Desc", ownerID)
 
-	// manually add the user once via the repo
-	_ = fakeRepo.AddUserToProject(context.Background(), p.ID, targetUserID, "member")
+	// add the user the first time via service logic
+	_ = svc.AddUserToProject(context.Background(), ownerID, p.ID, targetUserID, "member")
 
 	// try to add the same user again via the Handler
 	input := map[string]interface{}{
@@ -361,7 +358,6 @@ func TestAddUserToProject_Duplicate(t *testing.T) {
 		"role":       "member",
 	}
 	body, _ := json.Marshal(input)
-
 	req := httptest.NewRequest(http.MethodPost, "/projects/members", strings.NewReader(string(body)))
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec := httptest.NewRecorder()
@@ -374,7 +370,7 @@ func TestAddUserToProject_Duplicate(t *testing.T) {
 		e.HTTPErrorHandler(err, c)
 	}
 
-	// Should be 400 or 409 depending on your translator
+	// assert specific 409 Conflict
+	assert.Equal(t, http.StatusConflict, rec.Code)
 	assert.Contains(t, rec.Body.String(), "already a member")
-	assert.True(t, rec.Code == http.StatusBadRequest || rec.Code == http.StatusConflict)
 }

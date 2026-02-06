@@ -136,41 +136,93 @@ func TestUserLogin_InactiveAccount(t *testing.T) {
 }
 
 func TestMeEndpoint(t *testing.T) {
-	//  Create fake repo and service locally
-	fakeRepo := user.NewFakeRepository()
-	service := user.NewService(fakeRepo)
+	handler, fakeRepo, e := setupHandler()
 
-	//  Register a user via the Service
-	fakeUser, err := service.RegisterUser(context.Background(), "me@example.com", "supersecret")
-	assert.NoError(t, err)
+	// seed the user directly into the fakeRepo slice
+	// This bypasses the service but ensures we are testing the HANDLER's
+	// ability to retrieve data based on claims.
+	seededUser := user.User{
+		ID:     1,
+		Email:  "me@example.com",
+		Role:   "user",
+		Status: "active",
+	}
+	fakeRepo.Users = append(fakeRepo.Users, seededUser)
 
-	//  Create JWT manager and handler
-	jwtManager := auth.NewJWTManager("test-secret", 24*time.Hour)
-	handler := handlers.NewUserHandler(service, jwtManager)
-
-	//  Prepare echo request/recorder
-	e := echo.New()
+	// prepare echo request/recorder
 	req := httptest.NewRequest(http.MethodGet, "/me", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 
-	//  Inject JWT claims manually
+	// inject JWT claims manually (simulating middleware)
 	claims := &auth.Claims{
-		UserID: fakeUser.ID,
-		Email:  fakeUser.Email,
-		Role:   fakeUser.Role,
-		Status: fakeUser.Status,
+		UserID: seededUser.ID,
+		Email:  seededUser.Email,
+		Role:   seededUser.Role,
+		Status: seededUser.Status,
 	}
 	c.Set("user", claims)
 
-	//  Call /me handler
-	err = handler.Me(c)
-	assert.NoError(t, err)
-	assert.Equal(t, http.StatusOK, rec.Code)
+	// call /me handler and assert
+	if assert.NoError(t, handler.Me(c)) {
+		assert.Equal(t, http.StatusOK, rec.Code)
 
-	var resp dto.UserResponse
+		var resp dto.UserResponse
+		assert.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+		assert.Equal(t, seededUser.Email, resp.Email)
+		assert.Equal(t, seededUser.ID, resp.ID)
+	}
+}
+
+func TestUserRegistration_Duplicate(t *testing.T) {
+	handler, fakeRepo, e := setupHandler()
+
+	//  seed an existing user
+	email := "duplicate@example.com"
+	fakeRepo.Users = append(fakeRepo.Users, user.User{
+		Email: email,
+	})
+
+	// try to register with the same email
+	reqBody := `{"email":"` + email + `","password":"newpassword"}`
+	req := httptest.NewRequest(http.MethodPost, "/users", strings.NewReader(reqBody))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	// call the handler and pass the error to the translator
+	err := handler.Register(c)
+	if err != nil {
+		e.HTTPErrorHandler(err, c)
+	}
+
+	// assert: Expect 409 Conflict (assuming the translator maps it there)
+	assert.Equal(t, http.StatusConflict, rec.Code)
+
+	var resp map[string]interface{}
 	assert.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
-	assert.Equal(t, "me@example.com", resp.Email)
-	assert.Equal(t, "user", resp.Role)
-	assert.Equal(t, "active", resp.Status)
+	assert.Equal(t, "user already exists", resp["error"])
+}
+
+func TestUserRegistration_ContextCancelled(t *testing.T) {
+	handler, _, e := setupHandler()
+
+	reqBody := `{"email":"cancel@example.com","password":"password"}`
+	req := httptest.NewRequest(http.MethodPost, "/users", strings.NewReader(reqBody))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+
+	// Create a context that is already cancelled
+	ctx, cancel := context.WithCancel(req.Context())
+	cancel() // Cancel it immediately
+	req = req.WithContext(ctx)
+
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	// Execute
+	err := handler.Register(c)
+
+	// Assert: The error should be context.Canceled or wrapped by it
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "context canceled")
 }

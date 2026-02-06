@@ -98,7 +98,7 @@ func (s *Service) UpdateTask(ctx context.Context, requesterID int64, t Task, com
 
 	if !isOwner && !isAssignee {
 		slog.Warn("unauthorized task update attempt", "task_id", t.ID, "requester_id", requesterID)
-		return nil, fmt.Errorf("unauthorized: you are not the owner or the assigned member")
+		return nil, ErrUnauthorized
 	}
 
 	// Perform the update.
@@ -183,7 +183,7 @@ func (s *Service) GetTaskHistory(ctx context.Context, requesterID int64, taskID 
 	}
 
 	if !isMember {
-		return nil, fmt.Errorf("unauthorized: you must be a project member to view history")
+		return nil, ErrUnauthorized
 	}
 
 	// Fetch and return history
@@ -207,7 +207,7 @@ func (s *Service) ListTasks(ctx context.Context, requesterID int64, projectID in
 	}
 
 	if !isMember {
-		return nil, fmt.Errorf("unauthorized: you are not a member of this project")
+		return nil, ErrUnauthorized
 	}
 
 	//  Fetch the tasks

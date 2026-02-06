@@ -215,7 +215,7 @@ Invoke-RestMethod -Method GET -Uri http://localhost:880/projects -Headers @{ Aut
     * **Repositories**: Log technical/infrastructure failures (e.g., SQL timeouts, connection loss).
     * **Services**: Log high-value business events (e.g., successful project creation) and security warnings.
     * **Handlers**: Remain "log-silent" for standard HTTP, leveraging the global translator for cleaner terminal output.
-* **Error Context Wrapping**: Refactored Repository methods to use `fmt.Errorf` with the `%w` verb. This preserves the "Technical Context" (where the DB failed) while allowing the Service layer to perform business-level error translation.
+* **Error Context Wrapping**: Refactored Repository methods to use `fmt.Errorf` with the `%w` verb. This preserves the "Technical Context" (where the DB failed) while allowing the Service layer to perform business-level erro    r translation.
 
 ### Phase 2: WebSocket & Infrastructure Hardening
 * **WS Lifecycle Management**: Modernized the `WSHandler` and `Hub` to use `slog`. Implemented structured connect/disconnect logging to track real-time user activity without using legacy `fmt.Printf` or `log.Println`.
@@ -586,8 +586,21 @@ Validated within `internal/domain/projects/`.
 
 * **Ownership Guardrails:** Ensures only the project creator can delete resources or manage members.
 * **Auto-Provisioning:** Validates that the system correctly assigns roles upon project creation.
+* **Service-Based Seeding:** Uses the Service layer in tests to ensure realistic system states (e.g., owners are automatically members).
 * **Member Management:** Tests the "Join Table" logic in-memory to ensure member lists are accurate.
 * **Execution:** `go test -v ./internal/domain/projects`
+</details>
+
+<details>
+<summary><b>📋 Task Management & Cross-Domain Security</b></summary>
+
+Validated within `internal/domain/tasks/`.
+
+* **Multi-Role Authorization:** Verifies the "VIP lanes" for updates—ensuring only Project Owners OR the specific Task Assignee can modify status.
+* **Audit Trails:** Validates that every task action (Create/Update) automatically triggers a `TaskActivity` log entry.
+* **Cross-Domain Integrity:** Tests the service's ability to verify project-level permissions before performing task-level actions.
+* **Context Respect:** Ensures all repository methods correctly honor context deadlines and cancellations.
+* **Execution:** `go test -v ./internal/domain/tasks`
 </details>
 
 ---
@@ -608,12 +621,14 @@ Validated within `internal/interfaces/http/middleware/`.
 </details>
 
 <details>
-<summary><b>🚀 API Handler Endpoints</b></summary>
+<summary><b>🚀 API Handler Endpoints & Error Translation</b></summary>
 
 Validated within `internal/interfaces/http/tests/`.
 
-* **Request/Response Flow:** Validates JSON binding, status codes, and error formatting for User and Project routes.
+* **Centralized Error Mapping:** Verifies that Domain Sentinel errors (like `ErrUnauthorized`) are correctly translated into standard HTTP codes (403, 404, 409).
 * **End-to-End Persistence:** Tests the full flow from an HTTP request through the Service layer into the Fake Repository.
+* **Security Resilience:** Tests that unauthorized API attempts return clean, safe error messages without leaking system internals.
+* **JSON Binding:** Validates strict structural binding for complex entities like Tasks and Projects.
 * **Execution:** `go test -v ./internal/interfaces/http/tests/...`
 </details>
 
@@ -621,6 +636,17 @@ Validated within `internal/interfaces/http/tests/`.
 
 ### ⚡ Real-Time Integration (WebSocket)
 Testing for the communication engine, verifying that messages are not only saved but correctly routed.
+
+<details>
+<summary><b>📡 Full-Circuit Broadcast Integration</b></summary>
+
+Validated through service-to-hub integration tests.
+
+* **Live Signal Chain:** Proves the "Whole Circuit"—from a Service action (creating a task) through the Hub's concurrency loop to a Client's receiver channel.
+* **Concurrency Safety:** Validates the Hub’s `sync.RWMutex` logic under simulated client registrations and broadcasts.
+* **Room-Based Isolation:** Ensures the Hub correctly manages `ProjectRooms` for targeted data delivery.
+* **Execution:** `go test -v ./internal/domain/tasks -run TestTaskService_WebSocketIntegration` , `go test -v ./internal/domain/tasks -run TestTaskService_WebSocketBroadcast`
+</details>
 
 <details>
 <summary><b>📡 WebSocket Hub & Chat Tester</b></summary>
