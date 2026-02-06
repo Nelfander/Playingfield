@@ -148,10 +148,7 @@ func TestTaskService_WebSocketBroadcast(t *testing.T) {
 	p, _ := projRepo.CreateProject(ctx, projects.Project{ID: 1, Name: "Live Proj", OwnerID: ownerID})
 
 	//  Register a Fake Client
-	client := &ws.Client{
-		UserID: ownerID,
-		Send:   make(chan []byte, 10),
-	}
+	client := ws.NewClient(ownerID, 0, nil)
 	hub.Register <- client
 
 	// wait for registration to process

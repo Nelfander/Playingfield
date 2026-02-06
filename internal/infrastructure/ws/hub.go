@@ -63,17 +63,25 @@ func (h *Hub) cleanup() {
 
 	for _, client := range h.clients {
 		// close the Send channel so the client's writePump stops
-		close(client.Send)
+		if client.Send != nil {
+			// Note: Only close if you are SURE no other goroutine is currently writing to it
+			// In your Hub architecture, this is generally safe during a full stop.
+			close(client.Send)
+		}
 
 		// close the actual WebSocket connection
-		client.Conn.Close()
+		if client.Conn != nil {
+			client.Conn.Close()
+		}
 
-		// signal the client's internal handlers to stop
-		// and check if it's already closed to avoid a panic
-		select {
-		case <-client.done:
-		default:
-			close(client.done)
+		// safe close for internal done signal
+		if client.done != nil {
+			select {
+			case <-client.done:
+				// Already closed by a readPump or Unregister, skip
+			default:
+				close(client.done)
+			}
 		}
 
 		delete(h.clients, client.UserID)
