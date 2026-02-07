@@ -64,8 +64,6 @@ func (h *Hub) cleanup() {
 	for _, client := range h.clients {
 		// close the Send channel so the client's writePump stops
 		if client.Send != nil {
-			// Note: Only close if you are SURE no other goroutine is currently writing to it
-			// In your Hub architecture, this is generally safe during a full stop.
 			close(client.Send)
 		}
 
@@ -78,7 +76,6 @@ func (h *Hub) cleanup() {
 		if client.done != nil {
 			select {
 			case <-client.done:
-				// Already closed by a readPump or Unregister, skip
 			default:
 				close(client.done)
 			}
