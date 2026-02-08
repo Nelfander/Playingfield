@@ -7,85 +7,112 @@ export interface Message {
     receiver_id?: number;
     content: string;
     created_at: string;
+    read_at?: string;
     sender_email?: string;
 }
 
 interface ChatResponse {
-    type: "new_project_message" | "new_direct_message" | "error";
+    type: "new_project_message" | "message_read" | "user_typing" | "error";
     data?: Message;
+    message_id?: number;
+    is_typing?: boolean;
+    user_id?: number;
+    project_id?: number;
     error?: string;
 }
 
 export const useChat = (token: string | null, projectId?: number) => {
     const [messages, setMessages] = useState<Message[]>([]);
     const [isConnected, setIsConnected] = useState(false);
+    const [isTyping, setIsTyping] = useState(false);
+    const [typingUserId, setTypingUserId] = useState<number | null>(null); // Track specific user typing
     const socket = useRef<WebSocket | null>(null);
 
     useEffect(() => {
-        // Only connect if we have BOTH a token and a projectId
         if (!token || !projectId) return;
 
         const wsUrl = `ws://localhost:880/ws?token=${token}&projectId=${projectId}`;
-
-        // Close existing socket if it somehow exists before opening a new one
-        if (socket.current) {
-            socket.current.close();
-        }
+        if (socket.current) socket.current.close();
 
         const ws = new WebSocket(wsUrl);
         socket.current = ws;
 
-        ws.onopen = () => {
-            console.log(`✅ Connected to Project Room: ${projectId}`);
-            setIsConnected(true);
-        };
+        ws.onopen = () => setIsConnected(true);
 
         ws.onmessage = (event) => {
-            if (!event.data.startsWith('{')) {
-                console.log("ℹ️ System:", event.data);
-                return;
-            }
-
             try {
                 const response: ChatResponse = JSON.parse(event.data);
-                if (response.type === "new_project_message" && response.data) {
-                    // Only add message if it belongs to the current project
-                    if (response.data.project_id === projectId) {
-                        setMessages((prev) => [...prev, response.data!]);
-                    }
+
+                switch (response.type) {
+                    case "new_project_message":
+                        if (response.data?.project_id === projectId) {
+                            setMessages((prev) => [...prev, response.data!]);
+                        }
+                        break;
+                    case "message_read":
+                        setMessages((prev) => prev.map(m =>
+                            m.id === response.message_id ? { ...m, read_at: new Date().toISOString() } : m
+                        ));
+                        break;
+                    case "user_typing":
+                        // FIX: Only show typing if it's for THIS project and NOT a DM (project_id 0)
+                        if (response.project_id === projectId && response.project_id !== 0) {
+                            setIsTyping(!!response.is_typing);
+                            setTypingUserId(response.is_typing ? (response.user_id ?? null) : null);
+                        }
+                        break;
                 }
-                // Handle errors or DMs here if needed
             } catch (err) {
-                console.error("⚠️ Message Parse Error:", err);
+                console.error("WS Parse Error:", err);
             }
         };
 
-        ws.onclose = () => {
-            console.log("🔌 Disconnected from Hub");
-            setIsConnected(false);
-        };
+        ws.onclose = () => setIsConnected(false);
 
-        //  Cleanup Function
         return () => {
-            console.log("🧹 Cleaning up WebSocket...");
-            ws.close();
-            socket.current = null;
+            if (socket.current) socket.current.close();
         };
-    }, [token, projectId]); // Effect reruns if project switches
+    }, [token, projectId]);
 
     const sendMessage = useCallback((content: string, type: 'project_chat' | 'direct_message', targetId: number) => {
         if (socket.current?.readyState === WebSocket.OPEN) {
-            const payload = {
-                type: type,
-                content: content,
+            socket.current.send(JSON.stringify({
+                type,
+                content,
                 project_id: type === 'project_chat' ? targetId : undefined,
                 receiver_id: type === 'direct_message' ? targetId : undefined,
-            };
-            socket.current.send(JSON.stringify(payload));
-        } else {
-            console.error("🚫 Socket not open. State:", socket.current?.readyState);
+            }));
         }
     }, []);
 
-    return { messages, setMessages, sendMessage, isConnected };
+    const sendReadReceipt = useCallback((messageId: number) => {
+        if (socket.current?.readyState === WebSocket.OPEN) {
+            socket.current.send(JSON.stringify({
+                type: "read_receipt",
+                message_id: messageId,
+                project_id: projectId
+            }));
+        }
+    }, [projectId]);
+
+    const sendTypingStatus = useCallback((typing: boolean) => {
+        if (socket.current?.readyState === WebSocket.OPEN) {
+            socket.current.send(JSON.stringify({
+                type: "typing",
+                project_id: projectId,
+                is_typing: typing
+            }));
+        }
+    }, [projectId]);
+
+    return {
+        messages,
+        setMessages,
+        sendMessage,
+        sendReadReceipt,
+        sendTypingStatus,
+        isConnected,
+        isTyping,
+        typingUserId // Exporting this in case you want to show 'User X is typing'
+    };
 };

@@ -1,13 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useChat } from '../hooks/useChat';
-
-interface Message {
-    id: number;
-    sender_id: number;
-    sender_email?: string;
-    content: string;
-    created_at?: string;
-}
 
 interface ChatBoxProps {
     projectId: number;
@@ -15,15 +7,32 @@ interface ChatBoxProps {
 }
 
 export const ChatBox: React.FC<ChatBoxProps> = ({ projectId, token }) => {
-    const { messages, setMessages, sendMessage, isConnected } = useChat(token, projectId);
+    const {
+        messages,
+        setMessages,
+        sendMessage,
+        sendReadReceipt,
+        sendTypingStatus,
+        isConnected,
+        isTyping,
+        typingUserId // <--- From our updated hook
+    } = useChat(token, projectId);
+
     const [inputValue, setInputValue] = useState("");
-    // NEW STEP: State to hold the project name
     const [projectName, setProjectName] = useState<string>("");
 
     const messageListRef = useRef<HTMLDivElement>(null);
+    const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const currentUserId = Number(localStorage.getItem("userId"));
 
-    // NEW STEP: Fetch project details (Name) on load
+    // Helper: Find the email of the person typing from the message history
+    const typingUserEmail = useMemo(() => {
+        if (!typingUserId) return null;
+        const found = messages.find(m => Number(m.sender_id) === typingUserId);
+        return found?.sender_email || `User ${typingUserId}`;
+    }, [typingUserId, messages]);
+
+    // 1. Fetch Project Details
     useEffect(() => {
         const fetchProjectDetails = async () => {
             try {
@@ -38,40 +47,73 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ projectId, token }) => {
                 console.error("Failed to fetch project details:", err);
             }
         };
-
         if (projectId && token) fetchProjectDetails();
     }, [projectId, token]);
 
+    // 2. Fetch History & Initial Read
     useEffect(() => {
         const fetchHistory = async () => {
             try {
-                const response = await fetch(`http://localhost:880/projects/${projectId}/messages`, {
+                const res = await fetch(`http://localhost:880/projects/${projectId}/messages`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
-                if (response.ok) {
-                    const history = await response.json();
+                if (res.ok) {
+                    const history = await res.json();
                     setMessages(history || []);
+
+                    if (history && history.length > 0) {
+                        const lastMsg = history[history.length - 1];
+                        if (Number(lastMsg.sender_id) !== currentUserId && !lastMsg.read_at) {
+                            sendReadReceipt?.(lastMsg.id);
+                        }
+                    }
                 }
             } catch (err) {
                 console.error("Failed to load history:", err);
                 setMessages([]);
             }
         };
-
         if (projectId && token) fetchHistory();
-    }, [projectId, token, setMessages]);
+    }, [projectId, token, setMessages, currentUserId, sendReadReceipt]);
 
+    // 3. REAL-TIME READ: Mark new incoming messages as read instantly if chat is open
+    useEffect(() => {
+        if (messages.length > 0) {
+            const lastMsg = messages[messages.length - 1];
+            if (Number(lastMsg.sender_id) !== currentUserId && !lastMsg.read_at) {
+                sendReadReceipt?.(lastMsg.id);
+            }
+        }
+    }, [messages, currentUserId, sendReadReceipt]);
+
+    // Auto-scroll
     useEffect(() => {
         const container = messageListRef.current;
         if (container) {
             container.scrollTop = container.scrollHeight;
         }
-    }, [messages]);
+    }, [messages, isTyping]);
+
+    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setInputValue(e.target.value);
+        if (!typingTimeoutRef.current) sendTypingStatus(true);
+
+        if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+        typingTimeoutRef.current = setTimeout(() => {
+            sendTypingStatus(false);
+            typingTimeoutRef.current = null;
+        }, 2000);
+    };
 
     const handleSend = () => {
         if (!inputValue.trim()) return;
         sendMessage(inputValue, 'project_chat', projectId);
         setInputValue("");
+        if (typingTimeoutRef.current) {
+            clearTimeout(typingTimeoutRef.current);
+            sendTypingStatus(false);
+            typingTimeoutRef.current = null;
+        }
     };
 
     const formatTime = (dateStr?: string) => {
@@ -83,9 +125,8 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ projectId, token }) => {
     return (
         <div style={styles.container}>
             <div style={styles.header}>
-
-                <span>{projectName ? projectName : `Project ${projectId}`} Chat</span>
-                <span style={{ color: isConnected ? '#4caf50' : '#f44336' }}>
+                <span>{projectName || `Project ${projectId}`}</span>
+                <span style={{ color: isConnected ? '#4caf50' : '#f44336', fontSize: '0.8rem' }}>
                     {isConnected ? ' ● Online' : ' ● Offline'}
                 </span>
             </div>
@@ -112,23 +153,29 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ projectId, token }) => {
                                 }}>
                                     {isMe ? "Me" : m.sender_email || `User ${m.sender_id}`}
                                 </small>
-                                {time && (
-                                    <small style={{ fontSize: '0.6rem', color: isMe ? '#ccc' : '#999' }}>
-                                        {time}
-                                    </small>
-                                )}
+                                <small style={{ fontSize: '0.6rem', color: isMe ? '#ccc' : '#999' }}>
+                                    {time}
+                                </small>
                             </div>
                             <div style={{ marginTop: '2px' }}>{m.content}</div>
+
+                            {/* Read receipt div removed from here for Group Chat cleanliness */}
                         </div>
                     );
                 })}
+
+                {isTyping && typingUserId !== currentUserId && (
+                    <div style={styles.typingIndicator}>
+                        {typingUserEmail} is typing...
+                    </div>
+                )}
             </div>
 
             <div style={styles.inputArea}>
                 <input
                     style={styles.input}
                     value={inputValue}
-                    onChange={(e) => setInputValue(e.target.value)}
+                    onChange={handleInputChange}
                     onKeyDown={(e) => e.key === 'Enter' && handleSend()}
                     placeholder="Type a message..."
                 />
@@ -137,6 +184,7 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ projectId, token }) => {
         </div>
     );
 };
+// ... styles remain the same
 
 const styles: { [key: string]: React.CSSProperties } = {
     container: { border: '1px solid #ccc', borderRadius: '8px', width: '350px', display: 'flex', flexDirection: 'column', height: '450px', background: '#fff' },
@@ -150,6 +198,7 @@ const styles: { [key: string]: React.CSSProperties } = {
         boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
     },
     sender: { fontSize: '0.7rem', fontWeight: 'bold' },
+    typingIndicator: { fontSize: '0.75rem', color: '#007bff', fontStyle: 'italic', marginLeft: '5px' },
     inputArea: { padding: '10px', borderTop: '1px solid #eee', display: 'flex', gap: '5px' },
     input: { flex: 1, padding: '8px', borderRadius: '4px', border: '1px solid #ddd' },
     button: { padding: '8px 15px', background: '#007bff', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }

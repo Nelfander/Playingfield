@@ -6,26 +6,33 @@ export interface DirectMessage {
     receiver_id?: number;
     content: string;
     created_at: string;
+    read_at?: string; // Important for "Seen" status
     sender_email?: string;
 }
 
 interface DirectChatResponse {
-    type: "new_direct_message" | "error";
+    type: "new_direct_message" | "user_typing" | "message_read" | "error";
     data?: DirectMessage;
-    error?: string;
+    user_id?: number;
+    sender_id?: number;
+    receiver_id?: number;
+    message_id?: number;
+    is_typing?: boolean;
+    project_id?: number;
 }
 
 export const useDirectChat = (token: string | null, otherUserId?: number) => {
     const [messages, setMessages] = useState<DirectMessage[]>([]);
     const [isConnected, setIsConnected] = useState(false);
+    const [isTyping, setIsTyping] = useState(false);
+    const [typingUserId, setTypingUserId] = useState<number | null>(null);
     const socket = useRef<WebSocket | null>(null);
 
     useEffect(() => {
         if (!token || !otherUserId) return;
 
-        // For DMs, we still connect to a project room (or could be a user room)
-        // The backend sends to users directly via SendToUser, so any connection works
-        const wsUrl = `ws://localhost:880/ws?token=${token}&projectId=0`; // projectId not needed for DMs
+        // Using projectId=0 to signify Direct Messaging mode to the server
+        const wsUrl = `ws://localhost:880/ws?token=${token}&projectId=0`;
 
         if (socket.current) {
             socket.current.close();
@@ -40,51 +47,100 @@ export const useDirectChat = (token: string | null, otherUserId?: number) => {
         };
 
         ws.onmessage = (event) => {
-            if (!event.data.startsWith('{')) {
-                console.log("ℹ️ System:", event.data);
-                return;
-            }
-
             try {
                 const response: DirectChatResponse = JSON.parse(event.data);
-                if (response.type === "new_direct_message" && response.data) {
-                    const msg = response.data;
-                    // Only add if it's between current user and otherUserId
-                    const currentUserId = Number(localStorage.getItem("userId"));
-                    if ((msg.sender_id === currentUserId && msg.receiver_id === otherUserId) ||
-                        (msg.sender_id === otherUserId && msg.receiver_id === currentUserId)) {
-                        setMessages((prev) => [...prev, msg]);
-                    }
+
+                switch (response.type) {
+                    case "new_direct_message":
+                        if (response.data) {
+                            const msg = response.data;
+                            const currentUserId = Number(localStorage.getItem("userId"));
+
+                            // Only add if message belongs to this specific 1-on-1 chat
+                            if ((msg.sender_id === currentUserId && msg.receiver_id === otherUserId) ||
+                                (msg.sender_id === otherUserId && msg.receiver_id === currentUserId)) {
+
+                                setMessages((prev) => [...prev, msg]);
+
+                                // Reset typing state if they just sent a message
+                                if (Number(msg.sender_id) === Number(otherUserId)) {
+                                    setIsTyping(false);
+                                    setTypingUserId(null);
+                                }
+                            }
+                        }
+                        break;
+
+                    case "message_read":
+                        setMessages((prev) => prev.map(m =>
+                            m.id === response.message_id ? { ...m, read_at: new Date().toISOString() } : m
+                        ));
+                        break;
+
+                    case "user_typing":
+                        // The "Ultimate fallback"
+                        // If we get a typing event with project_id 0, just show it.
+                        if (response.project_id === 0) {
+                            console.log("🔥 EMERGENCY TOGGLE: Typing status is:", response.is_typing);
+                            setIsTyping(response.is_typing === true);
+                        }
+                        break;
                 }
             } catch (err) {
-                console.error("⚠️ Message Parse Error:", err);
+                console.error("WS Parse Error:", err);
             }
         };
 
         ws.onclose = () => {
-            console.log("🔌 Disconnected from DM Hub");
             setIsConnected(false);
         };
 
         return () => {
-            console.log("🧹 Cleaning up Direct Chat WebSocket...");
-            ws.close();
-            socket.current = null;
+            if (socket.current) socket.current.close();
         };
     }, [token, otherUserId]);
 
     const sendMessage = useCallback((content: string, receiverId: number) => {
         if (socket.current?.readyState === WebSocket.OPEN) {
-            const payload = {
+            socket.current.send(JSON.stringify({
                 type: "direct_message",
                 content: content,
-                receiver_id: receiverId,
-            };
-            socket.current.send(JSON.stringify(payload));
-        } else {
-            console.error("🚫 Socket not open. State:", socket.current?.readyState);
+                receiver_id: Number(receiverId),
+            }));
         }
     }, []);
 
-    return { messages, setMessages, sendMessage, isConnected };
+    const sendTypingStatus = useCallback((typing: boolean, receiverId: number) => {
+        if (socket.current?.readyState === WebSocket.OPEN) {
+            socket.current.send(JSON.stringify({
+                type: "user_typing",
+                is_typing: typing,
+                receiver_id: Number(receiverId),
+                project_id: 0,
+                content: ""
+            }));
+        }
+    }, []);
+
+    const sendReadReceipt = useCallback((messageId: number, senderId: number) => {
+        if (socket.current?.readyState === WebSocket.OPEN) {
+            socket.current.send(JSON.stringify({
+                type: "read_receipt",
+                message_id: messageId,
+                receiver_id: Number(senderId),
+                project_id: 0
+            }));
+        }
+    }, []);
+
+    return {
+        messages,
+        setMessages,
+        sendMessage,
+        sendTypingStatus,
+        sendReadReceipt,
+        isConnected,
+        isTyping,
+        typingUserId
+    };
 };
