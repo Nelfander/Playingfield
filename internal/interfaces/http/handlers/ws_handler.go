@@ -21,10 +21,12 @@ type WSHandler struct {
 }
 
 type WSIncomingMessage struct {
-	Type       string `json:"type"`
+	Type       string `json:"type"` // "project_chat", "direct_message", "typing", "read_receipt"
 	ProjectID  int64  `json:"project_id"`
 	ReceiverID int64  `json:"receiver_id"`
+	MessageID  int64  `json:"message_id"`
 	Content    string `json:"content"`
+	IsTyping   bool   `json:"is_typing"`
 }
 
 func NewWSHandler(jwtManager *auth.JWTManager, hub *ws.Hub, chatService *messages.Service) *WSHandler {
@@ -122,6 +124,48 @@ func (h *WSHandler) HandleConnection(c echo.Context) error {
 			_, chatErr = h.chatService.SendProjectMessage(ctx, claims.UserID, msg.ProjectID, msg.Content)
 		case "direct_message":
 			_, chatErr = h.chatService.SendDirectMessage(ctx, claims.UserID, msg.ReceiverID, msg.Content)
+		case "typing":
+			// create a small JSON payload to tell others who is typing
+			typingSignal, _ := json.Marshal(map[string]interface{}{
+				"type":       "user_typing",
+				"user_id":    claims.UserID,
+				"email":      claims.Email,
+				"project_id": msg.ProjectID,
+				"is_typing":  msg.IsTyping,
+			})
+
+			//  Route based on context
+			if msg.ReceiverID != 0 {
+				// It's a Direct Message: Send only to the specific person
+				h.hub.SendToUser(msg.ReceiverID, typingSignal)
+				continue
+			} else if msg.ProjectID != 0 {
+				// It's a Project Chat: Broadcast to the whole room
+				h.hub.BroadcastToProjectExcept(msg.ProjectID, claims.UserID, typingSignal)
+			}
+
+		case "read_receipt":
+			// persist the "Read" status to the database via service
+			// pass the claims.UserID to ensure only the recipient can mark it read
+			chatErr = h.chatService.MarkAsRead(ctx, msg.MessageID, claims.UserID)
+
+			if chatErr == nil {
+				// prepare the notification for the sender
+				receiptSignal, _ := json.Marshal(map[string]interface{}{
+					"type":       "message_read",
+					"message_id": msg.MessageID,
+					"reader_id":  claims.UserID,
+					"project_id": msg.ProjectID,
+				})
+
+				if msg.ReceiverID != 0 {
+					// it's a DM: tell the original sender
+					h.hub.SendToUser(msg.ReceiverID, receiptSignal)
+				} else if msg.ProjectID != 0 {
+					// it's a project message: broadcast to the room so the sender's UI updates
+					h.hub.BroadcastToProjectExcept(msg.ProjectID, claims.UserID, receiptSignal)
+				}
+			}
 		default:
 			slog.Warn("ws unknown message type", "type", msg.Type, "user_id", claims.UserID)
 			continue

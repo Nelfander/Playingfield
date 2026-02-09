@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useChat } from '../hooks/useChat';
 
 interface ChatBoxProps {
@@ -15,7 +15,8 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ projectId, token }) => {
         sendTypingStatus,
         isConnected,
         isTyping,
-        typingUserId // <--- From our updated hook
+        typingUserId,
+        typingUserEmail // <--- Now pulled directly from the hook!
     } = useChat(token, projectId);
 
     const [inputValue, setInputValue] = useState("");
@@ -24,13 +25,6 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ projectId, token }) => {
     const messageListRef = useRef<HTMLDivElement>(null);
     const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const currentUserId = Number(localStorage.getItem("userId"));
-
-    // Helper: Find the email of the person typing from the message history
-    const typingUserEmail = useMemo(() => {
-        if (!typingUserId) return null;
-        const found = messages.find(m => Number(m.sender_id) === typingUserId);
-        return found?.sender_email || `User ${typingUserId}`;
-    }, [typingUserId, messages]);
 
     // 1. Fetch Project Details
     useEffect(() => {
@@ -50,7 +44,7 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ projectId, token }) => {
         if (projectId && token) fetchProjectDetails();
     }, [projectId, token]);
 
-    // 2. Fetch History & Initial Read
+    // 2. Fetch History
     useEffect(() => {
         const fetchHistory = async () => {
             try {
@@ -60,13 +54,6 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ projectId, token }) => {
                 if (res.ok) {
                     const history = await res.json();
                     setMessages(history || []);
-
-                    if (history && history.length > 0) {
-                        const lastMsg = history[history.length - 1];
-                        if (Number(lastMsg.sender_id) !== currentUserId && !lastMsg.read_at) {
-                            sendReadReceipt?.(lastMsg.id);
-                        }
-                    }
                 }
             } catch (err) {
                 console.error("Failed to load history:", err);
@@ -74,25 +61,14 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ projectId, token }) => {
             }
         };
         if (projectId && token) fetchHistory();
-    }, [projectId, token, setMessages, currentUserId, sendReadReceipt]);
+    }, [projectId, token, setMessages]);
 
-    // 3. REAL-TIME READ: Mark new incoming messages as read instantly if chat is open
+    // 3. Scroll to bottom only when NEW MESSAGES arrive
     useEffect(() => {
-        if (messages.length > 0) {
-            const lastMsg = messages[messages.length - 1];
-            if (Number(lastMsg.sender_id) !== currentUserId && !lastMsg.read_at) {
-                sendReadReceipt?.(lastMsg.id);
-            }
+        if (messageListRef.current) {
+            messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
         }
-    }, [messages, currentUserId, sendReadReceipt]);
-
-    // Auto-scroll
-    useEffect(() => {
-        const container = messageListRef.current;
-        if (container) {
-            container.scrollTop = container.scrollHeight;
-        }
-    }, [messages, isTyping]);
+    }, [messages]);
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setInputValue(e.target.value);
@@ -147,26 +123,22 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ projectId, token }) => {
                             }}
                         >
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: '10px' }}>
-                                <small style={{
-                                    ...styles.sender,
-                                    color: isMe ? '#e0e0e0' : '#888'
-                                }}>
+                                <small style={{ ...styles.sender, color: isMe ? '#e0e0e0' : '#888' }}>
                                     {isMe ? "Me" : m.sender_email || `User ${m.sender_id}`}
                                 </small>
-                                <small style={{ fontSize: '0.6rem', color: isMe ? '#ccc' : '#999' }}>
-                                    {time}
-                                </small>
+                                <small style={{ fontSize: '0.6rem', color: isMe ? '#ccc' : '#999' }}>{time}</small>
                             </div>
                             <div style={{ marginTop: '2px' }}>{m.content}</div>
-
-                            {/* Read receipt div removed from here for Group Chat cleanliness */}
                         </div>
                     );
                 })}
+            </div>
 
+            {/* STICKY TYPING SHELF: Displays email from hook, fallback to ID if needed */}
+            <div style={styles.typingShelf}>
                 {isTyping && typingUserId !== currentUserId && (
                     <div style={styles.typingIndicator}>
-                        {typingUserEmail} is typing...
+                        {typingUserEmail || `User ${typingUserId}`} is typing...
                     </div>
                 )}
             </div>
@@ -184,21 +156,15 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ projectId, token }) => {
         </div>
     );
 };
-// ... styles remain the same
 
 const styles: { [key: string]: React.CSSProperties } = {
     container: { border: '1px solid #ccc', borderRadius: '8px', width: '350px', display: 'flex', flexDirection: 'column', height: '450px', background: '#fff' },
     header: { padding: '10px', borderBottom: '1px solid #eee', display: 'flex', justifyContent: 'space-between', fontWeight: 'bold' },
     messageList: { flex: 1, overflowY: 'auto', padding: '10px', display: 'flex', flexDirection: 'column', gap: '12px' },
-    messageItem: {
-        padding: '8px 12px',
-        borderRadius: '12px',
-        maxWidth: '80%',
-        wordBreak: 'break-word',
-        boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-    },
+    messageItem: { padding: '8px 12px', borderRadius: '12px', maxWidth: '80%', wordBreak: 'break-word', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' },
     sender: { fontSize: '0.7rem', fontWeight: 'bold' },
-    typingIndicator: { fontSize: '0.75rem', color: '#007bff', fontStyle: 'italic', marginLeft: '5px' },
+    typingShelf: { height: '22px', paddingLeft: '12px', display: 'flex', alignItems: 'center', background: '#fff' },
+    typingIndicator: { fontSize: '0.75rem', color: '#007bff', fontStyle: 'italic', fontWeight: '500' },
     inputArea: { padding: '10px', borderTop: '1px solid #eee', display: 'flex', gap: '5px' },
     input: { flex: 1, padding: '8px', borderRadius: '4px', border: '1px solid #ddd' },
     button: { padding: '8px 15px', background: '#007bff', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }

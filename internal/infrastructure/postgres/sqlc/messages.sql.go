@@ -15,9 +15,9 @@ const createMessage = `-- name: CreateMessage :one
 WITH inserted AS (
     INSERT INTO messages (sender_id, content, project_id, receiver_id)
     VALUES ($1, $2, $3, $4)
-    RETURNING id, sender_id, content, project_id, receiver_id, created_at
+    RETURNING id, sender_id, content, project_id, receiver_id, created_at, read_at
 )
-SELECT i.id, i.sender_id, i.content, i.project_id, i.receiver_id, i.created_at, u.email as sender_email
+SELECT i.id, i.sender_id, i.content, i.project_id, i.receiver_id, i.created_at, i.read_at, u.email as sender_email
 FROM inserted i
 JOIN users u ON i.sender_id = u.id
 `
@@ -36,6 +36,7 @@ type CreateMessageRow struct {
 	ProjectID   pgtype.Int8
 	ReceiverID  pgtype.Int8
 	CreatedAt   pgtype.Timestamptz
+	ReadAt      pgtype.Timestamptz
 	SenderEmail string
 }
 
@@ -54,13 +55,14 @@ func (q *Queries) CreateMessage(ctx context.Context, arg CreateMessageParams) (C
 		&i.ProjectID,
 		&i.ReceiverID,
 		&i.CreatedAt,
+		&i.ReadAt,
 		&i.SenderEmail,
 	)
 	return i, err
 }
 
 const getDirectMessages = `-- name: GetDirectMessages :many
-SELECT m.id, m.sender_id, m.content, m.receiver_id, m.created_at, u.email as sender_email
+SELECT m.id, m.sender_id, m.content, m.receiver_id, m.created_at, m.read_at, u.email as sender_email
 FROM messages m
 JOIN users u ON m.sender_id = u.id
 WHERE (m.sender_id = $1 AND m.receiver_id = $2)
@@ -79,6 +81,7 @@ type GetDirectMessagesRow struct {
 	Content     string
 	ReceiverID  pgtype.Int8
 	CreatedAt   pgtype.Timestamptz
+	ReadAt      pgtype.Timestamptz
 	SenderEmail string
 }
 
@@ -97,6 +100,7 @@ func (q *Queries) GetDirectMessages(ctx context.Context, arg GetDirectMessagesPa
 			&i.Content,
 			&i.ReceiverID,
 			&i.CreatedAt,
+			&i.ReadAt,
 			&i.SenderEmail,
 		); err != nil {
 			return nil, err
@@ -110,7 +114,7 @@ func (q *Queries) GetDirectMessages(ctx context.Context, arg GetDirectMessagesPa
 }
 
 const getProjectMessages = `-- name: GetProjectMessages :many
-SELECT m.id, m.sender_id, m.content, m.project_id, m.created_at, u.email as sender_email
+SELECT m.id, m.sender_id, m.content, m.project_id, m.created_at, m.read_at, u.email as sender_email
 FROM messages m
 JOIN users u ON m.sender_id = u.id
 WHERE m.project_id = $1
@@ -123,6 +127,7 @@ type GetProjectMessagesRow struct {
 	Content     string
 	ProjectID   pgtype.Int8
 	CreatedAt   pgtype.Timestamptz
+	ReadAt      pgtype.Timestamptz
 	SenderEmail string
 }
 
@@ -141,6 +146,7 @@ func (q *Queries) GetProjectMessages(ctx context.Context, projectID pgtype.Int8)
 			&i.Content,
 			&i.ProjectID,
 			&i.CreatedAt,
+			&i.ReadAt,
 			&i.SenderEmail,
 		); err != nil {
 			return nil, err
@@ -151,4 +157,23 @@ func (q *Queries) GetProjectMessages(ctx context.Context, projectID pgtype.Int8)
 		return nil, err
 	}
 	return items, nil
+}
+
+const markMessageAsRead = `-- name: MarkMessageAsRead :exec
+UPDATE messages 
+SET read_at = $2
+WHERE id = $1 
+  AND receiver_id = $3 
+  AND read_at IS NULL
+`
+
+type MarkMessageAsReadParams struct {
+	ID         int64
+	ReadAt     pgtype.Timestamptz
+	ReceiverID pgtype.Int8
+}
+
+func (q *Queries) MarkMessageAsRead(ctx context.Context, arg MarkMessageAsReadParams) error {
+	_, err := q.db.Exec(ctx, markMessageAsRead, arg.ID, arg.ReadAt, arg.ReceiverID)
+	return err
 }

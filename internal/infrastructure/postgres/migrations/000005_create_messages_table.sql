@@ -18,3 +18,7 @@ CREATE TABLE messages (
         (project_id IS NULL AND receiver_id IS NOT NULL)
     )
 );
+
+-- Migration: Add read_at to messages
+ALTER TABLE messages 
+ADD COLUMN read_at TIMESTAMP WITH TIME ZONE;

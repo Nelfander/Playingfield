@@ -184,3 +184,22 @@ func (h *Hub) BroadcastToProject(projectID int64, message []byte) {
 		}
 	}
 }
+
+// BroadcastToProjectExcept sends a message to everyone in a project room EXCEPT a specific userID
+func (h *Hub) BroadcastToProjectExcept(projectID int64, excludeUserID int64, message []byte) {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	if clients, ok := h.ProjectRooms[projectID]; ok {
+		for client := range clients {
+			if client.UserID == excludeUserID {
+				continue
+			}
+			select {
+			case client.Send <- message:
+			default:
+				// if a client's buffer is full skip them to avoid blocking the hub
+				continue
+			}
+		}
+	}
+}

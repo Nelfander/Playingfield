@@ -20,7 +20,7 @@ export const DirectMessageBox: React.FC<DirectMessageBoxProps> = ({
         sendReadReceipt,
         isConnected,
         isTyping,
-        typingUserId // <-- Now matched with the hook's new state
+        typingUserId
     } = useDirectChat(token, otherUserId);
 
     const [inputValue, setInputValue] = useState("");
@@ -28,7 +28,6 @@ export const DirectMessageBox: React.FC<DirectMessageBoxProps> = ({
     const typingTimeoutRef = useRef<any>(null);
     const currentUserId = Number(localStorage.getItem("userId"));
 
-    // 1. Fetch History
     useEffect(() => {
         const fetchHistory = async () => {
             try {
@@ -47,31 +46,18 @@ export const DirectMessageBox: React.FC<DirectMessageBoxProps> = ({
         if (otherUserId && token) fetchHistory();
     }, [otherUserId, token, setMessages]);
 
-    // 2. Scroll to Bottom
+    // Scroll only when NEW MESSAGES arrive, not when typing happens
     useEffect(() => {
         if (messageListRef.current) {
             messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
         }
-    }, [messages, isTyping]);
-
-    // 3. Send Read Receipt
-    useEffect(() => {
-        if (messages.length > 0) {
-            const lastMsg = messages[messages.length - 1];
-            if (Number(lastMsg.sender_id) === otherUserId) {
-                sendReadReceipt(lastMsg.id, otherUserId);
-            }
-        }
-    }, [messages.length, otherUserId, sendReadReceipt]);
+    }, [messages]);
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setInputValue(e.target.value);
-
-        // Match the group chat logic: Only send typing start once
         if (!typingTimeoutRef.current) {
             sendTypingStatus(true, otherUserId);
         }
-
         if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
         typingTimeoutRef.current = setTimeout(() => {
             sendTypingStatus(false, otherUserId);
@@ -82,8 +68,6 @@ export const DirectMessageBox: React.FC<DirectMessageBoxProps> = ({
     const handleSend = () => {
         if (!inputValue.trim()) return;
         sendMessage(inputValue, otherUserId);
-
-        // Clean up typing on send
         if (typingTimeoutRef.current) {
             clearTimeout(typingTimeoutRef.current);
             typingTimeoutRef.current = null;
@@ -111,6 +95,7 @@ export const DirectMessageBox: React.FC<DirectMessageBoxProps> = ({
                 </span>
             </div>
 
+            {/* Scrollable Area */}
             <div ref={messageListRef} style={styles.messageList}>
                 {(messages || []).map((m, i) => {
                     const isMe = Number(m.sender_id) === currentUserId;
@@ -134,7 +119,6 @@ export const DirectMessageBox: React.FC<DirectMessageBoxProps> = ({
                                 {time && <small style={{ fontSize: '0.6rem', color: isMe ? '#ccc' : '#999' }}>{time}</small>}
                             </div>
                             <div style={{ marginTop: '2px' }}>{m.content}</div>
-
                             {showSeen && (
                                 <div style={{ textAlign: 'right', fontSize: '0.6rem', marginTop: '2px', color: '#e0e0e0', fontWeight: 'bold' }}>
                                     ✓ Seen
@@ -143,12 +127,14 @@ export const DirectMessageBox: React.FC<DirectMessageBoxProps> = ({
                         </div>
                     );
                 })}
+            </div>
 
-                {/* Updated Typing logic to match ChatBox pattern */}
-                {isTyping && (
-                    <div style={styles.typingIndicator}>
+            {/* STICKY TYPING SHELF (Outside the scroll area) */}
+            <div style={styles.typingShelf}>
+                {isTyping && Number(typingUserId) === Number(otherUserId) && (
+                    <span style={styles.typingIndicator}>
                         {otherUserEmail} is typing...
-                    </div>
+                    </span>
                 )}
             </div>
 
@@ -172,7 +158,8 @@ const styles: { [key: string]: React.CSSProperties } = {
     messageList: { flex: 1, overflowY: 'auto', padding: '10px', display: 'flex', flexDirection: 'column', gap: '12px' },
     messageItem: { padding: '8px 12px', borderRadius: '12px', maxWidth: '80%', wordBreak: 'break-word', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' },
     sender: { fontSize: '0.7rem', fontWeight: 'bold' },
-    typingIndicator: { fontSize: '0.75rem', color: '#888', fontStyle: 'italic', margin: '5px 0', alignSelf: 'flex-start' },
+    typingShelf: { height: '22px', paddingLeft: '12px', display: 'flex', alignItems: 'center', background: '#fff' },
+    typingIndicator: { fontSize: '0.75rem', color: '#007bff', fontStyle: 'italic', fontWeight: '500' },
     inputArea: { padding: '10px', borderTop: '1px solid #eee', display: 'flex', gap: '5px' },
     input: { flex: 1, padding: '8px', borderRadius: '4px', border: '1px solid #ddd' },
     button: { padding: '8px 15px', background: '#007bff', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }

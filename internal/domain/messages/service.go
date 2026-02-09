@@ -29,6 +29,7 @@ type ChatService interface {
 	GetProjectHistory(ctx context.Context, projectID int64) ([]Message, error)
 	SendDirectMessage(ctx context.Context, senderID, receiverID int64, content string) (*Message, error)
 	GetDMHistory(ctx context.Context, userA, userB int64) ([]Message, error)
+	MarkAsRead(ctx context.Context, messageID int64, userID int64) error
 }
 
 func (s *Service) SendProjectMessage(ctx context.Context, senderID int64, projectID int64, content string) (*Message, error) {
@@ -139,4 +140,9 @@ func (s *Service) SendDirectMessage(ctx context.Context, senderID, receiverID in
 // GetDMHistory fetches private conversation
 func (s *Service) GetDMHistory(ctx context.Context, userA, userB int64) ([]Message, error) {
 	return s.repo.GetDirectMessages(ctx, userA, userB)
+}
+
+func (s *Service) MarkAsRead(ctx context.Context, messageID int64, userID int64) error {
+	// Now the "Check" is built into the SQL query itself!
+	return s.repo.MarkAsRead(ctx, messageID, userID)
 }

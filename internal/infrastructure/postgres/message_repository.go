@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/nelfander/Playingfield/internal/domain/messages"
@@ -88,6 +89,10 @@ func (r *MessageRepository) GetByProject(ctx context.Context, projectID int64) (
 			val := row.ProjectID.Int64
 			msg.ProjectID = &val
 		}
+		if row.ReadAt.Valid {
+			t := row.ReadAt.Time
+			msg.ReadAt = &t
+		}
 		list = append(list, msg)
 	}
 	return list, nil
@@ -120,7 +125,35 @@ func (r *MessageRepository) GetDirectMessages(ctx context.Context, userA, userB 
 			val := row.ReceiverID.Int64
 			msg.ReceiverID = &val
 		}
+
+		if row.ReadAt.Valid {
+			t := row.ReadAt.Time
+			msg.ReadAt = &t
+		}
 		list = append(list, msg)
+
 	}
 	return list, nil
+}
+
+func (r *MessageRepository) MarkAsRead(ctx context.Context, messageID int64, userID int64) error {
+	params := sqlc.MarkMessageAsReadParams{
+		ID: messageID,
+		ReadAt: pgtype.Timestamptz{
+			Time:  time.Now(),
+			Valid: true,
+		},
+		ReceiverID: pgtype.Int8{
+			Int64: userID,
+			Valid: true,
+		},
+	}
+
+	err := r.queries.MarkMessageAsRead(ctx, params)
+	if err != nil {
+		slog.Error("failed to mark message as read", "message_id", messageID, "user_id", userID, "error", err)
+		return fmt.Errorf("db: failed to mark message as read: %w", err)
+	}
+
+	return nil
 }

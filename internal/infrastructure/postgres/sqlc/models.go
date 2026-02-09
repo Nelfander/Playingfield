@@ -15,6 +15,7 @@ type Message struct {
 	ProjectID  pgtype.Int8
 	ReceiverID pgtype.Int8
 	CreatedAt  pgtype.Timestamptz
+	ReadAt     pgtype.Timestamptz
 }
 
 type Project struct {

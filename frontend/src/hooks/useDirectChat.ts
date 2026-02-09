@@ -78,11 +78,15 @@ export const useDirectChat = (token: string | null, otherUserId?: number) => {
                         break;
 
                     case "user_typing":
-                        // The "Ultimate fallback"
-                        // If we get a typing event with project_id 0, just show it.
-                        if (response.project_id === 0) {
-                            console.log("🔥 EMERGENCY TOGGLE: Typing status is:", response.is_typing);
+                        // 1. Extract the user who is typing from the Go backend payload
+                        const sid = response.sender_id || response.user_id;
+                        const typingId = Number(sid);
+
+                        // 2. Only show it if the typing person is the one we are chatting with
+                        if (typingId === Number(otherUserId)) {
+                            console.log("✅ Match! User", typingId, "is typing.");
                             setIsTyping(response.is_typing === true);
+                            setTypingUserId(response.is_typing ? typingId : null);
                         }
                         break;
                 }
@@ -111,15 +115,28 @@ export const useDirectChat = (token: string | null, otherUserId?: number) => {
     }, []);
 
     const sendTypingStatus = useCallback((typing: boolean, receiverId: number) => {
-        if (socket.current?.readyState === WebSocket.OPEN) {
-            socket.current.send(JSON.stringify({
-                type: "user_typing",
-                is_typing: typing,
-                receiver_id: Number(receiverId),
-                project_id: 0,
-                content: ""
-            }));
+        console.log("1. sendTypingStatus called. Typing:", typing, "To:", receiverId);
+
+        if (!socket.current) {
+            console.error("❌ No socket object found!");
+            return;
         }
+
+        if (socket.current.readyState !== WebSocket.OPEN) {
+            console.error("❌ WebSocket is NOT open. Current state:", socket.current.readyState);
+            return;
+        }
+
+        const payload = {
+            type: "typing",
+            is_typing: typing,
+            receiver_id: Number(receiverId),
+            project_id: 0,
+            content: ""
+        };
+
+        console.log("2. 📤 Sending Payload to Server:", JSON.stringify(payload));
+        socket.current.send(JSON.stringify(payload));
     }, []);
 
     const sendReadReceipt = useCallback((messageId: number, senderId: number) => {

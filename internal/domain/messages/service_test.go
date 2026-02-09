@@ -60,3 +60,8 @@ func TestMessageService(t *testing.T) {
 		assert.Contains(t, errFail.Error(), "share a project")
 	})
 }
+
+func (f *FakeRepository) MarkAsRead(ctx context.Context, messageID int64, userID int64) error {
+	// for now empty just to satisfy
+	return nil
+}

@@ -17,6 +17,7 @@ interface ChatResponse {
     message_id?: number;
     is_typing?: boolean;
     user_id?: number;
+    email?: string; // <--- 1. Capture the email from Go
     project_id?: number;
     error?: string;
 }
@@ -25,7 +26,8 @@ export const useChat = (token: string | null, projectId?: number) => {
     const [messages, setMessages] = useState<Message[]>([]);
     const [isConnected, setIsConnected] = useState(false);
     const [isTyping, setIsTyping] = useState(false);
-    const [typingUserId, setTypingUserId] = useState<number | null>(null); // Track specific user typing
+    const [typingUserId, setTypingUserId] = useState<number | null>(null);
+    const [typingUserEmail, setTypingUserEmail] = useState<string | null>(null); // 2. New State
     const socket = useRef<WebSocket | null>(null);
 
     useEffect(() => {
@@ -55,10 +57,11 @@ export const useChat = (token: string | null, projectId?: number) => {
                         ));
                         break;
                     case "user_typing":
-                        // FIX: Only show typing if it's for THIS project and NOT a DM (project_id 0)
                         if (response.project_id === projectId && response.project_id !== 0) {
                             setIsTyping(!!response.is_typing);
                             setTypingUserId(response.is_typing ? (response.user_id ?? null) : null);
+                            // 3. Set the email directly from the server signal
+                            setTypingUserEmail(response.is_typing ? (response.email ?? null) : null);
                         }
                         break;
                 }
@@ -113,6 +116,7 @@ export const useChat = (token: string | null, projectId?: number) => {
         sendTypingStatus,
         isConnected,
         isTyping,
-        typingUserId // Exporting this in case you want to show 'User X is typing'
+        typingUserId,
+        typingUserEmail // 4. Export the email
     };
 };
