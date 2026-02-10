@@ -12,6 +12,11 @@ import (
 func JWTMiddleware(jwtManager *auth.JWTManager) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
+			// if the RateLimitMiddleware already verified the token,
+			// the 'user' claims will already be in the context.
+			if claims, ok := c.Get("user").(*auth.Claims); ok && claims != nil {
+				return next(c)
+			}
 			authHeader := c.Request().Header.Get("Authorization")
 			if authHeader == "" {
 				return c.JSON(http.StatusUnauthorized, map[string]string{"message": "missing authorization header"})

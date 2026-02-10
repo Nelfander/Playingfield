@@ -83,18 +83,8 @@ func Run() {
 	//  Start the Hub in a background goroutine
 	go hub.Run()
 
-	/*
-		// --- Seed default admin ---
-		if err := postgres.SeedAdminUser(context.Background(), userRepo); err != nil {
-			logger.Warn("could not seed admin user, continuing startup", "error", err)
-		} else {
-			logger.Info("admin user seeded successfully")
-		}
-	*/
-
 	// WebSocket handler creation
 	wsHandler := handlers.NewWSHandler(jwtManager, hub, chatService)
-	// --- Handler ---
 
 	// --- Echo server ---
 	e := echo.New()
@@ -102,6 +92,9 @@ func Run() {
 	// Override default error handler to centralize JSON formatting and slog logging.
 	// This prevents sensitive internal error leakage to the client.
 	e.HTTPErrorHandler = http.CustomHTTPErrorHandler
+
+	// Apply globally to all routes
+	e.Use(middleware.RateLimitMiddleware(jwtManager))
 
 	// --- CORS Middleware ---
 	e.Use(echomiddleware.CORSWithConfig(echomiddleware.CORSConfig{

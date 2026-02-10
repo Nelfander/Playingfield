@@ -32,6 +32,14 @@ built with **Go (Echo framework)**, **PostgreSQL (Neon)**, and a **React (TypeSc
 * **Ownership Enforcement:** Destructive actions (deleting projects/tasks, removing members) are restricted to the project owner via backend middleware.
 Updating or creating actions are the same.
 
+### 🛡️ Resilience & Traffic Control
+* **Tiered Rate Limiting (Token Bucket):** Implemented a high-performance middleware using `golang.org/x/time/rate`. It dynamically adjusts throughput based on identity:
+    * **Anonymous Tier:** Strict IP-based limits (5 req/sec) to mitigate brute-force attacks and bot scraping.
+    * **Authenticated Tier:** Upgraded "VIP" limits (20 req/sec) for registered users, ensuring a smooth experience for legitimate app usage.
+* **Concurrency-First Registry:** Manages visitor state using a `sync.RWMutex` with a "Double-Checked Locking" pattern. This ensures the rate limiter never becomes a bottleneck during traffic spikes.
+* **Automated Memory Reclamation:** A background "Janitor" goroutine monitors the visitor registry, automatically pruning inactive entries every 10 minutes to maintain a flat memory footprint.
+* **Lazy JWT Verification:** Optimized middleware chain that "peeks" at the Authorization header to identify users, caching verified claims in the request context to avoid redundant cryptographic operations in downstream handlers.
+
 ### 🛠️ Reliability & Observability
 * **Centralized Error Translation:** Implemented a Global Error Handler that acts as a bridge between internal domain errors and HTTP responses. It ensures that internal truths (like specific DB failures) are logged for developers while users receive clean, safe, and actionable error messages.
 * **Structured Telemetry (slog):** The system uses machine-readable JSON logging in production. It follows a "Leveled" approach where low-level database traces are hidden by default, and only actionable WARN or ERROR events trigger alerts.
@@ -205,6 +213,22 @@ Invoke-RestMethod -Method GET -Uri http://localhost:880/projects -Headers @{ Aut
 
 ## 🛠 <b>Development History</b>
 <details><summary>(Click to expand)</summary>
+
+<details>
+<summary><b>Feb 10, 2026: Traffic Hardening & Concurrency Protection</b> (Click to expand) </summary>
+
+### Phase 1: Tiered Rate Limiting & Identity Upgrades
+* **Multi-Tiered Throttling Logic**: Engineered a user-aware rate limiter that distinguishes between anonymous IP traffic and authenticated JWT users. Implemented a "VIP" throughput model (20 req/sec vs 5 req/sec) to ensure high availability for registered members while protecting public endpoints from brute-force attacks.
+* **Lazy JWT Optimization**: Refactored the middleware chain to perform "Lazy Verification." The rate limiter "peeks" at the Authorization header and caches verified claims in the Echo context, allowing the subsequent `JWTMiddleware` to skip redundant cryptographic operations, significantly reducing CPU overhead per request.
+
+### Phase 2: High-Performance Concurrency Management
+* **Thread-Safe Visitor Registry**: Implemented a global visitor map protected by `sync.RWMutex`. Utilized a **Double-Checked Locking** pattern to optimize the "Happy Path," ensuring that existing visitors are verified with read-locks to maximize throughput under heavy parallel load.
+* **Automated Memory Reclamation**: Developed a background "Janitor" goroutine that performs periodic sweeps of the visitor registry. This ensures that the system automatically prunes stale entries (inactive for >10 mins), maintaining a stable memory footprint regardless of long-term uptime.
+
+### Phase 3: Defensive Architecture & Verification
+* **Standardized 429 Error Bridge**: Integrated the rate limiter with the `CustomHTTPErrorHandler` via a new `ErrRateLimitExceeded` sentinel error. This ensures that clients receive a standardized JSON response with appropriate machine-readable error codes and human-friendly messages.
+* **Race-Checked Integration Testing**: Developed a robust suite of integration tests in the `tests` package. Verified the tiered limits, context injection, and thread safety using the Go Race Detector (`-race`) to guarantee zero data races in the middleware signal chain.
+</details>
 
 <details>
 <summary><b>Feb 9, 2026: Real-Time Chat UX & Identity Synchronization</b> (Click to expand) </summary>

@@ -10,6 +10,7 @@ import (
 	"github.com/nelfander/Playingfield/internal/domain/projects"
 	"github.com/nelfander/Playingfield/internal/domain/tasks"
 	"github.com/nelfander/Playingfield/internal/domain/user"
+	"github.com/nelfander/Playingfield/internal/interfaces/http/middleware"
 )
 
 // CustomHTTPErrorHandler handles errors globally across the Echo instance
@@ -30,7 +31,7 @@ func CustomHTTPErrorHandler(err error, c echo.Context) {
 		code = http.StatusUnauthorized
 		message = "Invalid email or password"
 		// The 'err' itself is already logged by slog, we see "wrong password"
-		// from the service log and "invalid credentials" from the translator. Awesome =)
+		// from the service log and "invalid credentials" from the translator
 
 	case errors.Is(err, user.ErrInactiveAccount):
 		code = http.StatusForbidden
@@ -45,7 +46,7 @@ func CustomHTTPErrorHandler(err error, c echo.Context) {
 		code = http.StatusForbidden
 		message = "You do not have permission for this action"
 
-		// --- Project domain ---
+	// --- Project domain ---
 	case errors.Is(err, projects.ErrProjectNotFound):
 		code = http.StatusNotFound
 		message = "Project not found"
@@ -60,6 +61,11 @@ func CustomHTTPErrorHandler(err error, c echo.Context) {
 		// This covers "already a member" and "already have a project with the name"
 		code = http.StatusConflict
 		message = err.Error()
+
+	// --- Rate Limiter ---
+	case errors.Is(err, middleware.ErrRateLimitExceeded):
+		code = http.StatusTooManyRequests
+		message = "Slow down! You're sending too many requests."
 
 	// --- Echo and System errors! ---
 	default:
