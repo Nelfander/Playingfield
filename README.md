@@ -116,16 +116,16 @@ Clone the project and spin up the supporting services (PostgreSQL & MinIO):
 ### 2. Backend Setup
 Configure your .env file, generate code, and launch the Go server:
 
-   # Update .env with DB and MinIO credentials
-   sqlc generate
-   go run ./cmd/server
+   Update .env with DB and MinIO credentials
+   *sqlc generate
+   *go run ./cmd/server
 
 ### 3. Frontend Setup
 In a new terminal, install dependencies and start the application:
 
-   cd frontend
-   npm install
-   npm start
+   *cd frontend
+   *npm install
+   *npm start
 
 ### 4. Use PowerShell/Postman to test OR through the Frontend(Frontend is made only for Demo Visualisation):
 Heres a few Invokes for testing! (Won't add all of them here!):
