@@ -2,20 +2,24 @@ package tasks
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"time"
 )
 
 type FakeRepository struct {
-	tasks      []*Task
-	activities []*TaskActivity
-	nextID     int64
+	tasks       []*Task
+	activities  []*TaskActivity
+	attachments []*TaskAttachment
+	nextID      int64
 }
 
 func NewFakeRepository() *FakeRepository {
 	return &FakeRepository{
-		tasks:      []*Task{},
-		activities: []*TaskActivity{},
-		nextID:     1,
+		tasks:       []*Task{},
+		activities:  []*TaskActivity{},
+		attachments: []*TaskAttachment{},
+		nextID:      1,
 	}
 }
 
@@ -106,4 +110,55 @@ func (f *FakeRepository) GetTaskHistory(ctx context.Context, taskID int64) ([]*T
 		}
 	}
 	return res, nil
+}
+
+func (f *FakeRepository) CreateAttachment(ctx context.Context, att *TaskAttachment, fileKey string) (*TaskAttachment, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	att.ID = int64(len(f.attachments) + 1)
+	att.CreatedAt = time.Now()
+	f.attachments = append(f.attachments, att)
+	return att, nil
+}
+
+func (f *FakeRepository) GetTaskAttachments(ctx context.Context, taskID int64) ([]*TaskAttachment, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	var res []*TaskAttachment
+	for _, a := range f.attachments {
+		if a.TaskID == taskID {
+			res = append(res, a)
+		}
+	}
+	return res, nil
+}
+
+func (f *FakeRepository) GetAttachmentByID(ctx context.Context, id int64) (*TaskAttachment, string, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, "", err
+	}
+	for _, a := range f.attachments {
+		if a.ID == id {
+			// in a real DB we store the key, in the fake we'll just
+			// pretend the filename or a hardcoded string is the key.
+			fakeKey := fmt.Sprintf("keys/%s", a.FileName)
+			return a, fakeKey, nil
+		}
+	}
+	return nil, "", errors.New("attachment not found")
+}
+
+func (f *FakeRepository) DeleteAttachment(ctx context.Context, id int64) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	for i, a := range f.attachments {
+		if a.ID == id {
+			f.attachments = append(f.attachments[:i], f.attachments[i+1:]...)
+			return nil
+		}
+	}
+	return errors.New("attachment not found")
 }

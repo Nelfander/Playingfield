@@ -16,9 +16,12 @@ built with **Go (Echo framework)**, **PostgreSQL (Neon)**, and a **React (TypeSc
 ### 📋 Collaborative Task Management
 * **Kanban-Style Organization:** High-visibility board layout grouping tasks into `To Do`, `In Progress`, and `Done` columns for clear project tracking.
 * **Granular Task Ownership:** Ability to create tasks with specific descriptions and assign them to any verified project member.
+* **Integrated Document & Asset Management:** Engineered a robust integration with **MinIO**, utilizing a streaming `io.Reader` pattern to handle file uploads without memory-bloating the server.
+* **UUID-Namespaced Assets:** Implemented automated collision-prevention by prefixing file names with unique UUIDs, allowing multiple users to upload identical filenames to the same task safely.
+* **Strict "Collaborator-Only" Access:** Deployed a refined RBAC (Role-Based Access Control) layer where only the **Project Owner** or the **Task Assignee** can upload or delete attachments, while other project members maintain "Read-Only" gallery access.
+* **Atomic Deletion Sync:** A precision-engineered cleanup flow that ensures physical files are purged from the storage bucket immediately before their metadata is removed from Postgres, preventing "storage leaks" and orphan data.
 * **Signal-Driven Refresh:** Leverages a lightweight "Pulse" synchronization logic where task changes trigger instant UI re-validation across all collaborator screens via WebSockets.
-* **Role-Based Task Control:** Strict authorization logic ensuring only Project Owners can create or delete tasks, while allowing assigned members to update task status.
-* **Persistent History:** Every task is backed by a robust database schema, ensuring assignments and statuses are preserved across sessions. Kind of like a github commit. (Members can see what was changed, when it was changed).
+* **Persistent History:** Every task is backed by a robust database schema, ensuring assignments and statuses are preserved across sessions. Every action—from status updates to file uploads—is recorded in a "Git-like" timeline so members can see what was changed, when, and by whom.
 
 ### ⚡ Real-Time Synchronization (WebSockets)
 * **Global Hub:** A custom WebSocket Hub manages concurrent client connections and room-based broadcasting.
@@ -41,11 +44,11 @@ Updating or creating actions are the same.
 * **Lazy JWT Verification:** Optimized middleware chain that "peeks" at the Authorization header to identify users, caching verified claims in the request context to avoid redundant cryptographic operations in downstream handlers.
 
 ### 🛠️ Reliability & Observability
-* **Centralized Error Translation:** Implemented a Global Error Handler that acts as a bridge between internal domain errors and HTTP responses. It ensures that internal truths (like specific DB failures) are logged for developers while users receive clean, safe, and actionable error messages.
-* **Structured Telemetry (slog):** The system uses machine-readable JSON logging in production. It follows a "Leveled" approach where low-level database traces are hidden by default, and only actionable WARN or ERROR events trigger alerts.
-* **Recursive Error Wrapping:** Using Go's %w verb to wrap errors as they move up the stack. This preserves the original error (like a DB connection timeout) while adding "Domain Context" (like 'failed to register user').
-* **Defensive Mapping:** Data is strictly mapped between the Database (Postgres/sqlc) and the Domain (Go structs). This "Anti-Corruption Layer" ensures that database changes never break business rules.
-* **Ownership Enforcement:** The system performs "Deep Validation" on every request. Beyond just checking if a user is logged in, the backend verifies ownership before allowing any Updates, Deletions, or Member Management actions.
+* **Storage Provider Abstraction:** Abstracted storage logic into a `StorageProvider` interface, allowing the application to swap between local MinIO and AWS S3 with zero code changes in the domain layer.
+* **Centralized Error Translation:** Implemented a Global Error Handler that acts as a bridge between internal domain errors and HTTP responses. It ensures that internal truths are logged for developers while users receive clean, safe, and actionable error messages.
+* **Structured Telemetry (slog):** The system uses machine-readable JSON logging in production. It follows a "Leveled" approach where low-level database traces are hidden by default, and only actionable events trigger alerts.
+* **Recursive Error Wrapping:** Using Go's `%w` verb to wrap errors as they move up the stack. This preserves the original error (like a DB connection timeout) while adding "Domain Context."
+* **Defensive Mapping:** Data is strictly mapped between the Database (Postgres/sqlc) and the Domain (Go structs), ensuring database changes never break business rules.
 
 ---
 
@@ -217,7 +220,7 @@ Invoke-RestMethod -Method GET -Uri http://localhost:880/projects -Headers @{ Aut
 <details><summary>(Click to expand)</summary>
 
 <details>
-<summary><b>Feb 10, 2026: Traffic Hardening & Concurrency Protection</b> (Click to expand) </summary>
+<summary><b>Feb 10, 2026: Traffic Hardening & S3 Asset Integration</b> (Click to expand) </summary>
 
 ### Phase 1: Tiered Rate Limiting & Identity Upgrades
 * **Multi-Tiered Throttling Logic**: Engineered a user-aware rate limiter that distinguishes between anonymous IP traffic and authenticated JWT users. Implemented a "VIP" throughput model (20 req/sec vs 5 req/sec) to ensure high availability for registered members while protecting public endpoints from brute-force attacks.
@@ -227,9 +230,15 @@ Invoke-RestMethod -Method GET -Uri http://localhost:880/projects -Headers @{ Aut
 * **Thread-Safe Visitor Registry**: Implemented a global visitor map protected by `sync.RWMutex`. Utilized a **Double-Checked Locking** pattern to optimize the "Happy Path," ensuring that existing visitors are verified with read-locks to maximize throughput under heavy parallel load.
 * **Automated Memory Reclamation**: Developed a background "Janitor" goroutine that performs periodic sweeps of the visitor registry. This ensures that the system automatically prunes stale entries (inactive for >10 mins), maintaining a stable memory footprint regardless of long-term uptime.
 
-### Phase 3: Defensive Architecture & Verification
-* **Standardized 429 Error Bridge**: Integrated the rate limiter with the `CustomHTTPErrorHandler` via a new `ErrRateLimitExceeded` sentinel error. This ensures that clients receive a standardized JSON response with appropriate machine-readable error codes and human-friendly messages.
-* **Race-Checked Integration Testing**: Developed a robust suite of integration tests in the `tests` package. Verified the tiered limits, context injection, and thread safety using the Go Race Detector (`-race`) to guarantee zero data races in the middleware signal chain.
+### Phase 3: S3-Compatible Storage Integration (MinIO)
+* **Streaming Asset Pipeline**: Implemented a high-performance file upload system using an `io.Reader` stream. This allows the backend to pipe data directly from the HTTP request to MinIO, maintaining a flat memory footprint even when handling large binary assets.
+* **UUID-Based Object Namespacing**: Developed a filename sanitization and namespacing logic that prefixes all assets with unique UUIDs. This prevents object collisions in the S3 bucket while preserving the original user-friendly filename in the metadata.
+* **Scoped RBAC Protection**: Enforced strict ownership-based access control for storage operations. Only the Project Owner or the designated Task Assignee can trigger `POST` (Upload) or `DELETE` actions, while project members are granted "Read-Only" metadata access.
+
+### Phase 4: Defensive Architecture & Verification
+* **Atomic Metadata Sync**: Orchestrated the deletion sequence to ensure physical storage objects are purged from MinIO immediately before the database record is removed, preventing "dangling" S3 objects.
+* **Standardized 429 Error Bridge**: Integrated the rate limiter with the `CustomHTTPErrorHandler` via a new `ErrRateLimitExceeded` sentinel error, ensuring machine-readable JSON responses for throttled clients.
+* **Race-Checked Integration Testing**: Verified the tiered limits and storage signal chain using the Go Race Detector (`-race`) to guarantee zero data races during concurrent upload/delete cycles.
 </details>
 
 <details>

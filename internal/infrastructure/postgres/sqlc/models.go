@@ -53,6 +53,16 @@ type TaskActivity struct {
 	CreatedAt pgtype.Timestamptz
 }
 
+type TaskAttachment struct {
+	ID        int64
+	TaskID    int64
+	UserID    int64
+	FileName  string
+	FileKey   string
+	FileUrl   string
+	CreatedAt pgtype.Timestamptz
+}
+
 type User struct {
 	ID           int64
 	Email        string

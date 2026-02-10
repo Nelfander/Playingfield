@@ -14,7 +14,7 @@ import (
 func TestTaskService_Create(t *testing.T) {
 	taskRepo := NewFakeRepository()
 	projRepo := projects.NewFakeRepository()
-	svc := NewService(taskRepo, projRepo, nil)
+	svc := NewService(taskRepo, projRepo, nil, nil)
 	ctx := context.Background()
 
 	ownerID := int64(1)
@@ -55,7 +55,7 @@ func TestTaskService_Create(t *testing.T) {
 func TestTaskService_UpdatePermissions(t *testing.T) {
 	taskRepo := NewFakeRepository()
 	projRepo := projects.NewFakeRepository()
-	svc := NewService(taskRepo, projRepo, nil)
+	svc := NewService(taskRepo, projRepo, nil, nil)
 	ctx := context.Background()
 
 	ownerID := int64(1)
@@ -104,7 +104,7 @@ func TestTaskService_UpdatePermissions(t *testing.T) {
 func TestTaskService_HistoryPermissions(t *testing.T) {
 	taskRepo := NewFakeRepository()
 	projRepo := projects.NewFakeRepository()
-	svc := NewService(taskRepo, projRepo, nil)
+	svc := NewService(taskRepo, projRepo, nil, nil)
 	ctx := context.Background()
 
 	ownerID := int64(1)
@@ -141,7 +141,7 @@ func TestTaskService_WebSocketBroadcast(t *testing.T) {
 	// setup Service
 	taskRepo := NewFakeRepository()
 	projRepo := projects.NewFakeRepository()
-	svc := NewService(taskRepo, projRepo, hub)
+	svc := NewService(taskRepo, projRepo, nil, hub)
 
 	ctx := context.Background()
 	ownerID := int64(100)
@@ -176,7 +176,7 @@ func TestTaskService_WebSocketIntegration(t *testing.T) {
 
 	taskRepo := NewFakeRepository()
 	projRepo := projects.NewFakeRepository()
-	svc := NewService(taskRepo, projRepo, hub) // inject the REAL hub
+	svc := NewService(taskRepo, projRepo, nil, hub) // inject the REAL hub
 
 	ctx := context.Background()
 	ownerID := int64(100)

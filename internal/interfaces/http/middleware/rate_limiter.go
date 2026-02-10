@@ -42,7 +42,7 @@ func cleanupVisitors() {
 	}
 }
 
-// this is only so that tests can clear the state
+// this is only so that tests can clear the state,
 // in prod we do want visitors map to persist
 func ResetVisitors() {
 	mu.Lock()

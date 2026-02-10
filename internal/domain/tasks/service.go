@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 
+	"github.com/nelfander/Playingfield/internal/domain"
 	"github.com/nelfander/Playingfield/internal/domain/projects"
 
 	"github.com/nelfander/Playingfield/internal/infrastructure/ws"
@@ -19,13 +21,15 @@ var (
 type Service struct {
 	repo        Repository
 	projectRepo projects.Repository
+	storage     domain.StorageProvider
 	hub         *ws.Hub
 }
 
-func NewService(repo Repository, projectRepo projects.Repository, hub *ws.Hub) *Service {
+func NewService(repo Repository, projectRepo projects.Repository, storage domain.StorageProvider, hub *ws.Hub) *Service {
 	return &Service{
 		repo:        repo,
 		projectRepo: projectRepo,
+		storage:     storage,
 		hub:         hub,
 	}
 }
@@ -212,4 +216,141 @@ func (s *Service) ListTasks(ctx context.Context, requesterID int64, projectID in
 
 	//  Fetch the tasks
 	return s.repo.ListTaskByProject(ctx, projectID)
+}
+
+func (s *Service) UploadAttachment(ctx context.Context, requesterID int64, taskID int64, fileName string, content io.Reader) (*TaskAttachment, error) {
+	// fetch the task
+	task, err := s.repo.GetTaskByID(ctx, taskID)
+	if err != nil {
+		return nil, fmt.Errorf("task not found: %w", err)
+	}
+
+	// fetch the project to verify ownership
+	project, err := s.projectRepo.GetByID(ctx, task.ProjectID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to verify project ownership: %w", err)
+	}
+
+	// ss requester the owner OR the assignee?
+	isOwner := project.OwnerID == requesterID
+	isAssignee := task.AssignedTo != nil && *task.AssignedTo == requesterID
+
+	if !isOwner && !isAssignee {
+		slog.Warn("unauthorized attachment upload attempt",
+			"task_id", taskID,
+			"requester_id", requesterID)
+		return nil, ErrUnauthorized
+	}
+
+	// this streams content without loading the whole file into RAM
+	uploadResult, err := s.storage.UploadFile(ctx, fileName, content)
+	if err != nil {
+		return nil, fmt.Errorf("failed to upload to storage: %w", err)
+	}
+
+	// save metadata to DB
+	attachment := &TaskAttachment{
+		TaskID:   taskID,
+		UserID:   requesterID,
+		FileName: fileName,
+		FileSize: uploadResult.Size,
+		FileUrl:  uploadResult.URL,
+	}
+
+	// This repo method also records the "UPLOADED" activity log
+	created, err := s.repo.CreateAttachment(ctx, attachment, uploadResult.Key)
+	if err != nil {
+		return nil, err
+	}
+
+	slog.Info("file attached to task", "task_id", taskID, "file_name", fileName)
+
+	return created, nil
+}
+
+func (s *Service) DeleteAttachment(ctx context.Context, requesterID int64, attachmentID int64) error {
+	// get attachment info
+	att, fileKey, err := s.repo.GetAttachmentByID(ctx, attachmentID)
+	if err != nil {
+		return fmt.Errorf("attachment not found: %w", err)
+	}
+
+	// fetch the task to see who is assigned
+	task, err := s.repo.GetTaskByID(ctx, att.TaskID)
+	if err != nil {
+		return fmt.Errorf("task not found: %w", err)
+	}
+
+	// fetch the project to see who the owner is
+	project, err := s.projectRepo.GetByID(ctx, task.ProjectID)
+	if err != nil {
+		return fmt.Errorf("failed to verify project: %w", err)
+	}
+
+	//  Owner OR Assignee can delete
+	isOwner := project.OwnerID == requesterID
+	isAssignee := task.AssignedTo != nil && *task.AssignedTo == requesterID
+
+	if !isOwner && !isAssignee {
+		slog.Warn("unauthorized attachment deletion attempt",
+			"attachment_id", attachmentID,
+			"requester_id", requesterID,
+			"task_id", task.ID)
+		return ErrUnauthorized
+	}
+
+	// remove from MinIO
+	if err := s.storage.DeleteFile(ctx, fileKey); err != nil {
+		return fmt.Errorf("failed to delete file from storage: %w", err)
+	}
+
+	// remove from DB
+	if err := s.repo.DeleteAttachment(ctx, attachmentID); err != nil {
+		return fmt.Errorf("failed to delete metadata: %w", err)
+	}
+
+	// record Activity
+	_ = s.repo.RecordTaskActivity(ctx, &TaskActivity{
+		TaskID:  att.TaskID,
+		UserID:  requesterID,
+		Action:  "DELETED_FILE",
+		Details: fmt.Sprintf("Deleted file: %s", att.FileName),
+	})
+
+	slog.Info("attachment permanently deleted",
+		"attachment_id", attachmentID,
+		"task_id", att.TaskID,
+		"file_name", att.FileName,
+		"deleted_by", requesterID,
+	)
+
+	return nil
+}
+
+func (s *Service) GetTaskAttachments(ctx context.Context, requesterID int64, taskID int64) ([]*TaskAttachment, error) {
+	// fetch task to find the Project ID
+	task, err := s.repo.GetTaskByID(ctx, taskID)
+	if err != nil {
+		return nil, fmt.Errorf("task not found: %w", err)
+	}
+
+	// is user a member of this project?
+	members, err := s.projectRepo.ListUsersInProject(ctx, task.ProjectID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to verify project membership: %w", err)
+	}
+
+	isMember := false
+	for _, m := range members {
+		if m.ID == requesterID {
+			isMember = true
+			break
+		}
+	}
+
+	if !isMember {
+		return nil, ErrUnauthorized
+	}
+
+	return s.repo.GetTaskAttachments(ctx, taskID)
 }

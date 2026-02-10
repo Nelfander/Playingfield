@@ -28,14 +28,28 @@ type TaskActivity struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+type TaskAttachment struct {
+	ID        int64     `json:"id"`
+	TaskID    int64     `json:"task_id"`
+	UserID    int64     `json:"user_id"`
+	FileName  string    `json:"file_name"`
+	FileSize  int64     `json:"file_size"`
+	FileUrl   string    `json:"file_url"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
 type Repository interface {
 	CreateTask(ctx context.Context, task *Task) (*Task, error)
 	UpdateTask(ctx context.Context, task *Task) (*Task, error)
 	DeleteTask(ctx context.Context, id int64) error
 	GetTaskByID(ctx context.Context, id int64) (*Task, error)
 	ListTaskByProject(ctx context.Context, projectID int64) ([]*Task, error)
-
 	// History methods
 	RecordTaskActivity(ctx context.Context, activity *TaskActivity) error
 	GetTaskHistory(ctx context.Context, taskID int64) ([]*TaskActivity, error)
+	// Attachment methods
+	CreateAttachment(ctx context.Context, att *TaskAttachment, fileKey string) (*TaskAttachment, error)
+	GetTaskAttachments(ctx context.Context, taskID int64) ([]*TaskAttachment, error)
+	DeleteAttachment(ctx context.Context, id int64) error
+	GetAttachmentByID(ctx context.Context, id int64) (*TaskAttachment, string, error) // returns attachment + fileKey
 }

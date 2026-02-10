@@ -166,3 +166,77 @@ func toPgInt8(i *int64) pgtype.Int8 {
 	}
 	return pgtype.Int8{Int64: *i, Valid: true}
 }
+
+func (r *TaskRepository) CreateAttachment(ctx context.Context, att *tasks.TaskAttachment, fileKey string) (*tasks.TaskAttachment, error) {
+	// save metadata to task_attachments
+	res, err := r.queries.CreateAttachment(ctx, sqlc.CreateAttachmentParams{
+		TaskID:   att.TaskID,
+		UserID:   att.UserID,
+		FileName: att.FileName,
+		FileKey:  fileKey,
+		FileUrl:  att.FileUrl,
+	})
+	if err != nil {
+		slog.Error("database: create attachment failed", "task_id", att.TaskID, "error", err)
+		return nil, fmt.Errorf("db: create attachment: %w", err)
+	}
+
+	// record the activity
+	activityDetails := fmt.Sprintf("Attached file: %s", att.FileName)
+	err = r.RecordTaskActivity(ctx, &tasks.TaskActivity{
+		TaskID:  att.TaskID,
+		UserID:  att.UserID,
+		Action:  "UPLOADED",
+		Details: activityDetails,
+	})
+	if err != nil {
+		slog.Warn("attachment created but history log failed", "task_id", att.TaskID, "error", err)
+	}
+
+	return &tasks.TaskAttachment{
+		ID:        res.ID,
+		TaskID:    res.TaskID,
+		UserID:    res.UserID,
+		FileName:  res.FileName,
+		FileUrl:   res.FileUrl,
+		CreatedAt: res.CreatedAt.Time,
+	}, nil
+}
+
+func (r *TaskRepository) GetTaskAttachments(ctx context.Context, taskID int64) ([]*tasks.TaskAttachment, error) {
+	rows, err := r.queries.GetAttachmentsByTask(ctx, taskID)
+	if err != nil {
+		return nil, err
+	}
+
+	var list []*tasks.TaskAttachment
+	for _, row := range rows {
+		list = append(list, &tasks.TaskAttachment{
+			ID:        row.ID,
+			TaskID:    row.TaskID,
+			UserID:    row.UserID,
+			FileName:  row.FileName,
+			FileUrl:   row.FileUrl,
+			CreatedAt: row.CreatedAt.Time,
+		})
+	}
+	return list, nil
+}
+
+func (r *TaskRepository) GetAttachmentByID(ctx context.Context, id int64) (*tasks.TaskAttachment, string, error) {
+	res, err := r.queries.GetAttachmentByID(ctx, id)
+	if err != nil {
+		return nil, "", err
+	}
+	return &tasks.TaskAttachment{
+		ID:       res.ID,
+		TaskID:   res.TaskID,
+		UserID:   res.UserID,
+		FileName: res.FileName,
+		FileUrl:  res.FileUrl,
+	}, res.FileKey, nil
+}
+
+func (r *TaskRepository) DeleteAttachment(ctx context.Context, id int64) error {
+	return r.queries.DeleteAttachment(ctx, id)
+}

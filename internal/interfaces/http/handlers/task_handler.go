@@ -141,3 +141,72 @@ func (h *TaskHandler) GetTaskHistory(c echo.Context) error {
 
 	return c.JSON(http.StatusOK, history)
 }
+
+// POST /tasks/:id/attachments
+func (h *TaskHandler) UploadAttachment(c echo.Context) error {
+	taskID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid task id")
+	}
+
+	// get the file from the form data
+	file, err := c.FormFile("file")
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "file is required")
+	}
+
+	src, err := file.Open()
+	if err != nil {
+		return err
+	}
+	defer src.Close()
+
+	// get user from JWT claims
+	claims := c.Get("user").(*auth.Claims)
+
+	// call service
+	attachment, err := h.service.UploadAttachment(c.Request().Context(), claims.UserID, taskID, file.Filename, src)
+	if err != nil {
+		return err
+	}
+
+	return c.JSON(http.StatusCreated, attachment)
+}
+
+// GET /tasks/:id/attachments
+func (h *TaskHandler) GetAttachments(c echo.Context) error {
+	taskID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid task id")
+	}
+
+	claims := c.Get("user").(*auth.Claims)
+
+	// Note: You'll need to implement this light wrapper in your Service
+	// which calls repo.GetTaskAttachments after checking isMember.
+	attachments, err := h.service.GetTaskAttachments(c.Request().Context(), claims.UserID, taskID)
+	if err != nil {
+		return err
+	}
+
+	return c.JSON(http.StatusOK, attachments)
+}
+
+// DELETE /tasks/attachments/:attachment_id
+func (h *TaskHandler) DeleteAttachment(c echo.Context) error {
+	// We use :attachment_id directly here because our service
+	// uses it to find the file and the task it belongs to.
+	attachmentID, err := strconv.ParseInt(c.Param("attachment_id"), 10, 64)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid attachment id")
+	}
+
+	claims := c.Get("user").(*auth.Claims)
+
+	err = h.service.DeleteAttachment(c.Request().Context(), claims.UserID, attachmentID)
+	if err != nil {
+		return err
+	}
+
+	return c.NoContent(http.StatusNoContent)
+}

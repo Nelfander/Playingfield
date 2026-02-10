@@ -9,6 +9,11 @@ import (
 	"syscall"
 	"time"
 
+	awsConfig "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/labstack/echo/v4"
 	echomiddleware "github.com/labstack/echo/v4/middleware"
 	"github.com/nelfander/Playingfield/internal/domain/messages"
@@ -18,6 +23,7 @@ import (
 	"github.com/nelfander/Playingfield/internal/infrastructure/auth"
 	"github.com/nelfander/Playingfield/internal/infrastructure/postgres"
 	"github.com/nelfander/Playingfield/internal/infrastructure/postgres/sqlc"
+	"github.com/nelfander/Playingfield/internal/infrastructure/storage"
 	"github.com/nelfander/Playingfield/internal/infrastructure/ws"
 	"github.com/nelfander/Playingfield/internal/interfaces/http"
 	"github.com/nelfander/Playingfield/internal/interfaces/http/handlers"
@@ -54,6 +60,45 @@ func Run() {
 	// --- SQLC wrapper ---
 	queries := sqlc.New(db)
 
+	// --- S3 / MinIO Storage Setup ---
+
+	// 1. Create the AWS Credentials Provider
+	creds := credentials.NewStaticCredentialsProvider(cfg.S3AccessKey, cfg.S3SecretKey, "")
+
+	// 2. Load the SDK configuration
+	awscfg, err := awsConfig.LoadDefaultConfig(context.TODO(),
+		awsConfig.WithRegion(cfg.S3Region),
+		awsConfig.WithCredentialsProvider(creds),
+	)
+	if err != nil {
+		logger.Error("unable to load AWS SDK config", "error", err)
+		os.Exit(1)
+	}
+
+	// create S3 Client
+	s3Client := s3.NewFromConfig(awscfg, func(o *s3.Options) {
+		if cfg.S3Endpoint != "" {
+			o.BaseEndpoint = aws.String(cfg.S3Endpoint)
+		}
+		o.UsePathStyle = cfg.S3UsePathStyle
+	})
+
+	// Initialize  StorageProvider
+	storageProvider := storage.NewS3Storage(
+		s3Client,
+		cfg.S3BucketName,
+		cfg.S3PublicURL,
+		logger,
+	)
+
+	//  Quick check to see if storage is alive
+	_, err = s3Client.ListBuckets(context.TODO(), &s3.ListBucketsInput{})
+	if err != nil {
+		logger.Warn("Storage (MinIO) is not reachable. Is Docker running?", "error", err)
+	} else {
+		logger.Info("Successfully connected to S3/MinIO storage", "bucket", cfg.S3BucketName)
+	}
+
 	// --- JWT Manager ---
 	jwtManager := auth.NewJWTManager(cfg.JWTSecret, cfg.JWTExpiry)
 
@@ -72,7 +117,7 @@ func Run() {
 
 	// --- Task repo + service + handler ---
 	taskRepo := postgres.NewTaskRepository(db)
-	taskService := tasks.NewService(taskRepo, projectsRepo, hub)
+	taskService := tasks.NewService(taskRepo, projectsRepo, storageProvider, hub)
 	taskHandler := handlers.NewTaskHandler(taskService)
 
 	// --- Chat/Messages repo + service + handler ---
@@ -153,6 +198,9 @@ func Run() {
 	t.PUT("/:id", taskHandler.UpdateTask)
 	t.DELETE("/:id", taskHandler.DeleteTask)
 	t.GET("/:id/history", taskHandler.GetTaskHistory)
+	t.POST("/:id/attachments", taskHandler.UploadAttachment)
+	t.GET("/:id/attachments", taskHandler.GetAttachments)
+	t.DELETE("/attachments/:attachment_id", taskHandler.DeleteAttachment)
 
 	// project task list: /projects/:id/tasks
 	r.GET("/:id/tasks", taskHandler.ListTaskByProject)

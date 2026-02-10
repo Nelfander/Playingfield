@@ -26,7 +26,7 @@ func setupTaskHandler() (*handlers.TaskHandler, *tasks.FakeRepository, *projects
 	fakeProjRepo := projects.NewFakeRepository()
 
 	// task service needs BOTH repos
-	service := tasks.NewService(fakeTaskRepo, fakeProjRepo, nil)
+	service := tasks.NewService(fakeTaskRepo, fakeProjRepo, nil, nil)
 	handler := handlers.NewTaskHandler(service)
 
 	return handler, fakeTaskRepo, fakeProjRepo, e
