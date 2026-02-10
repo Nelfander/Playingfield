@@ -95,8 +95,10 @@ Updating or creating actions are the same.
 * Implement **user role management** (admin vs regular users). ✅ 
 * Add **unit and integration tests** for the project domain.  ✅
 * Add **Project group chats and 1 on 1 individual project member chat feature**. ✅
-* Implement **File Upload Feature**.
+* Implement **File Upload Feature**. ✅
 * Implement **The Redis Route (Distributed State)**. Not sure yet (if scaled maybe!)
+* Dockerize **Containerize**.
+* Deploy **AWS Deployment**.
 
 ---
 
