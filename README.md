@@ -102,47 +102,53 @@ Updating or creating actions are the same.
 
 ---
 
-## Quick Start
+## 🚀 Quick Start
 <details>
 <summary><b>Quick Start!</b> (Click to expand)</summary>
-1. Clone the repository:
 
-```bash
-git clone https://github.com/Nelfander/Playingfield.git
-cd Playingfield
-```
+### 1. Repository & Infrastructure
+Clone the project and spin up the supporting services (PostgreSQL & MinIO):
 
-2. Set up Neon/PostgreSQL database and update `.env` with the connection string.
+   git clone https://github.com/Nelfander/Playingfield.git
+   cd Playingfield
+   docker-compose up -d
 
-3. Generate SQLC queries (if changed):
+### 2. Backend Setup
+Configure your .env file, generate code, and launch the Go server:
 
-```bash
-sqlc generate
-```
+   # Update .env with DB and MinIO credentials
+   sqlc generate
+   go run ./cmd/server
 
-4. Run the server:
+### 3. Frontend Setup
+In a new terminal, install dependencies and start the application:
 
-```bash
-go run ./cmd/server
-```
+   cd frontend
+   npm install
+   npm start
 
-5. Use PowerShell or Postman to test:
+### 4. Use PowerShell/Postman to test OR through the Frontend(Frontend is made only for Demo Visualisation):
+Heres a few Invokes for testing! (Won't add all of them here!):
 
-```powershell
-# Login
-$login = Invoke-RestMethod -Method POST -Uri http://localhost:880/login -ContentType "application/json" -Body '{"email":"me@example.com","password":"supersecret"}'
-$token = $login.token
+  ```powershell
+  # Login
+  $login = Invoke-RestMethod -Method POST -Uri http://localhost:880/login -ContentType "application/json" -Body '{"email":"me@example.com","password":"supersecret"}'
+  $token = $login.token
 
-# Create project
-Invoke-RestMethod -Method POST -Uri http://localhost:880/projects -Headers @{ Authorization = "Bearer $token" } -ContentType "application/json" -Body '{"name":"Ball","description":"First Ball project"}'
+  # Create project
+  Invoke-RestMethod -Method POST -Uri http://localhost:880/projects -Headers @{ Authorization = "Bearer $token" } -ContentType "application/json" -Body '{"name":"Ball","description":"First Ball project"}'
 
-# List projects
-Invoke-RestMethod -Method GET -Uri http://localhost:880/projects -Headers @{ Authorization = "Bearer $token" }
-```
+  # List projects
+  Invoke-RestMethod -Method GET -Uri http://localhost:880/projects -Headers @{ Authorization = "Bearer $token" }
 
-</details>
+  # Test S3/MinIO File Upload
+  $filePath = "C:\path\to\your\test-file.png"
+   curl.exe -X POST "http://localhost:880/tasks/1/attachments" -H "Authorization: Bearer $token" -F "file=@$filePath"
+  ```
 
----
+  </details>
+
+  ---
 
 ## Code Structure
 <details>
