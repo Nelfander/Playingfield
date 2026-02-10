@@ -53,11 +53,40 @@ Updating or creating actions are the same.
 ---
 
 ## 🛠 Tech Stack
-* **Backend:** Go (Echo Framework), SQLC (Type-safe SQL), Gorilla WebSocket.
-* **Frontend:** React 18, TypeScript, Vite, CSS3 (Glassmorphism).
-* **Database:** PostgreSQL (Hosted on Neon.tech).
-* **Communication:** REST API for state + WebSockets for reactivity.
+### Backend
+- **Go (Echo framework)**
+- **SQLC** (Type-safe SQL generation)
+- **AWS SDK v2** (S3-compatible asset management)
+- **Gorilla WebSocket** (Real-time project hubs)
+- **JWT-based authentication**
+- **Auth-aware rate limiting** (Tiered throttling)
+- **Context-driven request lifecycle**
+- **Structured logging & custom HTTP error handling**
 
+### Storage & Database
+- **PostgreSQL (Neon.tech)**: Transaction-safe schema & migrations.
+- **MinIO**: S3-compatible object storage for task attachments.
+- **Atomic File Logic**: Metadata in Postgres synced with physical blobs in S3.
+
+### Frontend
+- **React 18** (Functional components & Hooks)
+- **TypeScript** (Strict type definitions)
+- **Vite** (Next-gen frontend tooling)
+- **CSS3** (Glassmorphism UI)
+
+### Communication
+- **REST API** for state management
+- **WebSockets** for real-time updates
+
+### Testing & Reliability
+- **Domain-Driven Design (DDD)**: Clear separation between infrastructure and business logic.
+- **Repository Pattern**: Using Fake Repositories for fast, isolated unit testing.
+- **Race Detection (`-race`)**: Ensuring thread-safety in WebSocket hubs and rate limiters.
+- **Structured Telemetry (slog)**: Machine-readable JSON logging for production observability.
+
+### Infrastructure
+- **Dockerized services** (Development parity)
+- **AWS Deployment** (Planned)
 ---
 
 ## Future Goals
