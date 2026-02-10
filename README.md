@@ -58,11 +58,13 @@ Updating or creating actions are the same.
 ---
 
 ## Future Goals
-* Implement **Task creation from the UI**. DONE
-* Improve **error handling and logging** further.
-* Implement **user role management** (admin vs regular users). 
-* Add **unit and integration tests** for the project domain.   Mostly Done
-* Add **Project group chats and 1 on 1 individual project member chat feature**. DONE
+* Implement **Task creation from the UI**. ✅
+* Improve **error handling and logging** further. ✅
+* Implement **user role management** (admin vs regular users). ✅ 
+* Add **unit and integration tests** for the project domain.  ✅
+* Add **Project group chats and 1 on 1 individual project member chat feature**. ✅
+* Implement **File Upload Feature**.
+* Implement **The Redis Route (Distributed State)**. Not sure yet (if scaled maybe!)
 
 ---
 

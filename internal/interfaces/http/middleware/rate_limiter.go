@@ -3,6 +3,7 @@ package middleware
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"strings"
 	"sync"
@@ -88,6 +89,8 @@ func RateLimitMiddleware(jwtManager *auth.JWTManager) echo.MiddlewareFunc {
 				burst = 10
 			}
 
+			slog.Debug("Rate limit check", "id", identifier)
+
 			// limiter logic (high performance locking)
 			mu.RLock()
 			v, exists := visitors[identifier]
@@ -111,6 +114,7 @@ func RateLimitMiddleware(jwtManager *auth.JWTManager) echo.MiddlewareFunc {
 			mu.Unlock()
 
 			if !v.limiter.Allow() {
+				slog.Warn("Rate limit exceeded", "id", identifier, "path", c.Path())
 				return ErrRateLimitExceeded
 			}
 
