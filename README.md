@@ -261,6 +261,26 @@ Heres a few Invokes for testing! (Won't add all of them here!):
 <details><summary>(Click to expand)</summary>
 
 <details>
+<summary><b>Feb 11, 2026: UI Asset Orchestration & Interaction Refinement</b> (Click to expand) </summary>
+
+### Phase 1: Interactive Asset Management UI
+* **Polymorphic File Injection**: Engineered a high-visibility "Upload File" interface by wrapping standard HTML file inputs in accessible label primitives. This allows for a streamlined, button-like appearance while maintaining native browser file-system access for secure binary transfers.
+* **Micro-Interaction Engine**: Implemented a state-driven hover logic using `onMouseEnter` and `onMouseLeave` hooks. Integrated CSS `transition` and `transform: scale(1.05)` properties to provide real-time tactile feedback, ensuring the custom label-based buttons match the interaction patterns of native `button` elements.
+
+### Phase 2: Secure Attachment Gallery
+* **Dynamic Content Hydration**: Refactored the `TaskBoard` rendering pipeline to asynchronously map MinIO-stored attachments to specific task cards. Developed an "Attachment Strip" that displays file metadata including human-readable sizes (converted via logarithmic byte-scaling).
+* **Identity-Aware Asset Access**: Implemented frontend-level RBAC (Role-Based Access Control) that conditionally renders management tools. The logic verifies `currentUserId` against `task.assigned_to` and `isOwner` props, ensuring only authorized users can trigger the `DELETE` and `UPLOAD` signal chains.
+
+### Phase 3: Binary Stream Handling & UX
+* **Client-Side Blob Synthesis**: Developed a secure download mechanism that fetches protected assets via authorized headers. The system pipes the response into a local `Blob` and triggers a programmatic `URL.createObjectURL` anchor click, allowing for authenticated downloads without exposing direct S3 bucket links.
+* **Error-Resilient File Pipelines**: Integrated `FormData` multi-part encoding for the upload stream, backed by real-time UI notifications. This ensures that server-side validation errors (like MinIO connection timeouts or size limits) are bubbled up to the user via JSON-mapped alerts.
+
+### Phase 4: Performance & Scalability
+* **Optimized Re-render Lifecycle**: Utilized React's `useEffect` with a debounced `setTimeout` strategy (150ms) to prevent "fetch-storms" when switching between projects, ensuring the UI remains snappy while the backend synchronizes complex task and file metadata.
+* **Metadata Sanitization**: Implemented `formatFileSize` and string-truncation utilities to maintain a dense, scannable Kanban layout, preventing long filenames from breaking the grid-flow in high-density task environments.
+</details>
+
+<details>
 <summary><b>Feb 10, 2026: Traffic Hardening & S3 Asset Integration</b> (Click to expand) </summary>
 
 ### Phase 1: Tiered Rate Limiting & Identity Upgrades

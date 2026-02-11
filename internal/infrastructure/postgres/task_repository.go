@@ -173,6 +173,7 @@ func (r *TaskRepository) CreateAttachment(ctx context.Context, att *tasks.TaskAt
 		TaskID:   att.TaskID,
 		UserID:   att.UserID,
 		FileName: att.FileName,
+		FileSize: att.FileSize,
 		FileKey:  fileKey,
 		FileUrl:  att.FileUrl,
 	})
@@ -198,6 +199,7 @@ func (r *TaskRepository) CreateAttachment(ctx context.Context, att *tasks.TaskAt
 		TaskID:    res.TaskID,
 		UserID:    res.UserID,
 		FileName:  res.FileName,
+		FileSize:  res.FileSize,
 		FileUrl:   res.FileUrl,
 		CreatedAt: res.CreatedAt.Time,
 	}, nil
@@ -216,6 +218,7 @@ func (r *TaskRepository) GetTaskAttachments(ctx context.Context, taskID int64) (
 			TaskID:    row.TaskID,
 			UserID:    row.UserID,
 			FileName:  row.FileName,
+			FileSize:  row.FileSize,
 			FileUrl:   row.FileUrl,
 			CreatedAt: row.CreatedAt.Time,
 		})
@@ -233,6 +236,7 @@ func (r *TaskRepository) GetAttachmentByID(ctx context.Context, id int64) (*task
 		TaskID:   res.TaskID,
 		UserID:   res.UserID,
 		FileName: res.FileName,
+		FileSize: res.FileSize,
 		FileUrl:  res.FileUrl,
 	}, res.FileKey, nil
 }

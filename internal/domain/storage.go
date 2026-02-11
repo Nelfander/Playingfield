@@ -16,4 +16,5 @@ type UploadResult struct {
 type StorageProvider interface {
 	UploadFile(ctx context.Context, fileName string, content io.Reader) (*UploadResult, error)
 	DeleteFile(ctx context.Context, key string) error
+	DownloadFile(ctx context.Context, key string) (io.ReadCloser, string, error)
 }

@@ -10,3 +10,6 @@ CREATE TABLE task_attachments (
 
 -- Index for performance
 CREATE INDEX idx_task_attachments_task_id ON task_attachments(task_id);
+
+ALTER TABLE task_attachments 
+ADD COLUMN file_size BIGINT NOT NULL DEFAULT 0;

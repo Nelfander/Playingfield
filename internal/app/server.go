@@ -201,6 +201,7 @@ func Run() {
 	t.POST("/:id/attachments", taskHandler.UploadAttachment)
 	t.GET("/:id/attachments", taskHandler.GetAttachments)
 	t.DELETE("/attachments/:attachment_id", taskHandler.DeleteAttachment)
+	t.GET("/attachments/:attachment_id/file", taskHandler.GetAttachmentFile)
 
 	// project task list: /projects/:id/tasks
 	r.GET("/:id/tasks", taskHandler.ListTaskByProject)

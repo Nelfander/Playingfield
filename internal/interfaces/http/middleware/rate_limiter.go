@@ -109,9 +109,9 @@ func RateLimitMiddleware(jwtManager *auth.JWTManager) echo.MiddlewareFunc {
 			}
 
 			// update state
-			mu.Lock()
+			mu.RLock()
 			v.lastSeen = time.Now()
-			mu.Unlock()
+			mu.RUnlock()
 
 			if !v.limiter.Allow() {
 				slog.Warn("Rate limit exceeded", "id", identifier, "path", c.Path())

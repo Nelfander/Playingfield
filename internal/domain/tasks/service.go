@@ -218,7 +218,7 @@ func (s *Service) ListTasks(ctx context.Context, requesterID int64, projectID in
 	return s.repo.ListTaskByProject(ctx, projectID)
 }
 
-func (s *Service) UploadAttachment(ctx context.Context, requesterID int64, taskID int64, fileName string, content io.Reader) (*TaskAttachment, error) {
+func (s *Service) UploadAttachment(ctx context.Context, requesterID int64, taskID int64, fileName string, fileSize int64, content io.Reader) (*TaskAttachment, error) {
 	// fetch the task
 	task, err := s.repo.GetTaskByID(ctx, taskID)
 	if err != nil {
@@ -253,7 +253,7 @@ func (s *Service) UploadAttachment(ctx context.Context, requesterID int64, taskI
 		TaskID:   taskID,
 		UserID:   requesterID,
 		FileName: fileName,
-		FileSize: uploadResult.Size,
+		FileSize: fileSize,
 		FileUrl:  uploadResult.URL,
 	}
 
@@ -263,7 +263,11 @@ func (s *Service) UploadAttachment(ctx context.Context, requesterID int64, taskI
 		return nil, err
 	}
 
-	slog.Info("file attached to task", "task_id", taskID, "file_name", fileName)
+	slog.Info("file attached to task",
+		"task_id", taskID,
+		"file_name", fileName,
+		"size_mb", fmt.Sprintf("%.2f MB", float64(fileSize)/(1024*1024)),
+	)
 
 	return created, nil
 }
@@ -353,4 +357,49 @@ func (s *Service) GetTaskAttachments(ctx context.Context, requesterID int64, tas
 	}
 
 	return s.repo.GetTaskAttachments(ctx, taskID)
+}
+
+func (s *Service) GetAttachmentStream(ctx context.Context, requesterID int64, attachmentID int64) (io.ReadCloser, string, error) {
+	// get attachment metadata and the secret fileKey (S3 Key) from the repo
+	att, fileKey, err := s.repo.GetAttachmentByID(ctx, attachmentID)
+	if err != nil {
+		return nil, "", fmt.Errorf("attachment not found: %w", err)
+	}
+
+	task, err := s.repo.GetTaskByID(ctx, att.TaskID)
+	if err != nil {
+		return nil, "", fmt.Errorf("task associated with attachment not found: %w", err)
+	}
+
+	members, err := s.projectRepo.ListUsersInProject(ctx, task.ProjectID)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to verify project membership: %w", err)
+	}
+
+	isMember := false
+	for _, m := range members {
+		if m.ID == requesterID {
+			isMember = true
+			break
+		}
+	}
+
+	if !isMember {
+		slog.Warn("unauthorized attachment download attempt",
+			"attachment_id", attachmentID,
+			"requester_id", requesterID,
+			"project_id", task.ProjectID)
+		return nil, "", ErrUnauthorized
+	}
+
+	// 4. Use the StorageProvider to get the stream
+	// Note: You may need to add 'DownloadFile' to your domain.StorageProvider interface
+	// if it only has Upload/Delete currently.
+	content, contentType, err := s.storage.DownloadFile(ctx, fileKey)
+	if err != nil {
+		// slog is already on s.storage.DownloadFile
+		return nil, "", fmt.Errorf("failed to retrieve file from storage: %w", err)
+	}
+
+	return content, contentType, nil
 }

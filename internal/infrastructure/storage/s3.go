@@ -61,3 +61,26 @@ func (s *S3Storage) DeleteFile(ctx context.Context, key string) error {
 	})
 	return err
 }
+
+func (s *S3Storage) DownloadFile(ctx context.Context, key string) (io.ReadCloser, string, error) {
+	// request the object from S3/MinIO
+	output, err := s.client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(s.bucketName),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		s.logger.Error("download failed", "key", key, "error", err)
+		return nil, "", err
+	}
+
+	// default to binary stream if content type is missing
+	contentType := "application/octet-stream"
+	if output.ContentType != nil {
+		contentType = *output.ContentType
+	}
+
+	// in S3 SDK v2, GetObject returns a Body which is an io.ReadCloserperfectly
+	// matching the memory-efficient streaming requirement.
+	// return it directly so the caller can stream the bytes.
+	return output.Body, contentType, nil
+}

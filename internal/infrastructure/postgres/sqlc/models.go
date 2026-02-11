@@ -61,6 +61,7 @@ type TaskAttachment struct {
 	FileKey   string
 	FileUrl   string
 	CreatedAt pgtype.Timestamptz
+	FileSize  int64
 }
 
 type User struct {

@@ -16,18 +16,20 @@ INSERT INTO task_attachments (
     task_id, 
     user_id, 
     file_name, 
+    file_size,
     file_key, 
     file_url
 ) VALUES (
-    $1, $2, $3, $4, $5
+    $1, $2, $3, $4, $5, $6
 )
-RETURNING id, task_id, user_id, file_name, file_key, file_url, created_at
+RETURNING id, task_id, user_id, file_name, file_key, file_url, created_at, file_size
 `
 
 type CreateAttachmentParams struct {
 	TaskID   int64
 	UserID   int64
 	FileName string
+	FileSize int64
 	FileKey  string
 	FileUrl  string
 }
@@ -37,6 +39,7 @@ func (q *Queries) CreateAttachment(ctx context.Context, arg CreateAttachmentPara
 		arg.TaskID,
 		arg.UserID,
 		arg.FileName,
+		arg.FileSize,
 		arg.FileKey,
 		arg.FileUrl,
 	)
@@ -49,6 +52,7 @@ func (q *Queries) CreateAttachment(ctx context.Context, arg CreateAttachmentPara
 		&i.FileKey,
 		&i.FileUrl,
 		&i.CreatedAt,
+		&i.FileSize,
 	)
 	return i, err
 }
@@ -65,7 +69,7 @@ func (q *Queries) DeleteAttachment(ctx context.Context, id int64) error {
 }
 
 const getAttachmentByID = `-- name: GetAttachmentByID :one
-SELECT id, task_id, user_id, file_name, file_key, file_url, created_at FROM task_attachments WHERE id = $1
+SELECT id, task_id, user_id, file_name, file_key, file_url, created_at, file_size FROM task_attachments WHERE id = $1
 `
 
 // Useful for verifying ownership before deletion
@@ -80,6 +84,7 @@ func (q *Queries) GetAttachmentByID(ctx context.Context, id int64) (TaskAttachme
 		&i.FileKey,
 		&i.FileUrl,
 		&i.CreatedAt,
+		&i.FileSize,
 	)
 	return i, err
 }
@@ -90,6 +95,7 @@ SELECT
     task_id, 
     user_id, 
     file_name, 
+    file_size,
     file_url, 
     created_at
 FROM task_attachments 
@@ -102,6 +108,7 @@ type GetAttachmentsByTaskRow struct {
 	TaskID    int64
 	UserID    int64
 	FileName  string
+	FileSize  int64
 	FileUrl   string
 	CreatedAt pgtype.Timestamptz
 }
@@ -121,6 +128,7 @@ func (q *Queries) GetAttachmentsByTask(ctx context.Context, taskID int64) ([]Get
 			&i.TaskID,
 			&i.UserID,
 			&i.FileName,
+			&i.FileSize,
 			&i.FileUrl,
 			&i.CreatedAt,
 		); err != nil {

@@ -149,23 +149,34 @@ func (h *TaskHandler) UploadAttachment(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid task id")
 	}
 
-	// get the file from the form data
+	// get the file header from form data
 	file, err := c.FormFile("file")
 	if err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "file is required")
 	}
 
+	// open the file to get the io.Reader (src)
 	src, err := file.Open()
 	if err != nil {
-		return err
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to open file")
 	}
 	defer src.Close()
 
 	// get user from JWT claims
-	claims := c.Get("user").(*auth.Claims)
+	userClaims, ok := c.Get("user").(*auth.Claims)
+	if !ok {
+		return echo.NewHTTPError(http.StatusUnauthorized, "invalid user claims")
+	}
 
-	// call service
-	attachment, err := h.service.UploadAttachment(c.Request().Context(), claims.UserID, taskID, file.Filename, src)
+	attachment, err := h.service.UploadAttachment(
+		c.Request().Context(),
+		userClaims.UserID,
+		taskID,
+		file.Filename,
+		file.Size,
+		src,
+	)
+
 	if err != nil {
 		return err
 	}
@@ -209,4 +220,27 @@ func (h *TaskHandler) DeleteAttachment(c echo.Context) error {
 	}
 
 	return c.NoContent(http.StatusNoContent)
+}
+
+// GET /tasks/attachments/:attachment_id/file
+func (h *TaskHandler) GetAttachmentFile(c echo.Context) error {
+	attachmentID, err := strconv.ParseInt(c.Param("attachment_id"), 10, 64)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid attachment id")
+	}
+
+	claims, ok := c.Get("user").(*auth.Claims)
+	if !ok || claims == nil {
+		return echo.ErrUnauthorized
+	}
+
+	//  checks permissions AND returns the stream + content type
+	content, contentType, err := h.service.GetAttachmentStream(c.Request().Context(), claims.UserID, attachmentID)
+	if err != nil {
+		return err
+	}
+	defer content.Close()
+
+	// stream the binary data directly to the browser
+	return c.Stream(http.StatusOK, contentType, content)
 }

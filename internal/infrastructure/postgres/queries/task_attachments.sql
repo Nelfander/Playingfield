@@ -3,10 +3,11 @@ INSERT INTO task_attachments (
     task_id, 
     user_id, 
     file_name, 
+    file_size,
     file_key, 
     file_url
 ) VALUES (
-    $1, $2, $3, $4, $5
+    $1, $2, $3, $4, $5, $6
 )
 RETURNING *;
 
@@ -17,6 +18,7 @@ SELECT
     task_id, 
     user_id, 
     file_name, 
+    file_size,
     file_url, 
     created_at
 FROM task_attachments 
