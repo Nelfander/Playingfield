@@ -42,6 +42,7 @@ Updating or creating actions are the same.
 * **Concurrency-First Registry:** Manages visitor state using a `sync.RWMutex` with a "Double-Checked Locking" pattern. This ensures the rate limiter never becomes a bottleneck during traffic spikes.
 * **Automated Memory Reclamation:** A background "Janitor" goroutine monitors the visitor registry, automatically pruning inactive entries every 10 minutes to maintain a flat memory footprint.
 * **Lazy JWT Verification:** Optimized middleware chain that "peeks" at the Authorization header to identify users, caching verified claims in the request context to avoid redundant cryptographic operations in downstream handlers.
+* **CORS-Aware Throttling:** Optimized the middleware to recognize OPTIONS pre-flight signatures, preventing "False-Positive" rate-limiting of browser security handshakes.
 
 ### 🛠️ Reliability & Observability
 * **Storage Provider Abstraction:** Abstracted storage logic into a `StorageProvider` interface, allowing the application to swap between local MinIO and AWS S3 with zero code changes in the domain layer.
@@ -259,6 +260,27 @@ Heres a few Invokes for testing! (Won't add all of them here!):
 
 ## 🛠 <b>Development History</b>
 <details><summary>(Click to expand)</summary>
+
+<details>
+<summary><b>Feb 12, 2026: Atomic Concurrency & Stateful Socket Orchestration</b> (Click to expand) </summary>
+
+### Phase 1: Atomic Rate-Limiter Engine (Backend)
+* **Lock-Free Concurrency Control**: Replaced traditional `sync.Mutex` overhead in the rate-limiting middleware with `atomic` primitives. By utilizing atomic addition and comparison, the system now performs thread-safe request counting with zero kernel-level context switching, significantly reducing latency during high-frequency WebSocket bursts.
+* **Low-Level Sync Primitives**: Leveraged the `sync/atomic` package to manage the user request window. This ensures that even with hundreds of concurrent WebSocket events, the rate-limiter increment/decrement cycle remains consistent across Go's G-M-P scheduler without the risk of race conditions or deadlock.
+
+### Phase 2: Intent-Aware Read Receipts (Frontend)
+* **Conditional Visibility Logic**: Engineered a "Reply-Sensitive" seen status. Developed a logic gate that identifies the `lastReadMessageByMe` and verifies it against the `lastOverallMessage` in the stack. This ensures "Seen" indicators persist during a one-way message stream but intelligently clear as soon as a reply is received to maintain a clean UI.
+* **Automated Acknowledgment Loop**: Integrated a side-effect hook within the `DirectMessageBox` that monitors the message array. The system automatically detects unread incoming payloads from the peer and dispatches a `read_receipt` WebSocket frame, closing the loop between client-side viewing and database state persistence.
+
+### Phase 3: WebSocket Lifecycle & Profiling
+* **Pprof-Driven Resource Audit**: Conducted a deep-dive analysis using `net/http/pprof` to visualize the Goroutine stack. Verified the "Read/Write Pump" cleanup cycle, ensuring that closing a chat component triggers a clean termination of backend routines, preventing "Zombie Goroutines" from leaking memory.
+* **Asynchronous History Hydration**: Optimized the DM initial load by decoupling the WebSocket connection from the RESTful history fetch. This ensures the user sees past messages immediately via an authorized `GET` request while the bidirectional socket initializes in the background.
+
+### Phase 4: UX Interaction & Polish
+* **State-Synchronized Indicators**: Refined the `useDirectChat` hook to handle `message_read` broadcast events. When a peer reads a message, the state-reducer maps the timestamp to the specific message ID, triggering a localized re-render of the "✓ Seen" UI element without a full-list refresh.
+* **Typing State Encapsulation**: Implemented a "Typing Shelf" outside the message scroll area to prevent layout shifts. Used a `useRef` timeout strategy to debounce the `is_typing` signal, ensuring the backend isn't flooded with status updates on every keystroke.
+
+</details>
 
 <details>
 <summary><b>Feb 11, 2026: UI Asset Orchestration & Interaction Refinement</b> (Click to expand) </summary>

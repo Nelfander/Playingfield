@@ -11,6 +11,7 @@ import (
 )
 
 func TestRateLimitMiddleware(t *testing.T) {
+	ResetVisitors() // ensures a clean map for the test
 	// setup echo
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -22,7 +23,7 @@ func TestRateLimitMiddleware(t *testing.T) {
 		return c.String(http.StatusOK, "passed")
 	})
 
-	// test: initial requests should pass (Burst is 10)
+	// test: initial requests should pass (burst is 10)
 	for i := 0; i < 10; i++ {
 		err := handler(c)
 		assert.NoError(t, err)

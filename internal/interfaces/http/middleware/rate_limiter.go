@@ -7,6 +7,7 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/labstack/echo/v4"
@@ -16,7 +17,7 @@ import (
 
 type visitor struct {
 	limiter  *rate.Limiter
-	lastSeen time.Time
+	lastSeen atomic.Int64
 }
 
 var (
@@ -34,7 +35,8 @@ func cleanupVisitors() {
 		time.Sleep(time.Minute)
 		mu.Lock()
 		for ip, v := range visitors {
-			if time.Since(v.lastSeen) > 10*time.Minute {
+			// load atomically and convert to time
+			if time.Since(time.Unix(v.lastSeen.Load(), 0)) > 10*time.Minute {
 				delete(visitors, ip)
 			}
 		}
@@ -43,7 +45,7 @@ func cleanupVisitors() {
 }
 
 // this is only so that tests can clear the state,
-// in prod we do want visitors map to persist
+// in prod we want visitors map to persist
 func ResetVisitors() {
 	mu.Lock()
 	defer mu.Unlock()
@@ -53,6 +55,11 @@ func ResetVisitors() {
 func RateLimitMiddleware(jwtManager *auth.JWTManager) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
+			// skip rate limiting for browser CORS pre-flight requests,
+			// these don't carry JWTs and shouldn't consume the user's quota
+			if c.Request().Method == "OPTIONS" {
+				return next(c)
+			}
 			var identifier string
 			var limit rate.Limit
 			var burst int
@@ -61,7 +68,7 @@ func RateLimitMiddleware(jwtManager *auth.JWTManager) echo.MiddlewareFunc {
 			authHeader := c.Request().Header.Get("Authorization")
 
 			// check if there is a valid token to upgrade the rate limit
-			if strings.HasPrefix(authHeader, "Bearer ") {
+			if jwtManager != nil && strings.HasPrefix(authHeader, "Bearer ") {
 				tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
 				claims, err := jwtManager.VerifyToken(tokenStr)
 
@@ -100,18 +107,16 @@ func RateLimitMiddleware(jwtManager *auth.JWTManager) echo.MiddlewareFunc {
 				mu.Lock()
 				if v, exists = visitors[identifier]; !exists {
 					v = &visitor{
-						limiter:  rate.NewLimiter(limit, burst),
-						lastSeen: time.Now(),
+						limiter: rate.NewLimiter(limit, burst),
 					}
+					v.lastSeen.Store(time.Now().Unix())
 					visitors[identifier] = v
 				}
 				mu.Unlock()
 			}
 
 			// update state
-			mu.RLock()
-			v.lastSeen = time.Now()
-			mu.RUnlock()
+			v.lastSeen.Store(time.Now().Unix())
 
 			if !v.limiter.Allow() {
 				slog.Warn("Rate limit exceeded", "id", identifier, "path", c.Path())

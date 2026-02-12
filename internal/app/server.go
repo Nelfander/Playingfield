@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	stdhttp "net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"syscall"
@@ -127,6 +128,16 @@ func Run() {
 
 	//  Start the Hub in a background goroutine
 	go hub.Run()
+
+	// --- Performance Profiling (pprof) ---
+	// This starts a private server on port 6060 just for internal checks.
+	// In production, you would block this port via firewall.
+	go func() {
+		slog.Info("Starting pprof sidecar", "port", "6060")
+		if err := stdhttp.ListenAndServe("localhost:6060", nil); err != nil {
+			slog.Error("pprof server failed", "error", err)
+		}
+	}()
 
 	// WebSocket handler creation
 	wsHandler := handlers.NewWSHandler(jwtManager, hub, chatService)

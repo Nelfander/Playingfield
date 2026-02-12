@@ -81,6 +81,5 @@ func (s *S3Storage) DownloadFile(ctx context.Context, key string) (io.ReadCloser
 
 	// in S3 SDK v2, GetObject returns a Body which is an io.ReadCloserperfectly
 	// matching the memory-efficient streaming requirement.
-	// return it directly so the caller can stream the bytes.
 	return output.Body, contentType, nil
 }

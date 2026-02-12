@@ -28,6 +28,25 @@ export const DirectMessageBox: React.FC<DirectMessageBoxProps> = ({
     const typingTimeoutRef = useRef<any>(null);
     const currentUserId = Number(localStorage.getItem("userId"));
 
+    // --- 1. Identify the last overall message and the last message I sent ---
+    const lastOverallMessage = messages.length > 0 ? messages[messages.length - 1] : null;
+
+    // Find the ID of the most recent message sent by me that has been read
+    const lastReadMessageByMe = [...messages]
+        .reverse()
+        .find(m => Number(m.sender_id) === currentUserId && m.read_at);
+
+    // --- 2. Trigger Read Receipt when new messages arrive from the other user ---
+    useEffect(() => {
+        if (lastOverallMessage) {
+            if (Number(lastOverallMessage.sender_id) === otherUserId && !lastOverallMessage.read_at) {
+                console.log("📖 Sending read receipt for message:", lastOverallMessage.id);
+                sendReadReceipt(lastOverallMessage.id, otherUserId);
+            }
+        }
+    }, [messages, otherUserId, sendReadReceipt, lastOverallMessage]);
+
+    // --- 3. Fetch History ---
     useEffect(() => {
         const fetchHistory = async () => {
             try {
@@ -46,7 +65,7 @@ export const DirectMessageBox: React.FC<DirectMessageBoxProps> = ({
         if (otherUserId && token) fetchHistory();
     }, [otherUserId, token, setMessages]);
 
-    // Scroll only when NEW MESSAGES arrive, not when typing happens
+    // --- 4. Scroll to Bottom ---
     useEffect(() => {
         if (messageListRef.current) {
             messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
@@ -82,10 +101,6 @@ export const DirectMessageBox: React.FC<DirectMessageBoxProps> = ({
         return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     };
 
-    const lastSentMessageId = [...messages]
-        .reverse()
-        .find(m => Number(m.sender_id) === currentUserId)?.id;
-
     return (
         <div style={styles.container}>
             <div style={styles.header}>
@@ -95,12 +110,18 @@ export const DirectMessageBox: React.FC<DirectMessageBoxProps> = ({
                 </span>
             </div>
 
-            {/* Scrollable Area */}
             <div ref={messageListRef} style={styles.messageList}>
                 {(messages || []).map((m, i) => {
                     const isMe = Number(m.sender_id) === currentUserId;
                     const time = formatTime(m.created_at);
-                    const showSeen = isMe && m.id === lastSentMessageId && (m as any).read_at;
+
+                    // --- REFINED SEEN LOGIC ---
+                    // 1. Is it a message I sent?
+                    // 2. Is it the most recently read message of mine?
+                    // 3. Has the other person NOT replied yet? (Last message in chat is still from me)
+                    const isLastReadByMe = lastReadMessageByMe?.id === m.id;
+                    const otherHasNotReplied = Number(lastOverallMessage?.sender_id) === currentUserId;
+                    const showSeen = isMe && isLastReadByMe && otherHasNotReplied;
 
                     return (
                         <div
@@ -129,7 +150,6 @@ export const DirectMessageBox: React.FC<DirectMessageBoxProps> = ({
                 })}
             </div>
 
-            {/* STICKY TYPING SHELF (Outside the scroll area) */}
             <div style={styles.typingShelf}>
                 {isTyping && Number(typingUserId) === Number(otherUserId) && (
                     <span style={styles.typingIndicator}>
