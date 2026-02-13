@@ -90,6 +90,67 @@ Updating or creating actions are the same.
 - **AWS Deployment** (Planned)
 ---
 
+## 🏛 Architectural Decisions 
+
+Choosing the right stack was a balance between Go's high-performance concurrency and developer productivity.
+
+#### 1. Backend: Echo Framework vs. Gin
+* **Decision**: [Echo](https://echo.labstack.com/)
+* **Reasoning**: Echo was selected for its superior performance benchmarks and built-in middleware capabilities (specifically for JWT and CORS). While Gin is a standard, Echo’s `Context` handling felt more idiomatic for this project's WebSocket hub orchestration. With that beeing said if I would do this project again I would totally do it with Gin Framework just to see the differences. At the time I started this project I was under the immpresion that Echo is the Go-to!
+* **Evaluation**: Post-implementation, Echo's centralized error handling proved highly effective for managing real-time stream failures.
+
+#### 2. Schema Strategy: Why SQLC over raw `database/sql`?
+* **Decision**: [sqlc](https://sqlc.dev/) for Type-Safe Queries
+* **The "Why"**: A lot of people use heavy ORMs like GORM because they think it makes switching databases easy, but I think that in the real world you rarely switch your DB. What you *do* do is change your schema. I wanted a tool that would catch my mistakes early.
+* **The Logic**: With sqlc, I write raw SQL for Postgres and it generates the Go code for me. If I change a column name in the DB but forget to update my queries, the code won't compile. It gives me the performance of raw SQL with the safety of a compiled language, so I don't have to worry about runtime "null pointer" crashes when fetching project data.
+
+#### 3. State Management: React Hooks + WebSockets
+* **Decision**: Encapsulated Hook Pattern (`useDirectChat`)
+* **Reasoning**: Instead of a global store (Redux), I opted for localized state management via custom hooks. This ensures that WebSocket subscriptions are lifecycle-aware; when a user leaves a chat component, the connection is cleaned up immediately, preventing goroutine leaks on the Go backend.
+
+#### 4. File Storage: Why MinIO (S3) instead of just the DB?
+* **Decision**: [MinIO](https://min.io/)
+* **The "Why"**: I didn't want to bloat my Postgres database with binary file data (BLOBs), which makes backups a nightmare and slows down queries. I went with MinIO because it’s S3-compatible. This way, when I move the app to AWS, I can just point the config to an S3 bucket and the code won't change.
+* **The Logic**: The backend acts as a gatekeeper. Instead of making files public, the Go API checks if you're authorized and then streams the file from MinIO to you. It keeps the data secure without exposing my storage server to the internet.
+
+#### 5. High-Frequency Counting: Atomics over Mutex
+* **Decision**: `sync/atomic` for the Rate Limiter
+* **The "Why"**: Initially, I thought about using a Mutex to lock the rate-limiter count, but Mutexes are heavy because they make other threads wait in line. Since the rate-limiter runs on every single request, I wanted it to be as "invisible" as possible.
+* **The Logic**: I used Atomic Compare-And-Swap (CAS). It handles the math at the CPU hardware level. It's non-blocking, meaning the WebSocket hub can keep pushing messages without getting stuck behind a database lock or a slow middleware check.
+
+#### 6. Real-Time: WebSockets vs. HTTP Polling
+* **Decision**: Bidirectional WebSockets
+* **The "Why"**: For a chat and task board, I wanted updates to be instant. Refreshing every 5 seconds (polling) felt "laggy" and wastes a lot of bandwidth on headers. 
+* **The Logic**: I built a Hub/Client pattern in Go. The biggest challenge here wasn't sending messages, but managing the "state" of the connection—making sure that when a user closes their browser, the server cleans up the goroutine so I don't leak memory. It makes the UI feel snappy, like a real desktop app.
+
+#### 7. Project Isolation: Why a Centralized Hub?
+* **Decision**: Single-Hub Multiplexing
+* **The "Why"**: I had to decide between creating a new "room" for every project or having one central Hub that handles everything. I went with a centralized Hub because it simplifies the WebSocket lifecycle. 
+* **The Logic**: The Hub maintains a map of project IDs to sets of clients. Instead of a user having 10 different socket connections for 10 projects, they have one persistent connection, and the backend "routes" the messages based on the `project_id` in the JSON payload. It’s much lighter on the server's file descriptors.
+
+#### 8. Ephemeral State: Typing Indicators & Redis
+* **Decision**: In-Memory Status (vs. Database updates)
+* **The "Why"**: "Typing..." status changes every second. If I saved that to Postgres, the database would be crushed by useless writes. 
+* **The Logic**: I treat typing indicators as "fire-and-forget" events. The server broadcasts them immediately to other members of the project but never touches the disk. For the portfolio, I implemented this in-memory, but I designed the Hub so I could easily swap in **Redis Pub/Sub** if I ever need to scale this across multiple server instances.
+
+#### 9. Pattern: Monolithic Evolution
+* **Decision**: Single Project Monolith
+* **The "Why"**: This project began as a focused exercise to learn Go's fundamentals. As I grew more comfortable with the language, I began adding new features that I learned that exist and sounded cool to me  (like WebSockets and S3 storage). 
+* **The Logic**: While I considered breaking these into microservices, I decided to keep the architecture monolithic. This allowed me to focus on learning Go's concurrency and internal package structures without the "network tax" and operational overhead of managing multiple independent services.
+* **Future-Proofing**: Because the code is organized into clean internal packages (Auth, Chat, Projects), the boundaries are already defined. If I needed to scale the Chat Hub independently on AWS in the future, it is already "seamed" for a clean break into a microservice.
+
+#### 10. Deployment: Containerized Environment  (TO-DO)
+* **Decision**: Docker-Compose Orchestration
+* **The "Why"**: I want a "one-command" setup. I dont want anyone to struggle with installing Postgres versions or configuring MinIO buckets manually. 
+* **The Logic**: By splitting the project into four containers (Frontend, Backend, DB, Storage), I create a modular environment. This makes the app "Infrastructure Agnostic"—I can run it on my local laptop, a Raspberry Pi, or scale it up to AWS ECS without changing a single line of application code.
+
+#### 11. Database Infrastructure: Neon (Serverless Postgres)
+* **Decision**: [Neon](https://neon.tech/)
+* **The "Why"**: I chose Neon over a standard self-hosted Postgres instance to leverage its serverless architecture. This allows for instant database branching—meaning I can create a copy of my production data for testing without any downtime or manual exports.
+* **The Logic**: Neon’s built-in connection pooling (via PgBouncer) is a perfect match for a Go backend. Since Go's `database/sql` opens multiple connections under high load, Neon ensures the database doesn't hit its connection limit, maintaining stability even during high-frequency WebSocket traffic.
+
+---
+
 ## Future Goals
 * Implement **Task creation from the UI**. ✅
 * Improve **error handling and logging** further. ✅
