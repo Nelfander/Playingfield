@@ -216,17 +216,120 @@ Heres a few Invokes for testing! (Won't add all of them here!):
 
   ---
 
-## Code Structure
-<details>
-<summary>(Click to expand)</summary>
 
-* `internal/domain/user` – domain model, repository interfaces.
-* `internal/domain/projects` – project domain, service, repository interface.
-* `internal/infrastructure/postgres` – SQLC-based repository implementation, DB adapter.
-* `cmd/server` – Echo server initialization and routing.
+## 🧪 Testing 
+
+The project employs a tiered testing strategy using Go's native toolchain and the `testify/assert` library. By utilizing **Stateful Fake Repositories**, the suite ensures high execution speed and 100% data consistency without the overhead of a live database.
 
 ---
+
+### 🏎️ Concurrency & Race Safety
+The entire suite is verified using the **Go Race Detector** to ensure thread-safety in high-concurrency environments (like WebSockets).
+
+* **CGO Enabled:** Configured with MinGW-w64 to support runtime memory analysis.
+* **Thread-Safe Fakes:** Repositories utilize `sync.RWMutex` to prevent data races during parallel test execution.
+* **Verification:** Run the full race-detection suite with:
+  ```bash
+  $env:CGO_ENABLED = "1"; go test -race ./...
+
+---
+
+
+### 🧩 Domain & Unit Testing (Logic Layer)
+These tests focus on core business rules in isolation. They sit within the domain packages to verify that the "brain" of the application works correctly.
+
+<details>
+<summary><b>💬 Messaging & Authorization Logic</b></summary>
+
+Validated within `internal/domain/messages/`.
+
+* **Logic Gates:** Verifies that project messages are only accepted from verified members.
+* **Social Constraints:** Ensures Direct Messages (DMs) are restricted to users who share at least one project.
+* **Stateful Persistence:** Uses a `FakeRepository` to simulate message storage and chronological retrieval.
+* **Nil-Resilience:** Validates that service methods handle infrastructure (WebSocket Hub) availability gracefully.
+* **Execution:** `go test -v ./internal/domain/messages`
 </details>
+
+<details>
+<summary><b>🏗️ Project Lifecycle & Ownership</b></summary>
+
+Validated within `internal/domain/projects/`.
+
+* **Ownership Guardrails:** Ensures only the project creator can delete resources or manage members.
+* **Auto-Provisioning:** Validates that the system correctly assigns roles upon project creation.
+* **Service-Based Seeding:** Uses the Service layer in tests to ensure realistic system states (e.g., owners are automatically members).
+* **Member Management:** Tests the "Join Table" logic in-memory to ensure member lists are accurate.
+* **Execution:** `go test -v ./internal/domain/projects`
+</details>
+
+<details>
+<summary><b>📋 Task Management & Cross-Domain Security</b></summary>
+
+Validated within `internal/domain/tasks/`.
+
+* **Multi-Role Authorization:** Verifies the "VIP lanes" for updates—ensuring only Project Owners OR the specific Task Assignee can modify status.
+* **Audit Trails:** Validates that every task action (Create/Update) automatically triggers a `TaskActivity` log entry.
+* **Cross-Domain Integrity:** Tests the service's ability to verify project-level permissions before performing task-level actions.
+* **Context Respect:** Ensures all repository methods correctly honor context deadlines and cancellations.
+* **Execution:** `go test -v ./internal/domain/tasks`
+</details>
+
+---
+
+### 🌐 HTTP & Integration Testing (API Layer)
+
+These tests verify the "Social" integration between the HTTP layer, Middleware, and the Service layer.
+
+<details>
+<summary><b>🔐 Middleware & Security</b></summary>
+
+Validated within `internal/interfaces/http/middleware/`.
+
+* **JWT Integrity:** Ensures `JWTMiddleware` correctly extracts and validates tokens from headers.
+* **Context Injection:** Verifies that user identity (ID, Role) is correctly passed to the internal logic.
+* **RBAC Enforcement:** Validates that `RequireRole` blocks unauthorized access to sensitive routes.
+* **Execution:** `go test -v ./internal/interfaces/http/middleware/...`
+</details>
+
+<details>
+<summary><b>🚀 API Handler Endpoints & Error Translation</b></summary>
+
+Validated within `internal/interfaces/http/tests/`.
+
+* **Centralized Error Mapping:** Verifies that Domain Sentinel errors (like `ErrUnauthorized`) are correctly translated into standard HTTP codes (403, 404, 409).
+* **End-to-End Persistence:** Tests the full flow from an HTTP request through the Service layer into the Fake Repository.
+* **Security Resilience:** Tests that unauthorized API attempts return clean, safe error messages without leaking system internals.
+* **JSON Binding:** Validates strict structural binding for complex entities like Tasks and Projects.
+* **Execution:** `go test -v ./internal/interfaces/http/tests/...`
+</details>
+
+---
+
+### ⚡ Real-Time Integration (WebSocket)
+Testing for the communication engine, verifying that messages are not only saved but correctly routed.
+
+<details>
+<summary><b>📡 Full-Circuit Broadcast Integration</b></summary>
+
+Validated through service-to-hub integration tests.
+
+* **Live Signal Chain:** Proves the "Whole Circuit"—from a Service action (creating a task) through the Hub's concurrency loop to a Client's receiver channel.
+* **Concurrency Safety:** Validates the Hub’s `sync.RWMutex` logic under simulated client registrations and broadcasts.
+* **Room-Based Isolation:** Ensures the Hub correctly manages `ProjectRooms` for targeted data delivery.
+* **Execution:** `go test -v ./internal/domain/tasks -run TestTaskService_WebSocketIntegration` , `go test -v ./internal/domain/tasks -run TestTaskService_WebSocketBroadcast`
+</details>
+
+<details>
+<summary><b>📡 WebSocket Hub & Chat Tester</b></summary>
+
+* **Connection Mapping:** Verifies the `Hub` correctly maps User IDs to active WebSocket connections.
+* **Targeted Broadcasting:** Validates that messages sent to a project are routed strictly to that project's members.
+* **Direct Messaging (P2P):** Ensures private messages are routed strictly to the sender and receiver.
+* **E2E Script:** A dedicated utility (`scripts/test_chat.go`) to verify the full "Plumbing" from Auth -> Upgrade -> Broadcast.
+* **Execution:** `go run scripts/test_chat.go`
+</details>
+
+---
 
 ## Known Issues & How I Solved Them
 <details>
@@ -763,116 +866,14 @@ JWT Claims: Security checks enforced using role-based claims within the JWT.
 
 ---
 
-## 🧪 Testing Strategy
-
-The project employs a tiered testing strategy using Go's native toolchain and the `testify/assert` library. By utilizing **Stateful Fake Repositories**, the suite ensures high execution speed and 100% data consistency without the overhead of a live database.
-
----
-
-### 🏎️ Concurrency & Race Safety
-The entire suite is verified using the **Go Race Detector** to ensure thread-safety in high-concurrency environments (like WebSockets).
-
-* **CGO Enabled:** Configured with MinGW-w64 to support runtime memory analysis.
-* **Thread-Safe Fakes:** Repositories utilize `sync.RWMutex` to prevent data races during parallel test execution.
-* **Verification:** Run the full race-detection suite with:
-  ```bash
-  $env:CGO_ENABLED = "1"; go test -race ./...
-
----
-
-
-### 🧩 Domain & Unit Testing (Logic Layer)
-These tests focus on core business rules in isolation. They sit within the domain packages to verify that the "brain" of the application works correctly.
-
+## Code Structure
 <details>
-<summary><b>💬 Messaging & Authorization Logic</b></summary>
+<summary>(Click to expand)</summary>
 
-Validated within `internal/domain/messages/`.
-
-* **Logic Gates:** Verifies that project messages are only accepted from verified members.
-* **Social Constraints:** Ensures Direct Messages (DMs) are restricted to users who share at least one project.
-* **Stateful Persistence:** Uses a `FakeRepository` to simulate message storage and chronological retrieval.
-* **Nil-Resilience:** Validates that service methods handle infrastructure (WebSocket Hub) availability gracefully.
-* **Execution:** `go test -v ./internal/domain/messages`
-</details>
-
-<details>
-<summary><b>🏗️ Project Lifecycle & Ownership</b></summary>
-
-Validated within `internal/domain/projects/`.
-
-* **Ownership Guardrails:** Ensures only the project creator can delete resources or manage members.
-* **Auto-Provisioning:** Validates that the system correctly assigns roles upon project creation.
-* **Service-Based Seeding:** Uses the Service layer in tests to ensure realistic system states (e.g., owners are automatically members).
-* **Member Management:** Tests the "Join Table" logic in-memory to ensure member lists are accurate.
-* **Execution:** `go test -v ./internal/domain/projects`
-</details>
-
-<details>
-<summary><b>📋 Task Management & Cross-Domain Security</b></summary>
-
-Validated within `internal/domain/tasks/`.
-
-* **Multi-Role Authorization:** Verifies the "VIP lanes" for updates—ensuring only Project Owners OR the specific Task Assignee can modify status.
-* **Audit Trails:** Validates that every task action (Create/Update) automatically triggers a `TaskActivity` log entry.
-* **Cross-Domain Integrity:** Tests the service's ability to verify project-level permissions before performing task-level actions.
-* **Context Respect:** Ensures all repository methods correctly honor context deadlines and cancellations.
-* **Execution:** `go test -v ./internal/domain/tasks`
-</details>
-
----
-
-### 🌐 HTTP & Integration Testing (API Layer)
-
-These tests verify the "Social" integration between the HTTP layer, Middleware, and the Service layer.
-
-<details>
-<summary><b>🔐 Middleware & Security</b></summary>
-
-Validated within `internal/interfaces/http/middleware/`.
-
-* **JWT Integrity:** Ensures `JWTMiddleware` correctly extracts and validates tokens from headers.
-* **Context Injection:** Verifies that user identity (ID, Role) is correctly passed to the internal logic.
-* **RBAC Enforcement:** Validates that `RequireRole` blocks unauthorized access to sensitive routes.
-* **Execution:** `go test -v ./internal/interfaces/http/middleware/...`
-</details>
-
-<details>
-<summary><b>🚀 API Handler Endpoints & Error Translation</b></summary>
-
-Validated within `internal/interfaces/http/tests/`.
-
-* **Centralized Error Mapping:** Verifies that Domain Sentinel errors (like `ErrUnauthorized`) are correctly translated into standard HTTP codes (403, 404, 409).
-* **End-to-End Persistence:** Tests the full flow from an HTTP request through the Service layer into the Fake Repository.
-* **Security Resilience:** Tests that unauthorized API attempts return clean, safe error messages without leaking system internals.
-* **JSON Binding:** Validates strict structural binding for complex entities like Tasks and Projects.
-* **Execution:** `go test -v ./internal/interfaces/http/tests/...`
-</details>
-
----
-
-### ⚡ Real-Time Integration (WebSocket)
-Testing for the communication engine, verifying that messages are not only saved but correctly routed.
-
-<details>
-<summary><b>📡 Full-Circuit Broadcast Integration</b></summary>
-
-Validated through service-to-hub integration tests.
-
-* **Live Signal Chain:** Proves the "Whole Circuit"—from a Service action (creating a task) through the Hub's concurrency loop to a Client's receiver channel.
-* **Concurrency Safety:** Validates the Hub’s `sync.RWMutex` logic under simulated client registrations and broadcasts.
-* **Room-Based Isolation:** Ensures the Hub correctly manages `ProjectRooms` for targeted data delivery.
-* **Execution:** `go test -v ./internal/domain/tasks -run TestTaskService_WebSocketIntegration` , `go test -v ./internal/domain/tasks -run TestTaskService_WebSocketBroadcast`
-</details>
-
-<details>
-<summary><b>📡 WebSocket Hub & Chat Tester</b></summary>
-
-* **Connection Mapping:** Verifies the `Hub` correctly maps User IDs to active WebSocket connections.
-* **Targeted Broadcasting:** Validates that messages sent to a project are routed strictly to that project's members.
-* **Direct Messaging (P2P):** Ensures private messages are routed strictly to the sender and receiver.
-* **E2E Script:** A dedicated utility (`scripts/test_chat.go`) to verify the full "Plumbing" from Auth -> Upgrade -> Broadcast.
-* **Execution:** `go run scripts/test_chat.go`
+* `internal/domain/user` – domain model, repository interfaces.
+* `internal/domain/projects` – project domain, service, repository interface.
+* `internal/infrastructure/postgres` – SQLC-based repository implementation, DB adapter.
+* `cmd/server` – Echo server initialization and routing.
 </details>
 
 ---
