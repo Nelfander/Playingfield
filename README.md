@@ -12,6 +12,9 @@ Unlike typical boilerplate task boards, it combines:
 - **Type-safe backend** using Go + Echo + SQLC, designed for maintainability
 - **Rate limiting & traffic resilience** built into the API layer
 - **React + TypeScript frontend** with real-time UI updates powered by WebSockets
+- **Structured logging** with Go slog, request-scoped fields, and centralized error handling
+- **Custom HTTP error handler** for consistent API responses
+- **Built-in rate limiting** and middleware-based traffic control
 
 ---
 
