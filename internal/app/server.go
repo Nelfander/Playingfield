@@ -131,7 +131,7 @@ func Run() {
 
 	// --- Performance Profiling (pprof) ---
 	// This starts a private server on port 6060 just for internal checks.
-	// In production, you would block this port via firewall.
+	// In production, I would block this port via firewall.
 	go func() {
 		slog.Info("Starting pprof sidecar", "port", "6060")
 		if err := stdhttp.ListenAndServe("localhost:6060", nil); err != nil {

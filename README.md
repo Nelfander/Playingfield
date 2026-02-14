@@ -1,7 +1,48 @@
-# Playingfield
+## Playingfield
 
-A real-time, collaborative project and task management application,
-built with **Go (Echo framework)**, **PostgreSQL (Neon)**, and a **React (TypeScript)** frontend.
+**Playingfield is a real-time, collaborative project and task management platform with live WebSocket sync, project-scoped chat, granular RBAC, file attachments, and structured domain logic — built for reliability and a production mindset, not just a demo app.**
+
+Unlike typical boilerplate task boards, it combines:
+
+- **Live, multi-user synchronization** via custom WebSocket hubs (no polling)
+- **Project-level real-time chat**, automatically provisioned per project
+- **Secure, token-based authentication** with strict ownership and permission checks
+- **Kanban-style task boards** with persistent history and status tracking
+- **Atomic file storage** backed by S3/MinIO with collision-proof asset naming
+- **Type-safe backend** using Go + Echo + SQLC, designed for maintainability
+- **Rate limiting & traffic resilience** built into the API layer
+- **React + TypeScript frontend** with real-time UI updates powered by WebSockets
+
+---
+
+## Who Is This For?
+
+- Developers who want a **real-time collaborative board foundation** with production-grade patterns  
+- Engineers exploring **Go-based backend architecture with structured domain separation**  
+- Builders who care about **correctness, security boundaries, and real-time systems**  
+- Anyone who wants a serious full-stack reference — not a tutorial toy  
+
+---
+
+## What Problems Does It Solve?
+
+- Eliminates **eventual consistency lag** from polling-based UIs  
+- Enables **real-time team communication scoped per project**
+- Prevents **insecure file attachment handling** with atomic storage coordination  
+- Enforces **clear ownership and permission boundaries** via RBAC  
+- Avoids fragile, tightly-coupled backend logic through structured domain layers  
+- Reduces type mismatches using **SQLC-generated, type-safe queries**
+
+---
+
+## What Makes It Different From Boilerplate Projects?
+
+- Real WebSocket orchestration powering both board updates and chat
+- Project-scoped chat automatically tied to membership boundaries
+- Explicit RBAC and ownership enforcement at the API layer
+- Atomic coordination between database records and object storage
+- Clean separation of handlers, services, repositories, and domain logic
+- Designed with extension and maintainability in mind
 
 ---
 
