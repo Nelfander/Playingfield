@@ -6,12 +6,19 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/labstack/echo/v4"
 	"github.com/nelfander/Playingfield/internal/domain/messages"
 	"github.com/nelfander/Playingfield/internal/infrastructure/auth"
 	"github.com/nelfander/Playingfield/internal/infrastructure/ws"
+)
+
+const (
+	writeWait  = 10 * time.Second    // time allowed to write a message to the peer.
+	pongWait   = 60 * time.Second    // time allowed to read the next pong message from the peer.
+	pingPeriod = (pongWait * 9) / 10 // send pings to peer with this period, must be less than pongWait.
 )
 
 type WSHandler struct {
@@ -78,18 +85,37 @@ func (h *WSHandler) HandleConnection(c echo.Context) error {
 
 	slog.Info("ws client connected", "user_id", claims.UserID, "project_id", projectID)
 
-	// This goroutine listens to the Hub and pushes messages to the browser
+	// WritePump handles the outgoing message queue and the AWS heartbeat (ping),
+	// it ensures only one goroutine is writing to the connection
 	go func() {
-		defer conn.Close()
+		// a ticker for the AWS Heartbeat
+		ticker := time.NewTicker(pingPeriod)
+		defer func() {
+			ticker.Stop()
+			conn.Close()
+		}()
+
 		for {
 			select {
 			case message, ok := <-client.Send:
+				// deadline: if the write takes > 10s, kill the connection
+				conn.SetWriteDeadline(time.Now().Add(writeWait))
+
 				if !ok {
+					// the Hub closed the channel (example: server shutting down)
+					conn.WriteMessage(websocket.CloseMessage, []byte{})
 					return
 				}
 				if err := conn.WriteMessage(websocket.TextMessage, message); err != nil {
 					return
 				}
+			case <-ticker.C:
+				// send a Ping every ~54 seconds
+				conn.SetWriteDeadline(time.Now().Add(writeWait))
+				if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+					return
+				}
+
 			case <-client.DoneChan(): // safe read-only access
 				close(client.Send)
 				return
@@ -103,16 +129,26 @@ func (h *WSHandler) HandleConnection(c echo.Context) error {
 		slog.Info("ws client disconnected", "user_id", claims.UserID)
 	}()
 
-	// The Read Loop (The "Ear")
+	// configure the connection to handle Pongs and set deadlines
+	conn.SetReadLimit(512 * 1024) // max message size 512KB
+	conn.SetReadDeadline(time.Now().Add(pongWait))
+	conn.SetPongHandler(func(string) error {
+		conn.SetReadDeadline(time.Now().Add(pongWait))
+		return nil
+	})
+
+	// ReadPump listens for incoming messages from the client,
+	// it sets a read deadline to detect 'zombie' connections if pongs aren't received
 	for {
 		_, payload, err := conn.ReadMessage()
 		if err != nil {
+			// this will trigger if the user closes the tab OR if we don't get a Pong in time
 			break
 		}
 
 		var msg WSIncomingMessage
 		if err := json.Unmarshal(payload, &msg); err != nil {
-			h.sendWSError(conn, "Invalid JSON format")
+			h.sendWSError(client, "Invalid JSON format")
 			continue
 		}
 
@@ -173,7 +209,7 @@ func (h *WSHandler) HandleConnection(c echo.Context) error {
 
 		if chatErr != nil {
 			slog.Error("ws chat processing failed", "user_id", claims.UserID, "error", chatErr)
-			h.sendWSError(conn, "Could not send message")
+			h.sendWSError(client, "Could not send message")
 			continue
 		}
 	}
@@ -182,11 +218,20 @@ func (h *WSHandler) HandleConnection(c echo.Context) error {
 }
 
 // Helper method to send error messages over the socket
-func (h *WSHandler) sendWSError(conn *websocket.Conn, message string) {
+func (h *WSHandler) sendWSError(client *ws.Client, message string) {
 	errPayload := map[string]string{
 		"type":  "error",
 		"error": message,
 	}
 	b, _ := json.Marshal(errPayload)
-	conn.WriteMessage(websocket.TextMessage, b)
+	select {
+	case client.Send <- b:
+		// message sent successfully to the client's write-pump
+	default:
+		// drop message if the client's 256-message buffer is totally full (if his connection is extremely slow for example)
+		slog.Warn("ws error message dropped",
+			"user_id", client.UserID,
+			"reason", "buffer_full",
+			"dropped_message", message)
+	}
 }

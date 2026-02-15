@@ -14,7 +14,6 @@ Unlike typical boilerplate task boards, it combines:
 - **React + TypeScript frontend** with real-time UI updates powered by WebSockets
 - **Structured logging** with Go slog, request-scoped fields, and centralized error handling
 - **Custom HTTP error handler** for consistent API responses
-- **Built-in rate limiting** and middleware-based traffic control
 
 ---
 
@@ -468,6 +467,27 @@ Validated through service-to-hub integration tests.
 
 ## 🛠 <b>Development History</b>
 <details><summary>(Click to expand)</summary>
+
+<details>
+<summary><b>Feb 15, 2026: Multi-Session Socket Multiplexing & Observability</b> (Click to expand) </summary>
+
+### Phase 1: High-Availability Multi-Session Architecture
+* **1-to-Many Connection Mapping**: Refactored the `Hub` data structure from a flat `map[int64]*Client` to a nested `map[int64]map[*Client]bool` architecture. This enables "Multi-Tab Synchronization," allowing a single `UserID` to maintain multiple concurrent WebSocket sessions (e.g., Desktop, Mobile, and multiple browser tabs) without session overriding.
+* **Granular Lifecycle Orchestration**: Optimized the `Unregister` workflow to be session-aware. The system now utilizes a "Last-Tab-Out" logic, where the global `UserID` key is only purged from the Hub once the final active connection for that user is terminated, preventing premature state deletion during multi-window usage.
+
+### Phase 2: Hub Concurrency & Broadcast Optimization
+* **Nested Loop Propagation**: Updated `SendToUser` and `SendToProjectMembers` to iterate through connection buckets. This ensures that every active socket belonging to a user receives real-time updates simultaneously, maintaining state parity across all open client interfaces.
+* **Thread-Safe Map Sets**: Utilized Go's `map[*Client]bool` as a high-performance "Set" within the Hub's mutex-protected memory space. This allows for $O(1)$ addition and removal of specific socket pointers during registration/unregistration cycles while holding the `sync.RWMutex`.
+
+### Phase 3: Observability & Performance Profiling
+* **Pprof-Driven Resource Audit**: Integrated `net/http/pprof` on a protected internal port (`6060`) to perform real-time resource audits. This allows for deep-dive inspections of the Go runtime, heap allocation, and Goroutine stack traces during active socket usage.
+* **Goroutine Leak Verification**: Conducted a "Rise and Fall" audit using Flame Graphs to visualize the "Read/Write Pump" lifecycle. Verified that the `close(client.done)` signal successfully triggers the termination of backend routines, ensuring that the Goroutine count returns to baseline levels immediately following client disconnection.
+
+### Phase 4: Stress Testing & Security Interdiction
+* **Automated Load Simulation**: Developed a PowerShell-based concurrency script to simulate high-frequency WebSocket handshakes. This was used to verify the Hub's stability under pressure and ensure the `BroadcastToProject` logic remains non-blocking even when several dozen clients are connected to the same room.
+* **Middleware Enforcement Audit**: Verified the efficacy of the rate-limiting middleware during stress tests. Confirmed that the system correctly identifies and throttles "connection bursts" (exceeding 10 concurrent sockets per user), successfully mitigating potential Resource Exhaustion (DoS) vectors at the application layer.
+
+</details>
 
 <details>
 <summary><b>Feb 12, 2026: Atomic Concurrency & Stateful Socket Orchestration</b> (Click to expand) </summary>

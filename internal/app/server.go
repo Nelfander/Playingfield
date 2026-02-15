@@ -63,10 +63,10 @@ func Run() {
 
 	// --- S3 / MinIO Storage Setup ---
 
-	// 1. Create the AWS Credentials Provider
+	//  Create the AWS Credentials Provider
 	creds := credentials.NewStaticCredentialsProvider(cfg.S3AccessKey, cfg.S3SecretKey, "")
 
-	// 2. Load the SDK configuration
+	//  Load the SDK configuration
 	awscfg, err := awsConfig.LoadDefaultConfig(context.TODO(),
 		awsConfig.WithRegion(cfg.S3Region),
 		awsConfig.WithCredentialsProvider(creds),
@@ -203,6 +203,10 @@ func Run() {
 	r.POST("/users", projectHandler.AddUserToProject)
 	r.GET("/users", projectHandler.ListUsersInProject)
 	r.DELETE("/users", projectHandler.RemoveUserFromProject)
+	// project task list: /projects/:id/tasks
+	r.GET("/:id/tasks", taskHandler.ListTaskByProject)
+	// project chat history: /projects/:id/messages
+	r.GET("/:id/messages", chatHandler.GetProjectHistory)
 
 	// task routes
 	t.POST("", taskHandler.CreateTask)
@@ -213,11 +217,6 @@ func Run() {
 	t.GET("/:id/attachments", taskHandler.GetAttachments)
 	t.DELETE("/attachments/:attachment_id", taskHandler.DeleteAttachment)
 	t.GET("/attachments/:attachment_id/file", taskHandler.GetAttachmentFile)
-
-	// project task list: /projects/:id/tasks
-	r.GET("/:id/tasks", taskHandler.ListTaskByProject)
-	// project chat history: /projects/:id/messages
-	r.GET("/:id/messages", chatHandler.GetProjectHistory)
 
 	// websocket route
 	e.GET("/ws", wsHandler.HandleConnection)

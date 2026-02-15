@@ -16,9 +16,10 @@ type Client struct {
 	done      chan struct{} // internal shutdown signal
 }
 
-// Hub maintains the set of active clients
+// Hub maintains the set of active clients and project rooms
 type Hub struct {
-	clients      map[int64]*Client
+	// Map of UserID to a set of active connections (allows multi-tab)
+	clients      map[int64]map[*Client]bool
 	ProjectRooms map[int64]map[*Client]bool
 	Broadcast    chan []byte
 	Register     chan *Client
@@ -32,7 +33,7 @@ func NewHub() *Hub {
 		Broadcast:    make(chan []byte),
 		Register:     make(chan *Client),
 		Unregister:   make(chan *Client),
-		clients:      make(map[int64]*Client),
+		clients:      make(map[int64]map[*Client]bool),
 		ProjectRooms: make(map[int64]map[*Client]bool),
 		stop:         make(chan struct{}),
 	}
@@ -48,7 +49,7 @@ func NewClient(userID, projectID int64, conn *websocket.Conn) *Client {
 	}
 }
 
-// getter for safe external access,( actually not needed now since i implemented the newclient constructor )
+// getter for safe external access
 func (c *Client) DoneChan() <-chan struct{} {
 	return c.done
 }
@@ -61,27 +62,28 @@ func (h *Hub) cleanup() {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	for _, client := range h.clients {
-		// close the Send channel so the client's writePump stops
-		if client.Send != nil {
-			close(client.Send)
-		}
+	for userID, connections := range h.clients {
+		for client := range connections {
+			// close the Send channel so the client's writePump stops
+			if client.Send != nil {
+				close(client.Send)
+			}
 
-		// close the actual WebSocket connection
-		if client.Conn != nil {
-			client.Conn.Close()
-		}
+			// close the actual WebSocket connection
+			if client.Conn != nil {
+				client.Conn.Close()
+			}
 
-		// safe close for internal done signal
-		if client.done != nil {
-			select {
-			case <-client.done:
-			default:
-				close(client.done)
+			// safe close for internal done signal
+			if client.done != nil {
+				select {
+				case <-client.done:
+				default:
+					close(client.done)
+				}
 			}
 		}
-
-		delete(h.clients, client.UserID)
+		delete(h.clients, userID)
 	}
 
 	// clear the rooms map too
@@ -94,46 +96,59 @@ func (h *Hub) Run() {
 		select {
 		case client := <-h.Register:
 			h.mu.Lock()
-			h.clients[client.UserID] = client
+			// initialize the user's connection map if it doesn't exist
+			if h.clients[client.UserID] == nil {
+				h.clients[client.UserID] = make(map[*Client]bool)
+			}
+			h.clients[client.UserID][client] = true
 
-			//  add client to their specific project room
+			// add specific connection to project room
 			if client.ProjectID != 0 {
 				if h.ProjectRooms[client.ProjectID] == nil {
 					h.ProjectRooms[client.ProjectID] = make(map[*Client]bool)
 				}
 				h.ProjectRooms[client.ProjectID][client] = true
-				//	fmt.Printf("✅ Chat Room: User %d joined Project %d\n", client.UserID, client.ProjectID)
-			} else {
-				//	fmt.Printf("ℹ️ Global Hub: User %d connected\n", client.UserID)
 			}
 
 			h.mu.Unlock()
 
 		case client := <-h.Unregister:
 			h.mu.Lock()
-			if _, ok := h.clients[client.UserID]; ok {
-				// remove from project room
-				if client.ProjectID != 0 {
-					if room, ok := h.ProjectRooms[client.ProjectID]; ok {
-						delete(room, client)
-						if len(room) == 0 {
-							delete(h.ProjectRooms, client.ProjectID)
-						}
-					}
+			// remove specific connection from user's map
+			if connections, ok := h.clients[client.UserID]; ok {
+				delete(connections, client)
+				if len(connections) == 0 {
+					delete(h.clients, client.UserID)
 				}
-				delete(h.clients, client.UserID)
-				// signal client to shut down
-				close(client.done)
 			}
 
+			// remove specific connection from project room
+			if client.ProjectID != 0 {
+				if room, ok := h.ProjectRooms[client.ProjectID]; ok {
+					delete(room, client)
+					if len(room) == 0 {
+						delete(h.ProjectRooms, client.ProjectID)
+					}
+				}
+			}
+
+			// signal this specific connection to stop
+			// check if already closed to avoid panics
+			select {
+			case <-client.done:
+			default:
+				close(client.done)
+			}
 			h.mu.Unlock()
 
 		case message := <-h.Broadcast:
 			h.mu.RLock()
-			for _, client := range h.clients {
-				select {
-				case client.Send <- message:
-				default:
+			for _, connections := range h.clients {
+				for client := range connections {
+					select {
+					case client.Send <- message:
+					default: // skip slow clients
+					}
 				}
 			}
 			h.mu.RUnlock()
@@ -147,25 +162,31 @@ func (h *Hub) Run() {
 	}
 }
 
+// SendToUser sends to ALL open tabs/devices for that user
 func (h *Hub) SendToUser(userID int64, message []byte) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
-	if client, ok := h.clients[userID]; ok {
-		select {
-		case client.Send <- message:
-		default: // advoids blocking
+	if connections, ok := h.clients[userID]; ok {
+		for client := range connections {
+			select {
+			case client.Send <- message:
+			default:
+			}
 		}
 	}
 }
 
+// SendToProjectMembers ensures all connections for multiple users get the message
 func (h *Hub) SendToProjectMembers(userIDs []int64, message []byte) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 	for _, id := range userIDs {
-		if client, ok := h.clients[id]; ok {
-			select {
-			case client.Send <- message:
-			default:
+		if connections, ok := h.clients[id]; ok {
+			for client := range connections {
+				select {
+				case client.Send <- message:
+				default:
+				}
 			}
 		}
 	}
@@ -186,11 +207,13 @@ func (h *Hub) BroadcastToProject(projectID int64, message []byte) {
 }
 
 // BroadcastToProjectExcept sends a message to everyone in a project room EXCEPT a specific userID
+// this is for the "user is typing..." broadcast
 func (h *Hub) BroadcastToProjectExcept(projectID int64, excludeUserID int64, message []byte) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 	if clients, ok := h.ProjectRooms[projectID]; ok {
 		for client := range clients {
+			// Skip ALL connections belonging to the excluded user
 			if client.UserID == excludeUserID {
 				continue
 			}
