@@ -234,6 +234,8 @@ cleanup := func() {
     })
 }
 
+---
+
 ### 📊 Performance & Stress Testing
 
 To ensure the system remains stable under high load, the WebSocket implementation was subjected to stress testing using a custom PowerShell script to simulate rapid connection bursts.
@@ -272,6 +274,7 @@ To ensure the system remains stable under high load, the WebSocket implementatio
 * Deploy **AWS Deployment**.
 
 ---
+
 
 ## 🚀 Quick Start
 <details>
