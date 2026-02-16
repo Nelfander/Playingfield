@@ -245,6 +245,52 @@ To ensure the system remains stable under high load, the WebSocket implementatio
 3. **The Peak:** Total goroutine count reached **211** (1 Hub loop + 10 baseline + 200 per-client pumps).
 4. **The "Hard" Disconnect:** The client script was terminated abruptly to simulate a network crash or client-side failure.
 
+> [!IMPORTANT]
+> **Rate Limiter Configuration for Testing:** > If you are running the stress test script, ensure you temporarily increase the `RateLimiter` threshold in the middleware. By default, the system protects against rapid bursts; to simulate 100+ concurrent connections from a single IP, the limit must be adjusted or bypassed for the test machine.
+
+#### 🛠 Reproducing the Test
+To verify the goroutine cleanup logic, you can use the following PowerShell script. This simulates 100 concurrent clients connecting, holding the connection, and then abruptly terminating.
+
+<details>
+<summary><b>Click to view PowerShell Stress Test Script</b></summary>
+
+```powershell
+# websocket_stress_test.ps1
+$url = "ws://localhost:8080/ws?token=YOUR_TEST_TOKEN&projectId=1"
+$connectionCount = 100
+$jobs = @()
+
+Write-Host "🚀 Spawning $connectionCount concurrent WebSocket clients..." -ForegroundColor Cyan
+
+for ($i = 1; $i -le $connectionCount; $i++) {
+    $jobs += Start-Job -ScriptBlock {
+        param($url)
+        try {
+            $ws = New-Object ClientWebSocket
+            $ct = New-Object System.Threading.CancellationTokenSource
+            $task = $ws.ConnectAsync($url, $ct.Token)
+            $task.Wait()
+            
+            # Keep connection open for 15 seconds
+            Start-Sleep -Seconds 15
+            $ws.Dispose()
+        } catch {
+            # Silent fail for stress test
+        }
+    } -ArgumentList $url
+}
+
+Write-Host "✅ All clients connected. Waiting 15s..." -ForegroundColor Green
+Start-Sleep -Seconds 15
+
+Write-Host "🛑 Terminating all clients abruptly..." -ForegroundColor Yellow
+$jobs | Stop-Job
+$jobs | Remove-Job
+
+Write-Host "🏁 Test complete. Check pprof for goroutine drop." -ForegroundColor Cyan
+```
+</details>
+
 #### Results:
 * **Detection:** The server successfully detected the "half-open" connections via the `writeWait` timeout and `pingPeriod` cycle.
 * **Cleanup:** All **200** client-related goroutines were destroyed, and the client was unregistered from the Hub within **10–20 seconds**.
@@ -260,7 +306,23 @@ To ensure the system remains stable under high load, the WebSocket implementatio
 
 > **Note:** The drop to 9 goroutines (below the 11 baseline) indicates that the "Master Kill Switch" logic successfully cleaned up pre-existing "zombie" connections that were lingering from previous sessions.
 
+
+## 📡 WebSocket Flow
+<details>
+<summary><b>System Orchestration Detail</b> (Click to expand)</summary>
+
+1. **Handshake & Upgrade**: The handler validates the JWT, upgrades the HTTP connection, and configures the underlying `net.TCPConn` with **TCP Keep-Alives** (30s) to detect hardware-level silent failures.
+2. **Registration & Initialization**: A `Client` object is instantiated and dispatched to the `Hub` via the `Register` channel. A **Unified Cleanup** closure is initialized using `sync.Once` to prevent teardown race conditions.
+3. **Dual-Pump Concurrency**: 
+    * **WritePump (Goroutine)**: Handles the outgoing message queue and the **25s Heartbeat (Ping)**. It enforces a 10s `writeWait` to ensure the server doesn't hang on stalled client buffers.
+    * **ReadPump (Main Loop)**: Processes incoming frames and pongs, continuously resetting the **30s ReadDeadline** to verify client liveness.
+4. **Hub Orchestration**: The Hub routes payloads to specific Project Rooms or Users. All outbound signals to the `Client.Send` channel are wrapped in `select` blocks to prevent a single slow peer from creating backpressure on the entire Hub.
+5. **Atomic Teardown**: Upon any failure or timeout, the **Master Kill Switch** is triggered. It forces an immediate socket closure and an asynchronous `Unregister` signal, ensuring the goroutine stack returns to baseline (9-11) within seconds.
+
+</details>
+
 ---
+
 ## Future Goals
 * Implement **Task creation from the UI**. ✅
 * Improve **error handling and logging** further. ✅
@@ -1030,18 +1092,6 @@ JWT Claims: Security checks enforced using role-based claims within the JWT.
 
 ---
 
-## WebSocket Flow
-<details>
-
-1. **Handler** upgrades HTTP connection, creates `Client`, and registers it with the `Hub`.
-2. **Writer Goroutine** (currently in the handler) listens on `Client.Send` and `Client.DoneChan()`.
-3. **Read Loop** reads websocket messages and forwards them to the hub or services.
-4. **Hub** routes messages to clients or project rooms, using non-blocking sends to avoid blocking slow clients.
-5. **Shutdown**: Hub signals client via `done` channel; writer goroutine closes `Send` and websocket safely.
-
-</details>
-
----
 
 ## Architecture & Flow Diagram
 <details>
