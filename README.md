@@ -256,7 +256,7 @@ To verify the goroutine cleanup logic, you can use the following PowerShell scri
 
 ```powershell
 # websocket_stress_test.ps1
-$url = "ws://localhost:8080/ws?token=YOUR_TEST_TOKEN&projectId=1"
+$url = "ws://localhost:880/ws?token=YOUR_TEST_TOKEN&projectId=1"
 $connectionCount = 100
 $jobs = @()
 
