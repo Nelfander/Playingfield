@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"net"
 	"net/http"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -16,9 +18,9 @@ import (
 )
 
 const (
-	writeWait  = 10 * time.Second    // time allowed to write a message to the peer.
-	pongWait   = 60 * time.Second    // time allowed to read the next pong message from the peer.
-	pingPeriod = (pongWait * 9) / 10 // send pings to peer with this period, must be less than pongWait.
+	writeWait  = 10 * time.Second // time allowed to write a message to the peer.
+	pongWait   = 30 * time.Second // time allowed to read the next pong message from the peer.
+	pingPeriod = 25 * time.Second // send pings to peer with this period (must be ~10% less than pongWait).
 )
 
 type WSHandler struct {
@@ -78,12 +80,36 @@ func (h *WSHandler) HandleConnection(c echo.Context) error {
 		return err
 	}
 
+	if tcpConn, ok := conn.UnderlyingConn().(*net.TCPConn); ok {
+		// enable TCP Keep-Alive
+		tcpConn.SetKeepAlive(true)
+		// how long to wait before starting probes
+		tcpConn.SetKeepAlivePeriod(30 * time.Second)
+	}
+
 	// include the ProjectID so the Hub knows where to route messages
 	client := ws.NewClient(claims.UserID, projectID, conn)
 
-	h.hub.Register <- client
+	// Ensure cleanup happens exactly once
+	var once sync.Once
+	cleanup := func() {
+		once.Do(func() {
+			// Master kill switch: this forces ReadMessage to return err immediately
+			conn.SetReadDeadline(time.Now())
+			conn.SetWriteDeadline(time.Now())
+			conn.Close()
 
-	slog.Info("ws client connected", "user_id", claims.UserID, "project_id", projectID)
+			select {
+			case h.hub.Unregister <- client:
+			default:
+			}
+			slog.Info("ws client disconnected", "user_id", claims.UserID)
+		})
+	}
+
+	// Register the client
+	h.hub.Register <- client
+	slog.Info("ws client registered", "user_id", claims.UserID)
 
 	// WritePump handles the outgoing message queue and the AWS heartbeat (ping),
 	// it ensures only one goroutine is writing to the connection
@@ -92,7 +118,7 @@ func (h *WSHandler) HandleConnection(c echo.Context) error {
 		ticker := time.NewTicker(pingPeriod)
 		defer func() {
 			ticker.Stop()
-			conn.Close()
+			cleanup()
 		}()
 
 		for {
@@ -117,19 +143,14 @@ func (h *WSHandler) HandleConnection(c echo.Context) error {
 				}
 
 			case <-client.DoneChan(): // safe read-only access
-				close(client.Send)
+				//	close(client.Send)
 				return
 			}
 		}
 	}()
 
-	// Cleanup
-	defer func() {
-		h.hub.Unregister <- client
-		slog.Info("ws client disconnected", "user_id", claims.UserID)
-	}()
-
 	// configure the connection to handle Pongs and set deadlines
+	defer cleanup()               // Trigger cleanup when this loop breaks
 	conn.SetReadLimit(512 * 1024) // max message size 512KB
 	conn.SetReadDeadline(time.Now().Add(pongWait))
 	conn.SetPongHandler(func(string) error {
@@ -142,8 +163,9 @@ func (h *WSHandler) HandleConnection(c echo.Context) error {
 	for {
 		_, payload, err := conn.ReadMessage()
 		if err != nil {
+			slog.Debug("read error", "user_id", claims.UserID, "err", err)
 			// this will trigger if the user closes the tab OR if we don't get a Pong in time
-			break
+			break // This exits the loop and hits the defer cleanup()
 		}
 
 		var msg WSIncomingMessage

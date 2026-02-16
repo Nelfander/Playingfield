@@ -3,6 +3,7 @@ package ws
 import (
 	"log/slog"
 	"sync"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
@@ -31,8 +32,8 @@ type Hub struct {
 func NewHub() *Hub {
 	return &Hub{
 		Broadcast:    make(chan []byte),
-		Register:     make(chan *Client),
-		Unregister:   make(chan *Client),
+		Register:     make(chan *Client, 128),
+		Unregister:   make(chan *Client, 128),
 		clients:      make(map[int64]map[*Client]bool),
 		ProjectRooms: make(map[int64]map[*Client]bool),
 		stop:         make(chan struct{}),
@@ -132,12 +133,19 @@ func (h *Hub) Run() {
 				}
 			}
 
+			if client.Conn != nil {
+				client.Conn.SetWriteDeadline(time.Now()) // Immediate timeout
+				client.Conn.SetReadDeadline(time.Now())  // Immediate timeout
+				client.Conn.Close()
+			}
+
 			// signal this specific connection to stop
 			// check if already closed to avoid panics
 			select {
 			case <-client.done:
 			default:
 				close(client.done)
+				close(client.Send) // closing this wakes up the WritePump from the channel block
 			}
 			h.mu.Unlock()
 
