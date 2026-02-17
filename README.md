@@ -306,6 +306,15 @@ Write-Host "🏁 Test complete. Check pprof for goroutine drop." -ForegroundColo
 
 > **Note:** The drop to 9 goroutines (below the 11 baseline) indicates that the "Master Kill Switch" logic successfully cleaned up pre-existing "zombie" connections that were lingering from previous sessions.
 
+#### 📈 pprof Visualization
+The following snapshots verify the goroutine lifecycle and resource reclamation:
+
+![Pprof Peak Load](./assets/ws-stress-test-peak.png)
+*Figure 1: pprof at peak load (211 goroutines) during active 100-user burst.*
+
+![Pprof Recovery](./assets/ws-stress-test-recovery.png)
+*Figure 2: pprof post-cleanup (9 goroutines) demonstrating zero leaked routines.*
+
 
 ## 📡 WebSocket Flow
 <details>
