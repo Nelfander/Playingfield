@@ -602,6 +602,11 @@ Validated through service-to-hub integration tests.
     * Added `Client.DoneChan()` getter, providing read-only access for select statements in the handler.  
     * Maintained internal ownership, ensuring only the writer closes channels and prevents panics.  
 
+### 13. Zombie Connection Purge & Half-Open TCP Resilience
+* **Issue**: The server-side `ReadPump` was blocking indefinitely on `ReadMessage()` due to "half-open" TCP states. Because the test script terminated processes without sending proper WebSocket `Close` frames, the backend held 100+ "zombie" goroutines that never received a network-level hang-up signal.
+* **Solution**:
+    * **The `SetReadDeadline` Tripwire**: Implemented a sliding-window heartbeat. By calling `conn.SetReadDeadline(time.Now().Add(pongWait))` on every successful pong, the system now forces a hard-error in the `ReadPump` if the client remains silent for >30s, effectively self-destructing dead routines.
+    * **Atomic `sync.Once` Cleanup**: Encapsulated socket closure and Hub unregistration within a `sync.Once` block. This guarantees that whether the failure originates in the `ReadPump` or `WritePump`, the resource release is executed exactly once, preventing "Close on Closed Channel" panics.
 
 </details>
 
@@ -628,7 +633,6 @@ Validated through service-to-hub integration tests.
 ### Phase 4: Route Lifecycle & Environment Validation
 * **Admin Group Isolation**: Refactored the `main.go` router to utilize Echo's `Group` functionality for administrative tasks. This logical separation isolates moderation routes (`/admin/users`) from standard authenticated routes, simplifying future security audits and logging.
 * **Graceful State Persistence**: Verified that all administrative deletions are handled through the `postgres.NewUserRepository` using context-aware queries. This ensures that even high-privilege operations respect the system's 10-second shutdown deadline and signal handling.
-
 </details>
 
 <details>
