@@ -39,9 +39,16 @@ const LoginForm = ({ message, setMessage }: any) => {
                     setPassword("");
                     setConfirmPassword("");
                 } else {
-                    // Login Success
+                    // --- Login Success ---
                     localStorage.setItem("token", data.token);
                     localStorage.setItem("userId", data.userId);
+
+                    // Store the role so the App knows whether to show User or Admin UI
+                    // We check if data.user exists, otherwise fallback to "user"
+                    const userRole = data.user?.role || "user";
+                    localStorage.setItem("role", userRole);
+
+                    // Reload triggers the App.tsx logic to pick up the new role
                     window.location.reload();
                 }
             } else {

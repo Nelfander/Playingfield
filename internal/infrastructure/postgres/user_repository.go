@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/nelfander/Playingfield/internal/domain/user"
 
 	"github.com/nelfander/Playingfield/internal/infrastructure/postgres/sqlc"
@@ -76,4 +77,35 @@ func (r *UserRepository) ListUsers(ctx context.Context) ([]user.UserListRow, err
 		})
 	}
 	return result, nil
+}
+
+func (r *UserRepository) ScrubUser(ctx context.Context, userID int64) error {
+	tx, err := r.db.pool.Begin(ctx)
+	if err != nil {
+		slog.Error("database: failed to begin transaction", "error", err)
+		return fmt.Errorf("db: begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	qtx := r.queries.WithTx(tx)
+
+	if err = qtx.DeleteProjectsByOwner(ctx, userID); err != nil {
+		return fmt.Errorf("db tx: delete projects: %w", err)
+	}
+
+	if err = qtx.RemoveUserFromAllProjectMemberships(ctx, userID); err != nil {
+		return fmt.Errorf("db tx: remove memberships: %w", err)
+	}
+
+	// this one specifically requires pgtype.Int8 because 'assigned_to' is nullable in schema
+	dbID := pgtype.Int8{Int64: userID, Valid: true}
+	if err = qtx.UnassignUserFromAllTasks(ctx, dbID); err != nil {
+		return fmt.Errorf("db tx: unassign tasks: %w", err)
+	}
+
+	if err = qtx.ScrubUserAccount(ctx, userID); err != nil {
+		return fmt.Errorf("db tx: scrub account: %w", err)
+	}
+
+	return tx.Commit(ctx)
 }

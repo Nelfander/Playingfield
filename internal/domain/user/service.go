@@ -28,6 +28,7 @@ type Service interface {
 	RegisterUser(ctx context.Context, email, hashedPassword string) (*User, error)
 	Login(ctx context.Context, email, password string) (*User, error)
 	ListAllUsers(ctx context.Context) ([]UserListRow, error)
+	AdminScrubUser(ctx context.Context, userID int64) error
 }
 
 func NewService(repo Repository) Service {
@@ -84,4 +85,17 @@ func (s *service) ListAllUsers(ctx context.Context) ([]UserListRow, error) {
 		return nil, fmt.Errorf("failed to list users: %w", err)
 	}
 	return users, nil
+}
+
+func (s *service) AdminScrubUser(ctx context.Context, userID int64) error {
+	slog.Info("admin initiating user scrub", "target_user_id", userID)
+
+	err := s.repo.ScrubUser(ctx, userID)
+	if err != nil {
+		slog.Error("failed to scrub user", "user_id", userID, "error", err)
+		return fmt.Errorf("service: scrub user failed: %w", err)
+	}
+
+	slog.Info("user scrubbed successfully", "user_id", userID)
+	return nil
 }

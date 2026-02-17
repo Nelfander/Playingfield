@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"net/http"
+	"strconv"
 
 	"github.com/labstack/echo/v4"
 
@@ -125,5 +126,30 @@ func (h *UserHandler) List(c echo.Context) error {
 		return err
 	}
 
+	return c.JSON(http.StatusOK, users)
+}
+
+// DELETE /admin/users/:id
+func (h *UserHandler) ScrubUser(c echo.Context) error {
+	idParam := c.Param("id")
+	userID, err := strconv.ParseInt(idParam, 10, 64)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid user id")
+	}
+
+	// Call service layer
+	if err := h.service.AdminScrubUser(c.Request().Context(), userID); err != nil {
+		return err // translator will handle mapping this to a 500
+	}
+
+	return c.NoContent(http.StatusNoContent)
+}
+
+// GET /admin/users
+func (h *UserHandler) AdminListAllUsers(c echo.Context) error {
+	users, err := h.service.ListAllUsers(c.Request().Context())
+	if err != nil {
+		return err
+	}
 	return c.JSON(http.StatusOK, users)
 }

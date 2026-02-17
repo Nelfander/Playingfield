@@ -73,3 +73,27 @@ func (f *FakeRepository) ListUsers(ctx context.Context) ([]UserListRow, error) {
 	}
 	return result, nil
 }
+
+func (f *FakeRepository) ScrubUser(ctx context.Context, userID int64) error {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("fake repo: %w", err)
+	}
+
+	found := false
+	for i := range f.Users {
+		if f.Users[i].ID == userID {
+			// Simulate the SQL Scrub logic
+			f.Users[i].Email = fmt.Sprintf("deleted_%d@playingfield.internal", userID)
+			f.Users[i].PasswordHash = "SCRUBBED"
+			f.Users[i].Status = "deleted"
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		return fmt.Errorf("fake repo: user not found")
+	}
+
+	return nil
+}

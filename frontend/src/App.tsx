@@ -6,6 +6,7 @@ import { ChatBox } from "./components/ChatBox";
 import { DirectMessageBox } from "./components/DirectMessageBox";
 import { type UserInProject } from "./components/ProjectUsers";
 import { useWebSockets } from "./hooks/useWebSockets";
+import AdminDashboard from "./components/AdminDashboard";
 import "./App.css";
 
 type Project = {
@@ -35,6 +36,7 @@ function App() {
 
   const token = localStorage.getItem("token");
   const currentUserId = Number(localStorage.getItem("userId")) || 0;
+  const userRole = localStorage.getItem("role"); // Retrieve the role (admin or user)
 
   // This simple number triggers refreshes across all task boards
   const [taskRefreshTick, setTaskRefreshTick] = useState(0);
@@ -42,7 +44,6 @@ function App() {
   // --- WebSocket Handlers ---
   const handleTaskSignal = (projectId: number) => {
     console.log(`WS Signal: Task change in project ${projectId}`);
-    // Incrementing the number forces a re-render/re-fetch in children
     setTaskRefreshTick(prev => prev + 1);
   };
 
@@ -81,9 +82,7 @@ function App() {
       const projectData: Project[] = data || [];
       setProjects(projectData);
 
-      // Fetch members for ALL projects immediately so TaskBoard always has them
       projectData.forEach(p => fetchUsersData(p.id));
-
     } catch (err) {
       console.error("Fetch projects error:", err);
     }
@@ -199,11 +198,17 @@ function App() {
     setSelectedProjectId(null);
   }
 
+  // --- RENDER LOGIC ---
+
   return (
     <div className="app-container">
       {!token ? (
         <LoginForm message={message} setMessage={setMessage} />
+      ) : userRole === "admin" ? (
+        /* ADMIN VIEW: Shows the Admin Dashboard instead of standard layout */
+        <AdminDashboard token={token} />
       ) : (
+        /* STANDARD USER VIEW */
         <div className="main-layout" style={{ display: 'flex', gap: '20px', padding: '20px' }}>
           <div className="project-list-container" style={{ flex: 1 }}>
             <h1>My Projects</h1>
@@ -215,8 +220,7 @@ function App() {
                 Create Project
               </button>
               <button onClick={() => {
-                localStorage.removeItem("token");
-                localStorage.removeItem("userId");
+                localStorage.clear();
                 window.location.reload();
               }}>
                 Logout
@@ -241,7 +245,7 @@ function App() {
               onSelectProject={(id) => setSelectedProjectId(id)}
               onStartDM={handleStartDM}
               onProjectUpdated={fetchProjects}
-              taskRefreshTick={taskRefreshTick} // Corrected syntax here
+              taskRefreshTick={taskRefreshTick}
             />
           </div>
 

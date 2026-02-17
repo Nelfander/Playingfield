@@ -7,6 +7,8 @@ package sqlc
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const createUser = `-- name: CreateUser :one
@@ -39,6 +41,16 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.CreatedAt,
 	)
 	return i, err
+}
+
+const deleteProjectsByOwner = `-- name: DeleteProjectsByOwner :exec
+DELETE FROM projects WHERE owner_id = $1
+`
+
+// Wipes projects the user created/owns
+func (q *Queries) DeleteProjectsByOwner(ctx context.Context, ownerID int64) error {
+	_, err := q.db.Exec(ctx, deleteProjectsByOwner, ownerID)
+	return err
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
@@ -89,4 +101,39 @@ func (q *Queries) ListUsers(ctx context.Context) ([]ListUsersRow, error) {
 		return nil, err
 	}
 	return items, nil
+}
+
+const removeUserFromAllProjectMemberships = `-- name: RemoveUserFromAllProjectMemberships :exec
+DELETE FROM project_users WHERE user_id = $1
+`
+
+// Removes them from project_users (access control)
+func (q *Queries) RemoveUserFromAllProjectMemberships(ctx context.Context, userID int64) error {
+	_, err := q.db.Exec(ctx, removeUserFromAllProjectMemberships, userID)
+	return err
+}
+
+const scrubUserAccount = `-- name: ScrubUserAccount :exec
+UPDATE users 
+SET 
+    email = 'deleted_' || id || '@playingfield.internal',
+    password_hash = 'SCRUBBED',
+    status = 'deleted'
+WHERE id = $1
+`
+
+// Wipes identity but keeps the ID record for history/attachments
+func (q *Queries) ScrubUserAccount(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, scrubUserAccount, id)
+	return err
+}
+
+const unassignUserFromAllTasks = `-- name: UnassignUserFromAllTasks :exec
+UPDATE tasks SET assigned_to = NULL WHERE assigned_to = $1
+`
+
+// Keeps the task, but clears the 'assigned_to' field
+func (q *Queries) UnassignUserFromAllTasks(ctx context.Context, assignedTo pgtype.Int8) error {
+	_, err := q.db.Exec(ctx, unassignUserFromAllTasks, assignedTo)
+	return err
 }

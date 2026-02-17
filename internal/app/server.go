@@ -167,23 +167,25 @@ func Run() {
 		},
 	}))
 
+	// --- Admin Group ---
+	// Only accessible by users with the 'admin' role
+	adminGroup := e.Group("/admin")
+	adminGroup.Use(middleware.JWTMiddleware(jwtManager))
+	adminGroup.Use(middleware.RequireRole(jwtManager, "admin"))
+
 	// --- Auth Group ---
 	authGroup := e.Group("")
 	authGroup.Use(middleware.JWTMiddleware(jwtManager))
-	authGroup.GET("/me", userHandler.Me)
-	authGroup.GET("/users", userHandler.List)
-	// DM Chat History: /messages/direct/:other_id
-	authGroup.GET("/messages/direct/:other_id", chatHandler.GetDMHistory)
 
 	http.RegisterRoutes(e, userHandler)
 
 	// a group for all project-related routes w
-	r := e.Group("/projects")
-	r.Use(middleware.JWTMiddleware(jwtManager))
+	projectGroup := e.Group("/projects")
+	projectGroup.Use(middleware.JWTMiddleware(jwtManager))
 
 	// a group for specific task actions
-	t := e.Group("/tasks")
-	t.Use(middleware.JWTMiddleware(jwtManager))
+	taskGroup := e.Group("/tasks")
+	taskGroup.Use(middleware.JWTMiddleware(jwtManager))
 
 	// --- Routes ---
 	e.POST("/register", userHandler.Register)
@@ -193,30 +195,39 @@ func Run() {
 	e.GET("/health", func(c echo.Context) error { // so AWS can verify the container is running.
 		return c.JSON(stdhttp.StatusOK, map[string]string{"status": "ok"})
 	})
+	authGroup.GET("/me", userHandler.Me)
+	authGroup.GET("/users", userHandler.List)
+	// DM Chat History: /messages/direct/:other_id
+	authGroup.GET("/messages/direct/:other_id", chatHandler.GetDMHistory)
+
+	//  Admin Routes
+	adminGroup.GET("", userHandler.Admin)
+	adminGroup.GET("/users", userHandler.AdminListAllUsers)
+	adminGroup.DELETE("/users/:id", userHandler.ScrubUser)
 
 	// project routes
-	r.POST("", projectHandler.Create)
-	r.PUT("/:id", projectHandler.Update)
-	r.GET("", projectHandler.List)
-	r.GET("/:id", projectHandler.GetByID)
-	r.DELETE("/:id", projectHandler.DeleteProject)
-	r.POST("/users", projectHandler.AddUserToProject)
-	r.GET("/users", projectHandler.ListUsersInProject)
-	r.DELETE("/users", projectHandler.RemoveUserFromProject)
+	projectGroup.POST("", projectHandler.Create)
+	projectGroup.PUT("/:id", projectHandler.Update)
+	projectGroup.GET("", projectHandler.List)
+	projectGroup.GET("/:id", projectHandler.GetByID)
+	projectGroup.DELETE("/:id", projectHandler.DeleteProject)
+	projectGroup.POST("/users", projectHandler.AddUserToProject)
+	projectGroup.GET("/users", projectHandler.ListUsersInProject)
+	projectGroup.DELETE("/users", projectHandler.RemoveUserFromProject)
 	// project task list: /projects/:id/tasks
-	r.GET("/:id/tasks", taskHandler.ListTaskByProject)
+	projectGroup.GET("/:id/tasks", taskHandler.ListTaskByProject)
 	// project chat history: /projects/:id/messages
-	r.GET("/:id/messages", chatHandler.GetProjectHistory)
+	projectGroup.GET("/:id/messages", chatHandler.GetProjectHistory)
 
 	// task routes
-	t.POST("", taskHandler.CreateTask)
-	t.PUT("/:id", taskHandler.UpdateTask)
-	t.DELETE("/:id", taskHandler.DeleteTask)
-	t.GET("/:id/history", taskHandler.GetTaskHistory)
-	t.POST("/:id/attachments", taskHandler.UploadAttachment)
-	t.GET("/:id/attachments", taskHandler.GetAttachments)
-	t.DELETE("/attachments/:attachment_id", taskHandler.DeleteAttachment)
-	t.GET("/attachments/:attachment_id/file", taskHandler.GetAttachmentFile)
+	taskGroup.POST("", taskHandler.CreateTask)
+	taskGroup.PUT("/:id", taskHandler.UpdateTask)
+	taskGroup.DELETE("/:id", taskHandler.DeleteTask)
+	taskGroup.GET("/:id/history", taskHandler.GetTaskHistory)
+	taskGroup.POST("/:id/attachments", taskHandler.UploadAttachment)
+	taskGroup.GET("/:id/attachments", taskHandler.GetAttachments)
+	taskGroup.DELETE("/attachments/:attachment_id", taskHandler.DeleteAttachment)
+	taskGroup.GET("/attachments/:attachment_id/file", taskHandler.GetAttachmentFile)
 
 	// websocket route
 	e.GET("/ws", wsHandler.HandleConnection)

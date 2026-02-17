@@ -362,3 +362,37 @@ button:active {
   border-radius: 10px;
   border: 1px solid #cbd5e1;
 }
+
+/* Add to App.css */
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 20px;
+  background: white;
+  color: #333;
+}
+
+.admin-table th,
+.admin-table td {
+  padding: 12px;
+  border: 1px solid #ddd;
+  text-align: left;
+}
+
+.admin-table th {
+  background-color: #f4f4f4;
+  font-weight: bold;
+}
+
+.btn-danger {
+  background-color: #ff4d4d;
+  color: white;
+  border: none;
+  padding: 5px 10px;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.btn-danger:hover {
+  background-color: #cc0000;
+}

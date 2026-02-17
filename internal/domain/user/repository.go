@@ -18,4 +18,5 @@ type Repository interface {
 	Create(ctx context.Context, user User) (*User, error)
 	GetByEmail(ctx context.Context, email string) (*User, error)
 	ListUsers(ctx context.Context) ([]UserListRow, error)
+	ScrubUser(ctx context.Context, userID int64) error
 }

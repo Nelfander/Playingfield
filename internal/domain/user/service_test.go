@@ -108,3 +108,32 @@ func TestListAllUsers_Service(t *testing.T) {
 		assert.Empty(t, users)
 	})
 }
+
+func TestAdminScrubUser_Service(t *testing.T) {
+	repo := NewFakeRepository()
+	svc := NewService(repo)
+	ctx := context.Background()
+
+	// Seed a user to scrub
+	targetID := int64(1)
+	repo.Users = []User{
+		{ID: targetID, Email: "fire_me@example.com", PasswordHash: "secret", Status: "active"},
+	}
+
+	t.Run("successful scrub", func(t *testing.T) {
+		err := svc.AdminScrubUser(ctx, targetID)
+		assert.NoError(t, err)
+
+		// Verify the user is still in the slice but "scrubbed"
+		assert.Len(t, repo.Users, 1)
+		u := repo.Users[0]
+		assert.Contains(t, u.Email, "deleted_1")
+		assert.Equal(t, "SCRUBBED", u.PasswordHash)
+		assert.Equal(t, "deleted", u.Status)
+	})
+
+	t.Run("scrub non-existent user returns error", func(t *testing.T) {
+		err := svc.AdminScrubUser(ctx, 999) // ID doesn't exist
+		assert.Error(t, err)
+	})
+}

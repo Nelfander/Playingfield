@@ -300,7 +300,7 @@ Write-Host "🏁 Test complete. Check pprof for goroutine drop." -ForegroundColo
 
 | Metric | Start | Peak | Post-Cleanup |
 | :--- | :--- | :--- | :--- |
-| **Goroutines** | 11 | 211 | 9 |
+| **Goroutines** | 11 | 211 | 11 |
 | **Active Sockets** | 1 | 101 | 1 |
 | **Hub Congestion** | 0% | < 1% | 0% |
 
@@ -308,8 +308,9 @@ Write-Host "🏁 Test complete. Check pprof for goroutine drop." -ForegroundColo
 
 #### 📈 pprof Visualization
 <details>
-<summary><b>Click to view pprof Visualization</b></summary>
+
 The following snapshots verify the goroutine lifecycle and resource reclamation:
+<summary><b>Click to view pprof Visualization</b></summary>
 
 ![Pprof Peak Load](./assets/ws-stress-test-peak.png)
 *Figure 1: pprof at peak load (211 goroutines) during active 100-user burst.*
@@ -608,6 +609,27 @@ Validated through service-to-hub integration tests.
 
 ## 🛠 <b>Development History</b>
 <details><summary>(Click to expand)</summary>
+
+<details>
+<summary><b>Feb 17, 2026: Admin Authorization Guardrails & Identity Scrubbing Infrastructure</b> (Click to expand) </summary>
+
+### Phase 1: Role-Based Access Control (RBAC) Hardening
+* **JWT Claims Integration**: Leveraged the `auth.Claims` structure to implement a server-side role verification layer. By injecting role metadata into the JWT, the backend now distinguishes between `member` and `admin` scopes during the middleware handshake.
+* **Middleware Gatekeeping**: Deployed the `RequireRole("admin")` interceptor across the newly architected `adminGroup`. This ensures that unauthorized attempts to access system-wide user data are terminated at the routing level with a `403 Forbidden` or `401 Unauthorized` before reaching the business logic.
+
+### Phase 2: Administrative Identity Orchestration
+* **Atomic User Scrubbing**: Implemented a "Scrub Identity" routine within the `UserHandler` and `Service` layers. This function initiates a permanent purge of user records via `AdminScrubUser`, designed to clear the identity from the primary `users` table while triggering secondary cleanup tasks.
+* **Global Visibility Hooks**: Engineered the `ListAllUsers` service method to bypass standard ownership filters. Unlike the standard `List` handler which relies on `claims.UserID` to scope results, this admin-specific path provides a "God-mode" view of the entire identity database for platform moderation.
+
+### Phase 3: Defensive Data Mapping & Serialization
+* **JSON Case-Resilience**: Optimized the API response handling to account for naming mismatches between Go's exported struct fields and the React frontend. By employing nullish coalescing logic and defensive serialization, the system ensures `id` and `email` fields are mapped correctly regardless of uppercase/lowercase JSON keying.
+* **Input Sanitization**: Hardened the `ScrubUser` handler by enforcing strict `strconv.ParseInt` validation on URI parameters. This prevents injection attempts or malformed ID strings from reaching the persistence layer, returning a structured `400 Bad Request` on invalid input.
+
+### Phase 4: Route Lifecycle & Environment Validation
+* **Admin Group Isolation**: Refactored the `main.go` router to utilize Echo's `Group` functionality for administrative tasks. This logical separation isolates moderation routes (`/admin/users`) from standard authenticated routes, simplifying future security audits and logging.
+* **Graceful State Persistence**: Verified that all administrative deletions are handled through the `postgres.NewUserRepository` using context-aware queries. This ensures that even high-privilege operations respect the system's 10-second shutdown deadline and signal handling.
+
+</details>
 
 <details>
 <summary><b>Feb 16, 2026: Half-Open TCP Resilience & Unified Cleanup Architecture</b> (Click to expand) </summary>

@@ -226,3 +226,46 @@ func TestUserRegistration_ContextCancelled(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "context canceled")
 }
+
+func TestAdminScrubUser_Handler(t *testing.T) {
+	handler, fakeRepo, e := setupHandler()
+
+	// Seed a user
+	targetID := int64(5)
+	fakeRepo.Users = append(fakeRepo.Users, user.User{
+		ID:     targetID,
+		Email:  "staff@company.com",
+		Status: "active",
+	})
+
+	t.Run("successful scrub via DELETE request", func(t *testing.T) {
+		// Prepare request for DELETE /admin/users/5
+		req := httptest.NewRequest(http.MethodDelete, "/admin/users/5", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetParamNames("id")
+		c.SetParamValues("5")
+
+		// Call the handler
+		if assert.NoError(t, handler.ScrubUser(c)) {
+			assert.Equal(t, http.StatusNoContent, rec.Code)
+
+			// Verify fake repo state
+			u := fakeRepo.Users[0]
+			assert.Equal(t, "deleted", u.Status)
+			assert.Contains(t, u.Email, "deleted_5")
+		}
+	})
+
+	t.Run("bad request on invalid ID string", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodDelete, "/admin/users/abc", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetParamNames("id")
+		c.SetParamValues("abc")
+
+		err := handler.ScrubUser(c)
+		assert.Error(t, err)
+		// Echo.NewHTTPError usually returns a 400 here
+	})
+}
