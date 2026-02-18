@@ -23,10 +23,21 @@ const UserSelect: React.FC<UserSelectProps> = ({ onUserChange, excludeIds }) => 
                 const data = await response.json();
 
                 // Normalize data format
-                const allUsers: User[] = Array.isArray(data) ? data : (data.value || []);
+                const allUsersRaw: any[] = Array.isArray(data) ? data : (data.value || []);
 
-                // Filter out people already in the project AND the creator
-                const filtered = allUsers.filter(user => !excludeIds.includes(user.ID));
+                // Map to consistent User interface to handle potential case differences (id vs ID)
+                const normalizedUsers: User[] = allUsersRaw.map(u => ({
+                    ID: u.ID || u.id,
+                    Email: u.Email || u.email
+                }));
+
+                // Filter logic
+                const filtered = normalizedUsers.filter(user => {
+                    if (!user || !user.ID) return false;
+
+                    // Convert both to Numbers to ensure comparison works regardless of type
+                    return !excludeIds.map(Number).includes(Number(user.ID));
+                });
 
                 setUsers(filtered);
             } catch (err) {
@@ -34,16 +45,18 @@ const UserSelect: React.FC<UserSelectProps> = ({ onUserChange, excludeIds }) => 
             }
         };
         fetchUsers();
-    }, [excludeIds]); // Re-filter if the member list changes
+    }, [excludeIds]);
 
     return (
         <select
             onChange={(e: ChangeEvent<HTMLSelectElement>) => onUserChange(e.target.value)}
-            defaultValue=""
+            value="" // Force reset to placeholder after selection
         >
             <option value="" disabled>-- Select a User --</option>
             {users.map(u => (
-                <option key={u.ID} value={u.ID.toString()}>{u.Email}</option>
+                <option key={u.ID.toString()} value={u.ID.toString()}>
+                    {u.Email || "Deleted User"}
+                </option>
             ))}
             {users.length === 0 && <option disabled>No other users to add</option>}
         </select>

@@ -204,6 +204,7 @@ func Run() {
 	adminGroup.GET("", userHandler.Admin)
 	adminGroup.GET("/users", userHandler.AdminListAllUsers)
 	adminGroup.DELETE("/users/:id", userHandler.ScrubUser)
+	adminGroup.POST("/users/:id/toggle", userHandler.ToggleStatus)
 
 	// project routes
 	projectGroup.POST("", projectHandler.Create)

@@ -67,8 +67,9 @@ func (f *FakeRepository) ListUsers(ctx context.Context) ([]UserListRow, error) {
 	var result []UserListRow
 	for _, u := range f.Users {
 		result = append(result, UserListRow{
-			ID:    u.ID,
-			Email: u.Email,
+			ID:     u.ID,
+			Email:  u.Email,
+			Status: u.Status,
 		})
 	}
 	return result, nil
@@ -96,4 +97,29 @@ func (f *FakeRepository) ScrubUser(ctx context.Context, userID int64) error {
 	}
 
 	return nil
+}
+
+func (f *FakeRepository) GetByID(ctx context.Context, id int64) (*User, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("fake repo: %w", err)
+	}
+	for i := range f.Users {
+		if f.Users[i].ID == id {
+			return &f.Users[i], nil
+		}
+	}
+	return nil, fmt.Errorf("fake repo: user not found")
+}
+
+func (f *FakeRepository) UpdateUserStatus(ctx context.Context, userID int64, status string) error {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("fake repo: %w", err)
+	}
+	for i := range f.Users {
+		if f.Users[i].ID == userID {
+			f.Users[i].Status = status
+			return nil
+		}
+	}
+	return fmt.Errorf("fake repo: user not found")
 }

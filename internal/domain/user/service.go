@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"github.com/nelfander/Playingfield/internal/infrastructure/auth"
 )
@@ -20,15 +21,17 @@ type service struct {
 }
 
 type UserListRow struct {
-	ID    int64
-	Email string
+	ID     int64  `json:"id"`
+	Email  string `json:"email"`
+	Status string `json:"status"`
 }
 
 type Service interface {
 	RegisterUser(ctx context.Context, email, hashedPassword string) (*User, error)
 	Login(ctx context.Context, email, password string) (*User, error)
 	ListAllUsers(ctx context.Context) ([]UserListRow, error)
-	AdminScrubUser(ctx context.Context, userID int64) error
+	AdminScrubUser(ctx context.Context, adminID int64, targetUserID int64) error
+	ToggleUserStatus(ctx context.Context, userID int64) error
 }
 
 func NewService(repo Repository) Service {
@@ -80,22 +83,61 @@ func (s *service) Login(ctx context.Context, email, password string) (*User, err
 }
 
 func (s *service) ListAllUsers(ctx context.Context) ([]UserListRow, error) {
-	users, err := s.repo.ListUsers(ctx)
+	// get everything from the repo (including the scrubbed ones)
+	allUsers, err := s.repo.ListUsers(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list users: %w", err)
 	}
-	return users, nil
+
+	// create a slice for the "clean" data
+	// pre-allocate with a capacity of len(allUsers) for efficiency
+	filteredUsers := make([]UserListRow, 0, len(allUsers))
+
+	// if the status is NOT 'deleted', keep them
+	for _, u := range allUsers {
+		// Clean the string before checking
+		cleanStatus := strings.ToLower(strings.TrimSpace(u.Status))
+
+		if cleanStatus != "deleted" {
+			filteredUsers = append(filteredUsers, u)
+		}
+	}
+
+	return filteredUsers, nil
 }
 
-func (s *service) AdminScrubUser(ctx context.Context, userID int64) error {
-	slog.Info("admin initiating user scrub", "target_user_id", userID)
+func (s *service) AdminScrubUser(ctx context.Context, requesterID int64, targetUserID int64) error {
+	// compare IDs before doing anything else
+	if requesterID == targetUserID {
+		slog.Warn("Self-scrub attempt blocked", "admin_id", requesterID)
+		return fmt.Errorf("self-preservation active: you cannot delete the account you are currently logged into")
+	}
 
-	err := s.repo.ScrubUser(ctx, userID)
+	slog.Info("admin initiating user scrub", "admin_id", requesterID, "target_user_id", targetUserID)
+
+	// proceed to the repo only if the check passes
+	err := s.repo.ScrubUser(ctx, targetUserID)
 	if err != nil {
-		slog.Error("failed to scrub user", "user_id", userID, "error", err)
+		slog.Error("failed to scrub user", "target_id", targetUserID, "error", err)
 		return fmt.Errorf("service: scrub user failed: %w", err)
 	}
 
-	slog.Info("user scrubbed successfully", "user_id", userID)
+	slog.Info("user scrubbed successfully", "target_id", targetUserID)
 	return nil
+}
+
+func (s *service) ToggleUserStatus(ctx context.Context, userID int64) error {
+	// fetch the user to see current status
+	u, err := s.repo.GetByID(ctx, userID)
+	if err != nil {
+		return fmt.Errorf("service: toggle status failed to fetch user: %w", err)
+	}
+
+	// switch
+	newStatus := "active"
+	if u.Status == "active" {
+		newStatus = "inactive"
+	}
+
+	return s.repo.UpdateUserStatus(ctx, userID, newStatus)
 }

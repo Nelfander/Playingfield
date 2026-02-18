@@ -19,7 +19,6 @@ interface ProjectListProps {
     projectUsersMap: Record<number, UserInProject[]>;
     showUsersMap: Record<number, boolean>;
     showTasksMap: Record<number, boolean>;
-    // CHANGED: Simple number instead of Record
     taskRefreshTick: number;
     toggleProjectUsers: (id: number) => void;
     toggleTasks: (id: number) => void;
@@ -106,8 +105,14 @@ const ProjectList: React.FC<ProjectListProps> = ({
     return (
         <div className="projects-container">
             {projects.map((project) => {
+                // Defensive check for the project object itself
+                if (!project || !project.id) return null;
+
                 const isOwner = Number(project.owner_id) === Number(currentUserId);
                 const isEditing = editingProjectId === project.id;
+
+                // Get current members safely
+                const currentMembers = projectUsersMap[project.id] || [];
 
                 return (
                     <div key={project.id} className="project-card">
@@ -200,7 +205,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                             {showUsersMap[project.id] && (
                                 <div className="accordion-content">
                                     <ProjectUsers
-                                        users={projectUsersMap[project.id] || []}
+                                        users={currentMembers}
                                         onRemove={isOwner ? (uId) => removeUser(project.id, uId) : undefined}
                                         onMessage={onStartDM}
                                     />
@@ -208,7 +213,11 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                         <AddMemberSection
                                             projectId={project.id}
                                             onAdd={handleAddMember}
-                                            excludeIds={(projectUsersMap[project.id] || []).map(u => u.id)}
+                                            // DEFENSIVE: Filter out any null IDs before passing to AddMemberSection
+                                            excludeIds={currentMembers
+                                                .filter(u => u && u.id)
+                                                .map(u => u.id)
+                                            }
                                         />
                                     )}
                                 </div>
@@ -222,10 +231,9 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                 <div className="accordion-content">
                                     <TaskBoard
                                         projectId={project.id}
-                                        // CHANGED: Use the simple number directly
                                         refreshTick={taskRefreshTick}
                                         isOwner={isOwner}
-                                        members={projectUsersMap[project.id] || []}
+                                        members={currentMembers}
                                     />
                                 </div>
                             )}

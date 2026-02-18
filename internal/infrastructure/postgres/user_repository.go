@@ -72,8 +72,9 @@ func (r *UserRepository) ListUsers(ctx context.Context) ([]user.UserListRow, err
 	var result []user.UserListRow
 	for _, row := range rows {
 		result = append(result, user.UserListRow{
-			ID:    row.ID,
-			Email: row.Email,
+			ID:     row.ID,
+			Email:  row.Email,
+			Status: row.Status,
 		})
 	}
 	return result, nil
@@ -108,4 +109,27 @@ func (r *UserRepository) ScrubUser(ctx context.Context, userID int64) error {
 	}
 
 	return tx.Commit(ctx)
+}
+
+func (r *UserRepository) UpdateUserStatus(ctx context.Context, userID int64, status string) error {
+	return r.queries.UpdateUserStatus(ctx, sqlc.UpdateUserStatusParams{
+		ID:     userID,
+		Status: status,
+	})
+}
+
+func (r *UserRepository) GetByID(ctx context.Context, id int64) (*user.User, error) {
+	row, err := r.queries.GetUserByID(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("db: get user by id: %w", err)
+	}
+
+	return &user.User{
+		ID:           row.ID,
+		Email:        row.Email,
+		PasswordHash: row.PasswordHash,
+		Role:         row.Role,
+		Status:       row.Status,
+		CreatedAt:    row.CreatedAt.Time,
+	}, nil
 }

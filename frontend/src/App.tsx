@@ -23,6 +23,9 @@ function App() {
   const [showProjects, setShowProjects] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
+  // Controls if the admin is looking at the Admin Panel or the regular App
+  const [isAdminView, setIsAdminView] = useState(false);
+
   // projectUsersMap holds the ACTUAL DATA (emails/ids)
   const [projectUsersMap, setProjectUsersMap] = useState<Record<number, UserInProject[]>>({});
 
@@ -36,9 +39,8 @@ function App() {
 
   const token = localStorage.getItem("token");
   const currentUserId = Number(localStorage.getItem("userId")) || 0;
-  const userRole = localStorage.getItem("role"); // Retrieve the role (admin or user)
+  const userRole = localStorage.getItem("role");
 
-  // This simple number triggers refreshes across all task boards
   const [taskRefreshTick, setTaskRefreshTick] = useState(0);
 
   // --- WebSocket Handlers ---
@@ -54,9 +56,9 @@ function App() {
     () => handleLiveProjectCreated(),
     (pId, uId) => handleLiveUserRemoved(pId, uId),
     () => fetchProjects(),
-    (pId) => handleTaskSignal(pId), // Created
-    (pId) => handleTaskSignal(pId), // Updated
-    (pId) => handleTaskSignal(pId)  // Deleted
+    (pId) => handleTaskSignal(pId),
+    (pId) => handleTaskSignal(pId),
+    (pId) => handleTaskSignal(pId)
   );
 
   async function fetchUsersData(projectId: number) {
@@ -81,7 +83,6 @@ function App() {
       const data = await res.json();
       const projectData: Project[] = data || [];
       setProjects(projectData);
-
       projectData.forEach(p => fetchUsersData(p.id));
     } catch (err) {
       console.error("Fetch projects error:", err);
@@ -204,11 +205,24 @@ function App() {
     <div className="app-container">
       {!token ? (
         <LoginForm message={message} setMessage={setMessage} />
-      ) : userRole === "admin" ? (
-        /* ADMIN VIEW: Shows the Admin Dashboard instead of standard layout */
-        <AdminDashboard token={token} />
+      ) : isAdminView && userRole === "admin" ? (
+        /* --- HIGH-END ADMIN VIEW --- */
+        <div style={adminLayoutStyles.overlay}>
+          <div style={adminLayoutStyles.navContainer}>
+            <button
+              onClick={() => setIsAdminView(false)}
+              style={adminLayoutStyles.backBtn}
+              onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)'}
+              onMouseOut={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'}
+            >
+              <span style={{ marginRight: '8px' }}>←</span> Return to User Dashboard
+            </button>
+          </div>
+          {/* CRITICAL FIX: Passing currentUserId to the dashboard */}
+          <AdminDashboard token={token} currentUserId={currentUserId} />
+        </div>
       ) : (
-        /* STANDARD USER VIEW */
+        /* --- STANDARD USER VIEW --- */
         <div className="main-layout" style={{ display: 'flex', gap: '20px', padding: '20px' }}>
           <div className="project-list-container" style={{ flex: 1 }}>
             <h1>My Projects</h1>
@@ -219,6 +233,16 @@ function App() {
               <button onClick={() => setIsModalOpen(true)} className="btn-success">
                 Create Project
               </button>
+
+              {userRole === "admin" && (
+                <button
+                  onClick={() => setIsAdminView(true)}
+                  style={{ backgroundColor: '#ff4d4d', color: 'white', fontWeight: 'bold' }}
+                >
+                  🛡️ Admin Panel
+                </button>
+              )}
+
               <button onClick={() => {
                 localStorage.clear();
                 window.location.reload();
@@ -293,5 +317,39 @@ function App() {
     </div>
   );
 }
+
+// --- ADMIN PAGE STYLES ---
+const adminLayoutStyles: Record<string, React.CSSProperties> = {
+  overlay: {
+    minHeight: '100vh',
+    background: 'rgba(15, 23, 42, 0.4)',
+    backdropFilter: 'blur(8px)',
+    WebkitBackdropFilter: 'blur(8px)',
+    paddingTop: '20px',
+    transition: 'all 0.5s ease'
+  },
+  navContainer: {
+    maxWidth: '1000px',
+    margin: '0 auto',
+    padding: '0 40px',
+    display: 'flex',
+    justifyContent: 'flex-start'
+  },
+  backBtn: {
+    background: 'rgba(255, 255, 255, 0.1)',
+    backdropFilter: 'blur(10px)',
+    WebkitBackdropFilter: 'blur(10px)',
+    border: '1px solid rgba(255, 255, 255, 0.2)',
+    color: '#fff',
+    padding: '10px 20px',
+    borderRadius: '12px',
+    cursor: 'pointer',
+    fontSize: '14px',
+    fontWeight: '500',
+    transition: 'all 0.3s ease',
+    display: 'flex',
+    alignItems: 'center'
+  }
+};
 
 export default App;

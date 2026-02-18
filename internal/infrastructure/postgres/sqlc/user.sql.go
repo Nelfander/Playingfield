@@ -73,14 +73,35 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 	return i, err
 }
 
+const getUserByID = `-- name: GetUserByID :one
+SELECT id, email, password_hash, role, status, created_at
+FROM users
+WHERE id = $1
+`
+
+func (q *Queries) GetUserByID(ctx context.Context, id int64) (User, error) {
+	row := q.db.QueryRow(ctx, getUserByID, id)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.PasswordHash,
+		&i.Role,
+		&i.Status,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const listUsers = `-- name: ListUsers :many
-SELECT id, email FROM users 
+SELECT id, email, status FROM users 
 ORDER BY email ASC
 `
 
 type ListUsersRow struct {
-	ID    int64
-	Email string
+	ID     int64
+	Email  string
+	Status string
 }
 
 func (q *Queries) ListUsers(ctx context.Context) ([]ListUsersRow, error) {
@@ -92,7 +113,7 @@ func (q *Queries) ListUsers(ctx context.Context) ([]ListUsersRow, error) {
 	var items []ListUsersRow
 	for rows.Next() {
 		var i ListUsersRow
-		if err := rows.Scan(&i.ID, &i.Email); err != nil {
+		if err := rows.Scan(&i.ID, &i.Email, &i.Status); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -135,5 +156,21 @@ UPDATE tasks SET assigned_to = NULL WHERE assigned_to = $1
 // Keeps the task, but clears the 'assigned_to' field
 func (q *Queries) UnassignUserFromAllTasks(ctx context.Context, assignedTo pgtype.Int8) error {
 	_, err := q.db.Exec(ctx, unassignUserFromAllTasks, assignedTo)
+	return err
+}
+
+const updateUserStatus = `-- name: UpdateUserStatus :exec
+UPDATE users 
+SET status = $2
+WHERE id = $1
+`
+
+type UpdateUserStatusParams struct {
+	ID     int64
+	Status string
+}
+
+func (q *Queries) UpdateUserStatus(ctx context.Context, arg UpdateUserStatusParams) error {
+	_, err := q.db.Exec(ctx, updateUserStatus, arg.ID, arg.Status)
 	return err
 }

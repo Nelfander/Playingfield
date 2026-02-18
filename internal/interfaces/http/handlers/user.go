@@ -132,14 +132,22 @@ func (h *UserHandler) List(c echo.Context) error {
 // DELETE /admin/users/:id
 func (h *UserHandler) ScrubUser(c echo.Context) error {
 	idParam := c.Param("id")
-	userID, err := strconv.ParseInt(idParam, 10, 64)
+	targetUserID, err := strconv.ParseInt(idParam, 10, 64)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid user id")
 	}
 
-	// Call service layer
-	if err := h.service.AdminScrubUser(c.Request().Context(), userID); err != nil {
-		return err // translator will handle mapping this to a 500
+	// Identify the person making the call
+	claims, ok := c.Get("user").(*auth.Claims)
+	if !ok {
+		// normmally this should never fail,
+		// but we check it for tight backend safety
+		return echo.NewHTTPError(http.StatusUnauthorized, "invalid or missing auth claims")
+	}
+
+	// call service layer with both the Admin's ID and the Target's ID
+	if err := h.service.AdminScrubUser(c.Request().Context(), claims.UserID, targetUserID); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
 	return c.NoContent(http.StatusNoContent)
@@ -152,4 +160,29 @@ func (h *UserHandler) AdminListAllUsers(c echo.Context) error {
 		return err
 	}
 	return c.JSON(http.StatusOK, users)
+}
+
+// POST /admin/users/:id/toggle
+func (h *UserHandler) ToggleStatus(c echo.Context) error {
+	idParam := c.Param("id")
+	targetUserID, err := strconv.ParseInt(idParam, 10, 64)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid user id")
+	}
+
+	// check who is making the request
+	claims, ok := c.Get("user").(*auth.Claims)
+	if !ok {
+		return echo.NewHTTPError(http.StatusUnauthorized, "invalid or missing auth claims")
+	}
+
+	if claims.UserID == targetUserID {
+		return echo.NewHTTPError(http.StatusBadRequest, "cannot deactivate your own admin account")
+	}
+
+	if err := h.service.ToggleUserStatus(c.Request().Context(), targetUserID); err != nil {
+		return err
+	}
+
+	return c.NoContent(http.StatusOK)
 }

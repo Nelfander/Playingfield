@@ -114,17 +114,20 @@ func TestAdminScrubUser_Service(t *testing.T) {
 	svc := NewService(repo)
 	ctx := context.Background()
 
-	// Seed a user to scrub
+	// seed data
+	adminID := int64(100)
 	targetID := int64(1)
+
 	repo.Users = []User{
 		{ID: targetID, Email: "fire_me@example.com", PasswordHash: "secret", Status: "active"},
 	}
 
 	t.Run("successful scrub", func(t *testing.T) {
-		err := svc.AdminScrubUser(ctx, targetID)
+		// Pass adminID AND targetID
+		err := svc.AdminScrubUser(ctx, adminID, targetID)
 		assert.NoError(t, err)
 
-		// Verify the user is still in the slice but "scrubbed"
+		// verify the user is still in the slice but "scrubbed"
 		assert.Len(t, repo.Users, 1)
 		u := repo.Users[0]
 		assert.Contains(t, u.Email, "deleted_1")
@@ -133,7 +136,46 @@ func TestAdminScrubUser_Service(t *testing.T) {
 	})
 
 	t.Run("scrub non-existent user returns error", func(t *testing.T) {
-		err := svc.AdminScrubUser(ctx, 999) // ID doesn't exist
+		// pass adminID AND fake targetID
+		err := svc.AdminScrubUser(ctx, adminID, 999)
 		assert.Error(t, err)
+	})
+
+	t.Run("admin cannot scrub themselves", func(t *testing.T) {
+		adminEmail := "admin@pro.com"
+		repo.Users = append(repo.Users, User{
+			ID:           adminID,
+			Email:        adminEmail,
+			PasswordHash: "secure_hash",
+			Status:       "active",
+		})
+
+		// attempt the prohibited self-scrub
+		err := svc.AdminScrubUser(ctx, adminID, adminID)
+
+		// it must return an error
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "self-preservation active")
+
+		// the data must remain unchanged
+		found := false
+		for _, u := range repo.Users {
+			if u.ID == adminID {
+				found = true
+				assert.Equal(t, adminEmail, u.Email, "Admin email should NOT have changed!")
+				assert.Equal(t, "active", u.Status, "Admin status should still be active!")
+			}
+		}
+		assert.True(t, found, "Admin should still exist in the repository")
+	})
+
+	t.Run("scrubbed user disappears from list", func(t *testing.T) {
+		// Before scrub: 2 users
+		// After scrub: ListAllUsers should only return 1
+		err := svc.AdminScrubUser(ctx, adminID, targetID)
+		assert.NoError(t, err)
+
+		activeUsers, _ := svc.ListAllUsers(ctx)
+		assert.Len(t, activeUsers, 1) // Only the admin or other users remain
 	})
 }

@@ -17,6 +17,9 @@ type User struct {
 type Repository interface {
 	Create(ctx context.Context, user User) (*User, error)
 	GetByEmail(ctx context.Context, email string) (*User, error)
+	GetByID(ctx context.Context, id int64) (*User, error)
+	UpdateUserStatus(ctx context.Context, userID int64, status string) error
+
 	ListUsers(ctx context.Context) ([]UserListRow, error)
 	ScrubUser(ctx context.Context, userID int64) error
 }

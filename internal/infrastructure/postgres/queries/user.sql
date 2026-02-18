@@ -9,8 +9,13 @@ FROM users
 WHERE email = $1;
 
 -- name: ListUsers :many
-SELECT id, email FROM users 
+SELECT id, email, status FROM users 
 ORDER BY email ASC;
+
+-- name: GetUserByID :one
+SELECT id, email, password_hash, role, status, created_at
+FROM users
+WHERE id = $1;
 
 
 
@@ -34,3 +39,8 @@ DELETE FROM project_users WHERE user_id = $1;
 -- name: UnassignUserFromAllTasks :exec
 -- Keeps the task, but clears the 'assigned_to' field
 UPDATE tasks SET assigned_to = NULL WHERE assigned_to = $1;
+
+-- name: UpdateUserStatus :exec
+UPDATE users 
+SET status = $2
+WHERE id = $1;
