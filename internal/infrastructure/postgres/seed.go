@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"os"
 
 	"github.com/nelfander/Playingfield/internal/domain/user"
 	"github.com/nelfander/Playingfield/internal/infrastructure/auth"
@@ -11,8 +12,15 @@ import (
 
 // func for creating admin user, dont know if i keep it in prod
 func SeedAdminUser(ctx context.Context, userRepo user.Repository) error {
-	adminEmail := "admin@example.com"
-	adminPassword := "supersecret"
+	adminEmail := os.Getenv("ADMIN_EMAIL")
+	if adminEmail == "" {
+		adminEmail = "admin@example.com" // Default for local dev
+	}
+
+	adminPassword := os.Getenv("ADMIN_PASSWORD")
+	if adminPassword == "" {
+		adminPassword = "supersecret" // Default for local dev
+	}
 
 	// check if admin exists
 	_, err := userRepo.GetByEmail(ctx, adminEmail)

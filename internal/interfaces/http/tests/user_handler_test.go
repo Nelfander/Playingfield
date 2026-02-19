@@ -25,7 +25,7 @@ func setupHandler() (*handlers.UserHandler, *user.FakeRepository, *echo.Echo) {
 	e.HTTPErrorHandler = custom.CustomHTTPErrorHandler
 
 	fakeRepo := user.NewFakeRepository()
-	service := user.NewService(fakeRepo)
+	service := user.NewService(fakeRepo, nil)
 	jwtManager := auth.NewJWTManager("test-secret", 24*time.Hour)
 	handler := handlers.NewUserHandler(service, jwtManager)
 	return handler, fakeRepo, e
@@ -239,22 +239,39 @@ func TestAdminScrubUser_Handler(t *testing.T) {
 	})
 
 	t.Run("successful scrub via DELETE request", func(t *testing.T) {
-		// Prepare request for DELETE /admin/users/5
+		// prepare request for DELETE /admin/users/5
 		req := httptest.NewRequest(http.MethodDelete, "/admin/users/5", nil)
 		rec := httptest.NewRecorder()
 		c := e.NewContext(req, rec)
 		c.SetParamNames("id")
 		c.SetParamValues("5")
 
-		// Call the handler
+		token := &auth.Claims{
+			UserID: 6, // The Admin's ID
+			Role:   "admin",
+		}
+
+		c.Set("user", token)
+
+		// seed relational data in the fake
+		fakeRepo.ProjectMemberships[101] = []int64{targetID, 99} // user is in project 101
+		fakeRepo.TaskAssignments[501] = targetID                 // user is assigned to task 501
+
+		// call the handler
 		if assert.NoError(t, handler.ScrubUser(c)) {
 			assert.Equal(t, http.StatusNoContent, rec.Code)
 
-			// Verify fake repo state
-			u := fakeRepo.Users[0]
-			assert.Equal(t, "deleted", u.Status)
-			assert.Contains(t, u.Email, "deleted_5")
+			// verify record PERSISTS
+			assert.Len(t, fakeRepo.Users, 1)
+
+			// verify MASKING
+			assert.Equal(t, "deleted", fakeRepo.Users[0].Status)
+
+			// verify DETACHMENT
+			assert.NotContains(t, fakeRepo.ProjectMemberships[101], targetID, "User should be removed from project memberships")
+			assert.Zero(t, fakeRepo.TaskAssignments[501], "Task should now be unassigned")
 		}
+
 	})
 
 	t.Run("bad request on invalid ID string", func(t *testing.T) {

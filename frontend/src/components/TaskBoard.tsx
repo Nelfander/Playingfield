@@ -51,9 +51,10 @@ const formatFileSize = (bytes: number) => {
 const TaskBoard: React.FC<TaskBoardProps> = ({ projectId, refreshTick, isOwner, members }) => {
     const [tasks, setTasks] = useState<Task[]>([]);
     const [updatingTaskId, setUpdatingTaskId] = useState<number | null>(null);
-    const [hoveredUploadId, setHoveredUploadId] = useState<number | null>(null); // New state for hover effect
+    const [hoveredUploadId, setHoveredUploadId] = useState<number | null>(null);
     const [commitMessage, setCommitMessage] = useState("");
     const [newStatus, setNewStatus] = useState<'TODO' | 'IN_PROGRESS' | 'DONE'>('TODO');
+    const [newAssignedTo, setNewAssignedTo] = useState<string>(""); // Track assignment change
     const [isAddingTask, setIsAddingTask] = useState(false);
     const [newTaskForm, setNewTaskForm] = useState({ title: '', description: '', assigned_to: '' });
     const [history, setHistory] = useState<TaskActivity[]>([]);
@@ -154,7 +155,15 @@ const TaskBoard: React.FC<TaskBoardProps> = ({ projectId, refreshTick, isOwner, 
         if (!commitMessage.trim()) { alert("Please enter an update message."); return; }
         const currentTask = tasks.find(t => t.id === taskId);
         if (!currentTask) return;
-        const payload = { ...currentTask, status: newStatus, message: commitMessage };
+
+        const payload = {
+            ...currentTask,
+            status: newStatus,
+            message: commitMessage,
+            // If owner, send the new assignment, otherwise keep existing
+            assigned_to: isOwner ? (newAssignedTo ? Number(newAssignedTo) : null) : currentTask.assigned_to
+        };
+
         try {
             const res = await fetch(`http://localhost:880/tasks/${taskId}`, {
                 method: 'PUT',
@@ -222,7 +231,8 @@ const TaskBoard: React.FC<TaskBoardProps> = ({ projectId, refreshTick, isOwner, 
     };
 
     const renderTaskCard = (task: Task) => {
-        const canManageAssets = isOwner || (task.assigned_to !== null && task.assigned_to === currentUserId);
+        const isAssignedToMe = task.assigned_to !== null && task.assigned_to === currentUserId;
+        const canManageAssets = isOwner || isAssignedToMe;
         const canUpdateStatus = canManageAssets;
 
         return (
@@ -243,26 +253,10 @@ const TaskBoard: React.FC<TaskBoardProps> = ({ projectId, refreshTick, isOwner, 
                 {task.attachments && task.attachments.length > 0 && (
                     <div style={{ marginTop: '5px', display: 'flex', flexWrap: 'wrap', gap: '5px', borderTop: '1px solid #f0f0f0', paddingTop: '8px' }}>
                         {task.attachments.map(file => (
-                            <div key={file.id} style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '4px',
-                                background: '#e6f7ff',
-                                padding: '2px 8px',
-                                borderRadius: '12px',
-                                border: '1px solid #91d5ff'
-                            }}>
+                            <div key={file.id} style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#e6f7ff', padding: '2px 8px', borderRadius: '12px', border: '1px solid #91d5ff' }}>
                                 <button
                                     onClick={() => handleDownload(file.id, file.file_name)}
-                                    style={{
-                                        all: 'unset',
-                                        fontSize: '0.65rem',
-                                        cursor: 'pointer',
-                                        color: '#1890ff',
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        fontWeight: 500
-                                    }}
+                                    style={{ all: 'unset', fontSize: '0.65rem', cursor: 'pointer', color: '#1890ff', display: 'inline-flex', alignItems: 'center', fontWeight: 500 }}
                                 >
                                     📎 {file.file_name.length > 12 ? file.file_name.substring(0, 10) + "..." : file.file_name}
                                     <span style={{ marginLeft: '5px', fontSize: '0.6rem', color: '#8c8c8c', background: 'rgba(255,255,255,0.6)', padding: '0 4px', borderRadius: '4px' }}>
@@ -280,12 +274,27 @@ const TaskBoard: React.FC<TaskBoardProps> = ({ projectId, refreshTick, isOwner, 
                 {updatingTaskId === task.id ? (
                     <div style={{ marginTop: '10px', borderTop: '1px solid #eee', paddingTop: '10px' }}>
                         <textarea value={commitMessage} onChange={e => setCommitMessage(e.target.value)} placeholder="Commit message..." style={{ width: '100%', fontSize: '0.8rem', minHeight: '50px', marginBottom: '5px' }} />
-                        <label style={{ fontSize: '0.7rem', color: '#666' }}>Status:</label>
-                        <select value={newStatus} onChange={e => setNewStatus(e.target.value as any)} style={{ width: '100%', marginBottom: '10px' }}>
-                            <option value="TODO">To Do</option>
-                            <option value="IN_PROGRESS">In Progress</option>
-                            <option value="DONE">Done</option>
-                        </select>
+
+                        <div style={{ marginBottom: '10px' }}>
+                            <label style={{ fontSize: '0.7rem', color: '#666' }}>Status:</label>
+                            <select value={newStatus} onChange={e => setNewStatus(e.target.value as any)} style={{ width: '100%' }}>
+                                <option value="TODO">To Do</option>
+                                <option value="IN_PROGRESS">In Progress</option>
+                                <option value="DONE">Done</option>
+                            </select>
+                        </div>
+
+                        {/* ONLY SHOW ASSIGNMENT TO OWNER */}
+                        {isOwner && (
+                            <div style={{ marginBottom: '10px' }}>
+                                <label style={{ fontSize: '0.7rem', color: '#666' }}>Assign To:</label>
+                                <select value={newAssignedTo} onChange={e => setNewAssignedTo(e.target.value)} style={{ width: '100%' }}>
+                                    <option value="">Unassigned</option>
+                                    {members.map(m => <option key={m.id} value={m.id}>{m.email}</option>)}
+                                </select>
+                            </div>
+                        )}
+
                         <div style={{ display: 'flex', gap: '5px' }}>
                             <button onClick={() => handleUpdateTask(task.id)} style={{ flex: 1, backgroundColor: '#52c41a', color: 'white', border: 'none', padding: '5px', borderRadius: '4px', cursor: 'pointer' }}>Save</button>
                             <button onClick={() => setUpdatingTaskId(null)} style={{ flex: 1, backgroundColor: '#ff4d4f', color: 'white', border: 'none', padding: '5px', borderRadius: '4px', cursor: 'pointer' }}>Cancel</button>
@@ -293,35 +302,32 @@ const TaskBoard: React.FC<TaskBoardProps> = ({ projectId, refreshTick, isOwner, 
                     </div>
                 ) : (
                     <div style={{ display: 'flex', gap: '5px', marginTop: '10px' }}>
-                        <button
-                            onClick={() => { setUpdatingTaskId(task.id); setNewStatus(task.status); }}
-                            style={{ flex: 2, fontSize: '0.75rem', padding: '4px', cursor: 'pointer', backgroundColor: '#1890ff', color: 'white', border: 'none', borderRadius: '4px', display: canUpdateStatus ? 'block' : 'none' }}
-                        >
-                            Update
-                        </button>
+                        {canUpdateStatus && (
+                            <button
+                                onClick={() => {
+                                    setUpdatingTaskId(task.id);
+                                    setNewStatus(task.status);
+                                    setNewAssignedTo(task.assigned_to?.toString() || "");
+                                }}
+                                style={{ flex: 2, fontSize: '0.75rem', padding: '4px', cursor: 'pointer', backgroundColor: '#1890ff', color: 'white', border: 'none', borderRadius: '4px' }}
+                            >
+                                Update
+                            </button>
+                        )}
 
                         {canManageAssets && (
                             <label
                                 onMouseEnter={() => setHoveredUploadId(task.id)}
                                 onMouseLeave={() => setHoveredUploadId(null)}
                                 style={{
-                                    flex: 2,
-                                    fontSize: '0.75rem',
-                                    padding: '4px',
-                                    textAlign: 'center',
+                                    flex: 2, fontSize: '0.75rem', padding: '4px', textAlign: 'center',
                                     backgroundColor: hoveredUploadId === task.id ? '#e6e6e6' : '#f5f5f5',
-                                    border: '1px solid #ccc',
-                                    borderRadius: '4px',
-                                    cursor: 'pointer',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    gap: '4px',
-                                    transition: 'all 0.2s ease',
-                                    transform: hoveredUploadId === task.id ? 'scale(1.05)' : 'scale(1)'
+                                    border: '1px solid #ccc', borderRadius: '4px', cursor: 'pointer', display: 'flex',
+                                    alignItems: 'center', justifyContent: 'center', gap: '4px',
+                                    transition: 'all 0.2s ease', transform: hoveredUploadId === task.id ? 'scale(1.05)' : 'scale(1)'
                                 }}
                             >
-                                📎 Upload File
+                                📎 Upload
                                 <input type="file" hidden onChange={(e) => handleFileUpload(task.id, e)} />
                             </label>
                         )}

@@ -11,7 +11,7 @@ import (
 
 func TestRegisterUser_Service(t *testing.T) {
 	repo := NewFakeRepository()
-	svc := NewService(repo)
+	svc := NewService(repo, nil)
 	ctx := context.Background()
 
 	t.Run("successful registration", func(t *testing.T) {
@@ -38,7 +38,7 @@ func TestRegisterUser_Service(t *testing.T) {
 
 func TestLogin_Service(t *testing.T) {
 	repo := NewFakeRepository()
-	svc := NewService(repo)
+	svc := NewService(repo, nil)
 	ctx := context.Background()
 
 	// Seed a user
@@ -82,7 +82,7 @@ func TestLogin_Service(t *testing.T) {
 
 func TestListAllUsers_Service(t *testing.T) {
 	repo := NewFakeRepository()
-	svc := NewService(repo)
+	svc := NewService(repo, nil)
 	ctx := context.Background()
 
 	// seed multiple users directly into repo
@@ -111,7 +111,7 @@ func TestListAllUsers_Service(t *testing.T) {
 
 func TestAdminScrubUser_Service(t *testing.T) {
 	repo := NewFakeRepository()
-	svc := NewService(repo)
+	svc := NewService(repo, nil)
 	ctx := context.Background()
 
 	// seed data

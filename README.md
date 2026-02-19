@@ -424,6 +424,22 @@ The entire suite is verified using the **Go Race Detector** to ensure thread-saf
 These tests focus on core business rules in isolation. They sit within the domain packages to verify that the "brain" of the application works correctly.
 
 <details>
+<summary><b>👤 User Identity & Lifecycle</b></summary>
+
+Validated within `internal/domain/user/`.
+
+* **Registration & Auth Flow**: Verifies successful user onboarding with default roles (`user`) and status (`active`), while ensuring **Duplicate Email** prevention via sentinel errors.
+* **Security & Persistence**:
+    * **State-Aware Login**: Validates that authentication respects account states (e.g., preventing **Inactive** or **Scrubbed** accounts from accessing the system).
+    * **Credential Integrity**: Ensures password hashing/comparison logic (via Bcrypt) is correctly integrated with the service layer.
+* **Administrative Identity Scrubbing (Soft-Purge)**:
+    * **PII Anonymization**: Confirms that scrubbing masks emails (e.g., `deleted_1@...`) and purges password hashes to "SCRUBBED" while maintaining the database record for historical integrity.
+    * **Self-Preservation Logic**: A critical safety test ensuring that Administrators cannot accidentally scrub their own accounts.
+    * **Visibility Filtering**: Verifies that once a user is scrubbed, they are automatically excluded from global active user lists, effectively "evicting" them from the platform UI.
+* **Execution**: `go test -v ./internal/domain/user`
+</details>
+
+<details>
 <summary><b>💬 Messaging & Authorization Logic</b></summary>
 
 Validated within `internal/domain/messages/`.
@@ -472,7 +488,7 @@ Validated within `internal/interfaces/http/middleware/`.
 
 * **JWT Integrity:** Ensures `JWTMiddleware` correctly extracts and validates tokens from headers.
 * **Context Injection:** Verifies that user identity (ID, Role) is correctly passed to the internal logic.
-* **RBAC Enforcement:** Validates that `RequireRole` blocks unauthorized access to sensitive routes.
+* **RBAC Enforcement:** Specifically validates the `RequireRole("admin")` guard, ensuring that high-privilege operations like "Identity Scrubbing" are strictly restricted to system administrators.
 * **Execution:** `go test -v ./internal/interfaces/http/middleware/...`
 </details>
 
@@ -484,6 +500,9 @@ Validated within `internal/interfaces/http/tests/`.
 * **Centralized Error Mapping:** Verifies that Domain Sentinel errors (like `ErrUnauthorized`) are correctly translated into standard HTTP codes (403, 404, 409).
 * **End-to-End Persistence:** Tests the full flow from an HTTP request through the Service layer into the Fake Repository.
 * **Security Resilience:** Tests that unauthorized API attempts return clean, safe error messages without leaking system internals.
+* **Cross-Domain Cleanup:** Validates the "Ripple Effect" of a User Scrub. This test ensures that when the User Service triggers a scrub, the system successfully:
+    1.  **Evicts** the user from all project memberships.
+    2.  **Unlinks** the user from all active task assignments.
 * **JSON Binding:** Validates strict structural binding for complex entities like Tasks and Projects.
 * **Execution:** `go test -v ./internal/interfaces/http/tests/...`
 </details>
@@ -614,6 +633,46 @@ Validated through service-to-hub integration tests.
 
 ## 🛠 <b>Development History</b>
 <details><summary>(Click to expand)</summary>
+
+<details>
+<summary><b>Feb 19, 2026: Identity Scrubbing Resilience & Permission-Aware Task State</b> (Click to expand) </summary>
+
+### Phase 1: Identity Scrubbing & Persistence Stability
+* **Scrub Test Validation**: Successfully verified the "Deleted User" lifecycle; when a user is scrubbed, their owned projects are purged via cascading logic, while their activity in shared projects persists as an anonymized historical record.
+* **Audit Continuity**: Hardened the task history service to handle missing foreign keys. By finding and mapping user IDs to a validated member list, the system now gracefully displays "(deleted)" or "Unassigned" for scrubbed identities instead of returning 404/null errors.
+
+### Phase 2: Role-Based Logic Hardening
+* **Owner-Locked Assignment**: Restricted the `assigned_to` update authority to the Project Owner within the task persistence layer. This prevents non-owners from re-assigning work, ensuring the project hierarchy remains immutable during task transitions.
+* **Assignee Operation Scoping**: Refactored the update payload to distinguish between "Status Updates" (allowed for assignees) and "Identity Updates" (restricted to owners), preventing unauthorized privilege escalation via API manipulation.
+
+### Phase 3: Relational Integrity & Membership Decoupling
+* **Member-Only Constraint**: Enforced a strict validation check ensuring only active project members can be linked to tasks. This prevents the "Global User Leak" where any system user could previously be assigned to a private project task.
+* **Cascading Project Purge**: Refined the cleanup routine to ensure that when a primary identity is removed, all associated project ownerships are terminated immediately, preventing the existence of "orphaned" or "ghost" projects in the registry.
+
+### Phase 4: Payload Normalization
+* **Safe-Null Handling**: Updated the task model to handle `NULL` assignments safely across both the Go backend and React frontend. This ensures that unassigned tasks—common after a user scrub—do not break UI rendering or JSON serialization.
+* **History Mapping**: Standardized the activity log formatter to dynamically map user IDs to emails from the current member pool, providing a fallback for deleted users without requiring expensive database joins on every fetch.
+</details>
+
+<details>
+<summary><b>Feb 18, 2026: Persistence-First Identity Scrubbing & Transactional Integrity</b> (Click to expand) </summary>
+
+### Phase 1: Transactional "Soft-Purge" Architecture
+* **Atomic Scrubbing Routine**: Engineered a multi-stage PostgreSQL transaction within the `UserRepository` to handle user removal without breaking data integrity. The routine successfully unlinks users from active project memberships and task assignments while preserving the primary user record for historical audit logs.
+* **Nullable Assignment Handling**: Implemented `pgtype.Int8` logic in the persistence layer to safely transition task assignments from a specific user ID to `NULL`. This ensures that historical tasks remain in the system as "unassigned" rather than being deleted alongside the user.
+
+### Phase 2: Relational Cleanup & Ownership Transfers
+* **Cascading Project Purge**: Hardened the `DeleteProjectsByOwner` routine to ensure that when an identity is scrubbed, any orphaned projects owned by that user are terminated. This prevents "ghost projects" from cluttering the global registry while keeping the database state synchronized.
+* **Membership Decoupling**: Refactored the `RemoveUserFromAllProjectMemberships` query to surgically remove a user’s access rights across the platform. This ensures that a scrubbed user is immediately evicted from all UI views (like "Show Members") without requiring a manual cache clear.
+
+### Phase 3: Identity Masking for History Persistence
+* **Post-Scrub Identity Obfuscation**: Updated the `ScrubUserAccount` service to overwrite sensitive PII (emails and usernames) with anonymized placeholders (e.g., `deleted_user_ID@...`). This satisfies the requirement for history to persist while ensuring the user can no longer be contacted or identified.
+* **Audit-Log Continuity**: Verified that foreign key constraints in history-tracking tables (like `task_history`) remain intact post-scrub. By keeping the user ID row present but "scrubbed," the backend ensures that historical logs ("User X changed status to Done") do not return 404 errors.
+
+### Phase 4: API Normalization & Resilience
+* **Case-Insensitive Payload Mapping**: Standardized the Go-to-JSON serialization to handle inconsistencies between `ID`/`id` and `Email`/`email` fields. This ensures that frontend components fetching global user lists receive a predictable data structure regardless of the underlying SQL row mapping.
+* **Error Propagation Hardening**: Refactored database connection error handling to provide clearer logging when external poolers (like Neon) experience DNS resolution or suspension issues, preventing silent failures during administrative operations.
+</details>
 
 <details>
 <summary><b>Feb 17, 2026: Admin Authorization Guardrails & Identity Scrubbing Infrastructure</b> (Click to expand) </summary>

@@ -1,15 +1,17 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 
-// Props now strictly typed for safety
+// Props updated to include refreshTick for real-time UI sync
 interface AdminDashboardProps {
     token: string;
     currentUserId: number;
+    refreshTick?: number;
 }
 
-const AdminDashboard = ({ token, currentUserId }: AdminDashboardProps) => {
+const AdminDashboard = ({ token, currentUserId, refreshTick }: AdminDashboardProps) => {
     const [users, setUsers] = useState<any[]>([]);
 
-    const fetchAdminData = async () => {
+    // Using useCallback so we can safely include it in the useEffect dependency array
+    const fetchAdminData = useCallback(async () => {
         try {
             const userRes = await fetch("http://localhost:880/admin/users", {
                 headers: { Authorization: `Bearer ${token}` },
@@ -20,11 +22,12 @@ const AdminDashboard = ({ token, currentUserId }: AdminDashboardProps) => {
             console.error("Admin fetch error:", err);
             setUsers([]);
         }
-    };
+    }, [token]);
 
+    // This effect runs on mount, when token changes, AND when refreshTick changes
     useEffect(() => {
         fetchAdminData();
-    }, [token]);
+    }, [fetchAdminData, refreshTick]);
 
     const handleToggleStatus = async (userId: number) => {
         try {
@@ -33,6 +36,9 @@ const AdminDashboard = ({ token, currentUserId }: AdminDashboardProps) => {
                 headers: { Authorization: `Bearer ${token}` },
             });
             if (res.ok) {
+                // We don't necessarily need to call fetchAdminData() here 
+                // because the WebSocket will trigger the refreshTick anyway!
+                // But keeping it for instant local feedback is fine.
                 fetchAdminData();
             } else {
                 const errorData = await res.json();

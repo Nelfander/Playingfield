@@ -108,7 +108,7 @@ func Run() {
 
 	// --- user repo + service + handler ---
 	userRepo := postgres.NewUserRepository(db, queries)
-	userService := user.NewService(userRepo)
+	userService := user.NewService(userRepo, hub)
 	userHandler := handlers.NewUserHandler(userService, jwtManager)
 
 	// Projects repo + service + handler

@@ -8,12 +8,16 @@ import (
 
 // FakeRepository implements Repository for testing without a real DB
 type FakeRepository struct {
-	Users []User
+	Users              []User
+	ProjectMemberships map[int64][]int64
+	TaskAssignments    map[int64]int64
 }
 
 func NewFakeRepository() *FakeRepository {
 	return &FakeRepository{
-		Users: []User{},
+		Users:              []User{},
+		ProjectMemberships: make(map[int64][]int64),
+		TaskAssignments:    make(map[int64]int64),
 	}
 }
 
@@ -91,9 +95,25 @@ func (f *FakeRepository) ScrubUser(ctx context.Context, userID int64) error {
 			break
 		}
 	}
-
 	if !found {
 		return fmt.Errorf("fake repo: user not found")
+	}
+	// remove from all project memberships
+	for projID, members := range f.ProjectMemberships {
+		var newMembers []int64
+		for _, mID := range members {
+			if mID != userID {
+				newMembers = append(newMembers, mID)
+			}
+		}
+		f.ProjectMemberships[projID] = newMembers
+	}
+
+	// unassign from all tasks
+	for taskID, assignedID := range f.TaskAssignments {
+		if assignedID == userID {
+			f.TaskAssignments[taskID] = 0 // Set to "null"
+		}
 	}
 
 	return nil

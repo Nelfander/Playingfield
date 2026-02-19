@@ -22,17 +22,10 @@ function App() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [showProjects, setShowProjects] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
-
-  // Controls if the admin is looking at the Admin Panel or the regular App
   const [isAdminView, setIsAdminView] = useState(false);
-
-  // projectUsersMap holds the ACTUAL DATA (emails/ids)
   const [projectUsersMap, setProjectUsersMap] = useState<Record<number, UserInProject[]>>({});
-
-  // UI state for accordions
   const [showUsersMap, setShowUsersMap] = useState<Record<number, boolean>>({});
   const [showTasksMap, setShowTasksMap] = useState<Record<number, boolean>>({});
-
   const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
   const [selectedDMUserId, setSelectedDMUserId] = useState<number | null>(null);
   const [selectedDMUserEmail, setSelectedDMUserEmail] = useState<string>("");
@@ -42,11 +35,36 @@ function App() {
   const userRole = localStorage.getItem("role");
 
   const [taskRefreshTick, setTaskRefreshTick] = useState(0);
+  const [adminRefreshTick, setAdminRefreshTick] = useState(0); // For live admin panel updates
+
+  // --- Global Logout / Force Kick Logic ---
+  const forceLogout = (reason: string) => {
+    alert(reason);
+    localStorage.clear();
+    window.location.reload();
+  };
 
   // --- WebSocket Handlers ---
   const handleTaskSignal = (projectId: number) => {
     console.log(`WS Signal: Task change in project ${projectId}`);
     setTaskRefreshTick(prev => prev + 1);
+  };
+
+  const handleUserScrubbed = (userId: number) => {
+    if (userId === currentUserId) {
+      forceLogout("Your account has been deleted by an administrator.");
+    }
+    // If we are an admin watching the dashboard, refresh the list
+    setAdminRefreshTick(prev => prev + 1);
+    // Refresh projects to remove the deleted user from UI
+    fetchProjects();
+  };
+
+  const handleUserStatusUpdated = (userId: number, newStatus: string) => {
+    if (userId === currentUserId && newStatus === "inactive") {
+      forceLogout("Your account has been deactivated.");
+    }
+    setAdminRefreshTick(prev => prev + 1);
   };
 
   useWebSockets(
@@ -58,7 +76,15 @@ function App() {
     () => fetchProjects(),
     (pId) => handleTaskSignal(pId),
     (pId) => handleTaskSignal(pId),
-    (pId) => handleTaskSignal(pId)
+    (pId) => handleTaskSignal(pId),
+    // --- NEW GLOBAL HANDLERS ---
+    (uId) => handleUserScrubbed(uId),
+    (uId, status) => handleUserStatusUpdated(uId, status),
+    // --- USER_CREATED HANDLER ---
+    (uId) => {
+      console.log(`New user detected: ${uId}`);
+      setAdminRefreshTick(prev => prev + 1);
+    }
   );
 
   async function fetchUsersData(projectId: number) {
@@ -199,30 +225,27 @@ function App() {
     setSelectedProjectId(null);
   }
 
-  // --- RENDER LOGIC ---
-
   return (
     <div className="app-container">
       {!token ? (
         <LoginForm message={message} setMessage={setMessage} />
       ) : isAdminView && userRole === "admin" ? (
-        /* --- HIGH-END ADMIN VIEW --- */
         <div style={adminLayoutStyles.overlay}>
           <div style={adminLayoutStyles.navContainer}>
             <button
               onClick={() => setIsAdminView(false)}
               style={adminLayoutStyles.backBtn}
-              onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)'}
-              onMouseOut={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'}
             >
-              <span style={{ marginRight: '8px' }}>←</span> Return to User Dashboard
+              <span>←</span> Return to User Dashboard
             </button>
           </div>
-          {/* CRITICAL FIX: Passing currentUserId to the dashboard */}
-          <AdminDashboard token={token} currentUserId={currentUserId} />
+          <AdminDashboard
+            token={token}
+            currentUserId={currentUserId}
+            refreshTick={adminRefreshTick} // Pass tick to trigger re-fetches in AdminPanel
+          />
         </div>
       ) : (
-        /* --- STANDARD USER VIEW --- */
         <div className="main-layout" style={{ display: 'flex', gap: '20px', padding: '20px' }}>
           <div className="project-list-container" style={{ flex: 1 }}>
             <h1>My Projects</h1>
@@ -318,7 +341,6 @@ function App() {
   );
 }
 
-// --- ADMIN PAGE STYLES ---
 const adminLayoutStyles: Record<string, React.CSSProperties> = {
   overlay: {
     minHeight: '100vh',

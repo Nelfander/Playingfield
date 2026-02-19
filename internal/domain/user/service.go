@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/nelfander/Playingfield/internal/infrastructure/auth"
+	"github.com/nelfander/Playingfield/internal/infrastructure/ws"
 )
 
 var (
@@ -18,6 +19,7 @@ var (
 
 type service struct {
 	repo Repository
+	hub  *ws.Hub
 }
 
 type UserListRow struct {
@@ -34,8 +36,11 @@ type Service interface {
 	ToggleUserStatus(ctx context.Context, userID int64) error
 }
 
-func NewService(repo Repository) Service {
-	return &service{repo: repo}
+func NewService(repo Repository, hub *ws.Hub) Service {
+	return &service{
+		repo: repo,
+		hub:  hub,
+	}
 }
 
 func (s *service) RegisterUser(ctx context.Context, email, hashedPassword string) (*User, error) {
@@ -56,6 +61,12 @@ func (s *service) RegisterUser(ctx context.Context, email, hashedPassword string
 	}
 
 	slog.Info("new user registered", "user_id", created.ID, "email", created.Email)
+
+	if s.hub != nil {
+		notification := fmt.Sprintf("USER_CREATED:%d", created.ID)
+		s.hub.Broadcast <- []byte(notification)
+	}
+
 	return created, nil
 }
 
@@ -123,6 +134,11 @@ func (s *service) AdminScrubUser(ctx context.Context, requesterID int64, targetU
 	}
 
 	slog.Info("user scrubbed successfully", "target_id", targetUserID)
+
+	if s.hub != nil {
+		notification := fmt.Sprintf("USER_SCRUBBED:%d", targetUserID)
+		s.hub.Broadcast <- []byte(notification)
+	}
 	return nil
 }
 
@@ -137,6 +153,11 @@ func (s *service) ToggleUserStatus(ctx context.Context, userID int64) error {
 	newStatus := "active"
 	if u.Status == "active" {
 		newStatus = "inactive"
+	}
+
+	if s.hub != nil {
+		notification := fmt.Sprintf("USER_UPDATED:%d:%s", userID, newStatus)
+		s.hub.Broadcast <- []byte(notification)
 	}
 
 	return s.repo.UpdateUserStatus(ctx, userID, newStatus)
