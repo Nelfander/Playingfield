@@ -1176,15 +1176,72 @@ JWT Claims: Security checks enforced using role-based claims within the JWT.
 ---
 
 ## Code Structure
-<details>
-<summary>(Click to expand)</summary>
 
-* `internal/domain/user` – domain model, repository interfaces.
-* `internal/domain/projects` – project domain, service, repository interface.
-* `internal/infrastructure/postgres` – SQLC-based repository implementation, DB adapter.
-* `cmd/server` – Echo server initialization and routing.
-</details>
+This project adopts a **clean, domain-centric architecture** strongly inspired by **Domain-Driven Design (DDD)**, **hexagonal architecture** (ports & adapters), and modern Go best practices. The core principle is to keep business/domain logic completely isolated from infrastructure (DB, external services), delivery mechanisms (HTTP, WebSocket), and frameworks — resulting in code that is:
 
+- Highly testable (easy mocking of ports/interfaces)
+- Maintainable and evolvable
+- Framework-agnostic in the domain layer
+- Safe for concurrency (especially real-time features)
+
+All production code is private under `internal/` to enforce module boundaries and prevent accidental external imports.
+
+### Directory Breakdown
+
+- **`internal/domain/`** — The heart of the application: pure business domain logic with no external dependencies.
+  - **`user/`**  
+    User entities, value objects, lifecycle rules (registration, authentication, data scrubbing), repository **interface**, and application **service** (orchestrates use cases like login, profile updates).
+  - **`projects/`**  
+    Project entities, ownership/membership rules, repository **interface**, and **service** layer enforcing collaboration invariants (e.g., who can invite, archive, or delete).
+  - **`tasks/`**  
+    Task model (Kanban status, assignments, due dates, history), repository **interface**, and rich **service** that coordinates task lifecycle + real-time WebSocket broadcasts on changes.
+  - **`messages/`**  
+    Chat/message entities, typing indicators, direct/group messaging rules, repository **interface**, and service handling real-time delivery.
+
+- **`internal/infrastructure/postgres/`**  
+  Concrete **repository implementations** for all domain interfaces.  
+  Powered by **sqlc** for type-safe, zero-boilerplate SQL queries.  
+  Includes DB connection pooling/adapter.  
+  Swappable (e.g., in-memory fakes for fast unit tests or alternative DBs later).
+
+- **`internal/interfaces/http/`**  
+  Delivery layer: all HTTP/WebSocket concerns live here (kept separate from domain).
+  - **`middleware/`** — Reusable Echo middleware stack:  
+    JWT authentication & claims extraction  
+    Tiered rate limiting (anonymous vs authenticated) with atomic counters + cleanup goroutine  
+    RBAC/ownership checks (project/task/message level permissions)  
+    Structured logging, recovery, request context propagation
+  - Handlers — Domain-specific Echo handlers (e.g., UserHandler, ProjectHandler, TaskHandler, MessageHandler):  
+    Bind/validate JSON, call domain services, return proper HTTP responses/codes, handle errors gracefully.
+  - WebSocket handler — Upgrades connections, integrates with the central WS hub, manages room subscriptions.
+
+- **`internal/` (other real-time infrastructure)**  
+  Custom **WebSocket hub** (Gorilla-based or similar):  
+  Manages client connections per room/project, broadcasts updates (task changes, chat messages), handles heartbeats, graceful cleanup on disconnects.  
+  Thread-safe with channels + goroutines for fan-out efficiency.
+
+- **`cmd/server/`**  
+  Thin application entrypoint & composition root:  
+  Loads config (env vars + defaults), initializes dependencies (DB, repositories, services, WS hub), wires Echo instance, applies global middleware, registers all routes/handlers/WebSocket endpoint, sets up graceful shutdown.
+
+### Testing Strategy
+
+Tests are first-class citizens and follow Go conventions:
+- **Unit tests** — colocated in domain packages (e.g., `internal/domain/tasks/service_test.go`) — focus on business rules, invariants, edge cases with table-driven tests.
+- **Repository tests** — integration-style against real PostgreSQL (via testcontainers or local DB) to verify sqlc queries.
+- **Handler/integration tests** — in `internal/interfaces/http/tests/` — test full HTTP request/response cycles, middleware stack, error translation, auth flows.
+- **WebSocket E2E tests** — custom simulation in `scripts/test_chat.go` — verifies real-time sync, broadcasts, disconnect handling under load/concurrency.
+- Race detector enabled (`-race`) across the suite to catch concurrency bugs early.
+
+### Why this structure?
+
+- **Separation of concerns** — Domain remains pure; infrastructure & interfaces are swappable adapters.
+- **Testability at every layer** — Interfaces + dependency injection enable fast unit tests + realistic integration/E2E.
+- **Concurrency safety** — Critical for real-time (WebSocket hub, rate limiter, atomic operations) — structured to avoid races.
+- **Extensibility** — New domains (e.g., notifications, analytics), adapters (Redis pub/sub, gRPC), or entrypoints (CLI worker) can be added without refactoring core logic.
+- **Production alignment** — Mirrors patterns in mature Go codebases (see [Standard Go Project Layout](https://github.com/golang-standards/project-layout), Uber Go Style Guide, clean/hexagonal examples from successful open-source projects).
+
+This organization has enabled secure RBAC, atomic MinIO + DB file operations, efficient real-time synchronization, and robust observability — all while remaining readable and approachable after just 2 months of Go experience.
 ---
 
 
@@ -1194,57 +1251,42 @@ JWT Claims: Security checks enforced using role-based claims within the JWT.
 
 
 ```text
-                        ┌───────────────┐
-                        │    Client     │
-                        │ (React / PS)  │
-                        └───────┬───────┘
-                                │
-                                │ POST /users (register)
-                                │ POST /login (login)
-                                ▼
-                        ┌───────────────┐
-                        │   HTTP Server │
-                        │   (Echo / Go) │
-                        └───────┬───────┘
-                                │
-                                │ JWT Middleware
-                                │ Extract user ID
-                                ▼
-                 ┌─────────────────────────┐
-                 │ ProjectHandler / UserHandler │
-                 │  - Validate requests        │
-                 │  - Bind JSON               │
-                 │  - Pass data to Service    │
-                 └─────────┬───────────────┘
+                  +-------------------+
+                  |   React Frontend  |
+                  +-------------------+
                            │
                            ▼
-                   ┌───────────────┐
-                   │   Service     │
-                   │  - Business   │
-                   │    logic      │
-                   │  - Enforce    │
-                   │    per-user   │
-                   │    uniqueness │
-                   └───────┬───────┘
+          +---------------------------------+
+          |          Echo HTTP + WS         |  ← cmd/server
+          +---------------------------------+
+                           │
+          ┌────────────────┼────────────────┐
+          ▼                ▼                ▼
++----------------+  +----------------+  +-----------------+
+|   Handlers     |  |  Middleware    |  |  WS Hub         |
+| (interfaces/http)|  | (auth, rate    |  | (goroutines,    |
++----------------+  |  limit, etc.)  |  |  heartbeats)    |
+                    +----------------+  +-----------------+
                            │
                            ▼
-                    ┌─────────────┐
-                    │ Repository  │
-                    │  (SQLC)     │
-                    │ - SQL queries│
-                    │ - Insert /   │
-                    │   Fetch      │
-                    └───────┬─────┘
-                            │
-                            ▼
-                     ┌──────────────┐
-                     │   PostgreSQL │
-                     │   / Neon DB  │
-                     │ - users      │
-                     │ - projects   │
-                     └──────────────┘
-
-
+          +---------------------------------+
+          |  Application Services / Use Cases |
+          +---------------------------------+
+                           │
+                           ▼
+          +---------------------------------+
+          |          Domain Layer           |  ← internal/domain/*
+          |   (entities, rules, interfaces) |
+          +---------------------------------+
+                           │
+                           ▼
+          +---------------------------------+
+          |   Infrastructure Adapters       |  ← internal/infrastructure/*
+          |        (sqlc + Postgres)        |
+          +---------------------------------+
+                           │
+                           ▼
+                    PostgreSQL / MinIO
 
 
 
