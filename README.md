@@ -1252,42 +1252,70 @@ Tests are first-class citizens and follow Go conventions:
 
 
 ```text
-                  +-------------------+
-                  |   React Frontend  |
-                  +-------------------+
-                           │
-                           ▼
-          +---------------------------------+
-          |          Echo HTTP + WS         |  ← cmd/server
-          +---------------------------------+
-                           │
-          ┌────────────────┼────────────────┐
-          ▼                ▼                ▼
-+----------------+  +----------------+  +-----------------+
-|   Handlers     |  |  Middleware    |  |  WS Hub         |
-| (interfaces/http)|  | (auth, rate    |  | (goroutines,    |
-+----------------+  |  limit, etc.)  |  |  heartbeats)    |
-                    +----------------+  +-----------------+
-                           │
-                           ▼
-          +---------------------------------+
-          |  Application Services / Use Cases |
-          +---------------------------------+
-                           │
-                           ▼
-          +---------------------------------+
-          |          Domain Layer           |  ← internal/domain/*
-          |   (entities, rules, interfaces) |
-          +---------------------------------+
-                           │
-                           ▼
-          +---------------------------------+
-          |   Infrastructure Adapters       |  ← internal/infrastructure/*
-          |        (sqlc + Postgres)        |
-          +---------------------------------+
-                           │
-                           ▼
-                    PostgreSQL / MinIO
+                  +──────────────────────────────┐
+                  │        Clients               │
+                  │  (React Frontend + Browser)  │
+                  └───────────────┬──────────────┘
+                                  │
+                ┌─────────────────┼─────────────────┐
+                │                 │                 │
+        HTTP/REST API     WebSocket (real-time)   Admin/Stress Scripts
+                │                 │                 │
+                ▼                 ▼                 ▼
+       +────────────────+  +────────────────+  +────────────────+
+       │   Echo Server  │  │  WS Upgrade    │  │  (scripts/)    │
+       │ (cmd/server)   │  │   Endpoint     │  └────────────────┘
+       +────────────────+  +────────────────+
+                │                 │
+       ┌────────┼────────┐        │
+       │                 │        │
+       ▼                 ▼        ▼
++----------------+  +───────────────────────┐
+│ Middleware     │  │   WebSocket Hub       │
+│ Stack:         │  │ (Gorilla-based)       │
+│ - JWT Auth     │  │ - Room management     │
+│ - Rate Limit   │  │ - Broadcasts          │
+│ -RBAC/Ownership│  │ - Heartbeats/Cleanup  │
+│ - Logging      │  └───────────────────────┘
++----------------+
+       │
+       ▼
++----------------───────────────┐
+│   Handlers (interfaces/http/) │
+│   - UserHandler               │
+│   - ProjectHandler            │
+│   - TaskHandler               │
+│   - MessageHandler            │
+│   - File Upload/Delete        │
+└───────────────┬───────────────┘
+                │
+                ▼
+     +────────────────────────────┐
+     │   Domain Services          │   ← internal/domain/* (services + logic)
+     │   (user, projects, tasks,  │
+     │    messages)               │
+     │   - Business rules         │
+     │   - Use-case orchestration │
+     └───────────────┬────────────┘
+                     │
+                     ▼
+          +───────────────────────┐
+          │  Repository Interfaces│   ← internal/domain/*/repository.go
+          └───────────────┬───────┘
+                          │
+                          ▼
+               +──────────────────────┐
+               │ Infrastructure       │   ← internal/infrastructure/postgres
+               │(sqlc implementations)│
+               └───────────────┬──────┘
+                               │
+                               ▼
+                        PostgreSQL (Neon)
+                               │
+                               ▼
+                         MinIO (S3-compatible)
+                               ▲
+                               │ Atomic uploads/deletes
 
 
 
