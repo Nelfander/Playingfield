@@ -308,9 +308,8 @@ Write-Host "🏁 Test complete. Check pprof for goroutine drop." -ForegroundColo
 
 #### 📈 pprof Visualization
 <details>
-
-The following snapshots verify the goroutine lifecycle and resource reclamation:
 <summary><b>Click to view pprof Visualization</b></summary>
+The following snapshots verify the goroutine lifecycle and resource reclamation:
 
 ![Pprof Peak Load](./assets/ws-stress-test-peak.png)
 *Figure 1: pprof at peak load (211 goroutines) during active 100-user burst.*
