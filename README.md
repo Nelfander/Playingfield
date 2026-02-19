@@ -1171,11 +1171,12 @@ Ownership Logic: Only project owners are permitted to remove users.
 JWT Claims: Security checks enforced using role-based claims within the JWT.
 
 </details>
-</details>
+
 
 ---
 
 ## Code Structure
+<details><summary>(Click to expand)</summary>
 
 This project adopts a **clean, domain-centric architecture** strongly inspired by **Domain-Driven Design (DDD)**, **hexagonal architecture** (ports & adapters), and modern Go best practices. The core principle is to keep business/domain logic completely isolated from infrastructure (DB, external services), delivery mechanisms (HTTP, WebSocket), and frameworks — resulting in code that is:
 
@@ -1242,6 +1243,7 @@ Tests are first-class citizens and follow Go conventions:
 - **Production alignment** — Mirrors patterns in mature Go codebases (see [Standard Go Project Layout](https://github.com/golang-standards/project-layout), Uber Go Style Guide, clean/hexagonal examples from successful open-source projects).
 
 This organization has enabled secure RBAC, atomic MinIO + DB file operations, efficient real-time synchronization, and robust observability — all while remaining readable and approachable after just 2 months of Go experience.
+</details>
 ---
 
 
