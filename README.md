@@ -1243,8 +1243,8 @@ Tests are first-class citizens and follow Go conventions:
 - **Production alignment** — Mirrors patterns in mature Go codebases (see [Standard Go Project Layout](https://github.com/golang-standards/project-layout), Uber Go Style Guide, clean/hexagonal examples from successful open-source projects).
 
 </details>
----
 
+---
 
 ## Architecture & Flow Diagram
 <details>
