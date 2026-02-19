@@ -1171,7 +1171,7 @@ Ownership Logic: Only project owners are permitted to remove users.
 JWT Claims: Security checks enforced using role-based claims within the JWT.
 
 </details>
-
+</details>
 
 ---
 
@@ -1242,7 +1242,6 @@ Tests are first-class citizens and follow Go conventions:
 - **Extensibility** — New domains (e.g., notifications, analytics), adapters (Redis pub/sub, gRPC), or entrypoints (CLI worker) can be added without refactoring core logic.
 - **Production alignment** — Mirrors patterns in mature Go codebases (see [Standard Go Project Layout](https://github.com/golang-standards/project-layout), Uber Go Style Guide, clean/hexagonal examples from successful open-source projects).
 
-This organization has enabled secure RBAC, atomic MinIO + DB file operations, efficient real-time synchronization, and robust observability — all while remaining readable and approachable after just 2 months of Go experience.
 </details>
 ---
 
