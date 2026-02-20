@@ -352,7 +352,7 @@ The following snapshots verify the goroutine lifecycle and resource reclamation:
 <details>
 <summary><b>Quick Start!</b> (Click to expand)</summary>
 
-Assuming you have Docker, Go 1.22+, Node.js/npm installed.
+Assuming you have Docker, Go 1.25+ (tested on 1.25.5), Node.js/npm installed.
 
 ### 1. Repository & Infrastructure
 Clone the project and spin up the supporting services (PostgreSQL & MinIO):
