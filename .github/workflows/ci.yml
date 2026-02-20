@@ -44,7 +44,7 @@ jobs:
     - name: Test with race detector
       run: go test -race -v ./...
 
-     - name: Lint
+    - name: Lint
       uses: golangci/golangci-lint-action@v6
       with:
         version: latest
