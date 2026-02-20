@@ -139,7 +139,7 @@ Choosing the right stack was a balance between Go's high-performance concurrency
 
 #### 1. Backend: Echo Framework vs. Gin
 * **Decision**: [Echo](https://echo.labstack.com/)
-* **Reasoning**: Echo was selected for its superior performance benchmarks and built-in middleware capabilities (specifically for JWT and CORS). While Gin is a standard, Echo’s `Context` handling felt more idiomatic for this project's WebSocket hub orchestration. With that beeing said if I would do this project again I would totally do it with Gin Framework just to see the differences. At the time I started this project I was under the immpresion that Echo is the Go-to!
+* **Reasoning**: Echo was selected for its superior performance benchmarks and built-in middleware capabilities (specifically for JWT and CORS). While Gin is a standard, Echo’s `Context` handling felt more idiomatic for this project's WebSocket hub orchestration. With that being said if I would do this project again I would totally do it with Gin Framework just to see the differences. At the time I started this project I was under the impresion that Echo is the Go-to!
 * **Evaluation**: Post-implementation, Echo's centralized error handling proved highly effective for managing real-time stream failures.
 
 #### 2. Schema Strategy: Why SQLC over raw `database/sql`?
@@ -352,6 +352,8 @@ The following snapshots verify the goroutine lifecycle and resource reclamation:
 <details>
 <summary><b>Quick Start!</b> (Click to expand)</summary>
 
+Assuming you have Docker, Go 1.22+, Node.js/npm installed.
+
 ### 1. Repository & Infrastructure
 Clone the project and spin up the supporting services (PostgreSQL & MinIO):
 
@@ -377,23 +379,26 @@ In a new terminal, install dependencies and start the application:
 
    npm start
 
-### 4. Use PowerShell/Postman to test OR through the Frontend(Frontend is made only for Demo Visualisation):
-Heres a few Invokes for testing! (Won't add all of them here!):
+### 4. Testing the API (via PowerShell, curl, or Postman)
+
+The frontend is mainly for visual demo — use these examples to test some of the core endpoints:
 
   ```powershell
-  # Login
+  # 1. Login and get JWT token
   $login = Invoke-RestMethod -Method POST -Uri http://localhost:880/login -ContentType "application/json" -Body '{"email":"me@example.com","password":"supersecret"}'
   $token = $login.token
 
-  # Create project
+  # 2. Create a project
   Invoke-RestMethod -Method POST -Uri http://localhost:880/projects -Headers @{ Authorization = "Bearer $token" } -ContentType "application/json" -Body '{"name":"Ball","description":"First Ball project"}'
 
-  # List projects
+  # 3. List your projects
   Invoke-RestMethod -Method GET -Uri http://localhost:880/projects -Headers @{ Authorization = "Bearer $token" }
 
-  # Test S3/MinIO File Upload
+  # 4. Upload a file attachment to a task (example with curl)
   $filePath = "C:\path\to\your\test-file.png"
-   curl.exe -X POST "http://localhost:880/tasks/1/attachments" -H "Authorization: Bearer $token" -F "file=@$filePath"
+  curl -X POST "http://localhost:880/tasks/1/attachments" \
+  -H "Authorization: Bearer $token" \
+  -F "file=@/path/to/your/test-file"
   ```
 
   </details>
