@@ -1,5 +1,7 @@
 ## Playingfield
 
+[<image-card alt="CI" src="https://github.com/Nelfander/Playingfield/actions/workflows/ci.yml/badge.svg" ></image-card>](https://github.com/Nelfander/Playingfield/actions/workflows/ci.yml)
+
 **Playingfield is a real-time, collaborative project and task management platform with live WebSocket sync, project-scoped chat, granular RBAC, file attachments, and structured domain logic — built for reliability and a production mindset, not just a demo app.**
 
 Unlike typical boilerplate task boards, it combines:
