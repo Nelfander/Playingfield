@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"log/slog"
 	"net/http"
 	"strconv"
 
@@ -160,7 +161,11 @@ func (h *TaskHandler) UploadAttachment(c echo.Context) error {
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to open file")
 	}
-	defer src.Close()
+	defer func() {
+		if err := src.Close(); err != nil {
+			slog.Warn("failed to close uploaded source file", "err", err)
+		}
+	}()
 
 	// get user from JWT claims
 	userClaims, ok := c.Get("user").(*auth.Claims)
@@ -239,7 +244,11 @@ func (h *TaskHandler) GetAttachmentFile(c echo.Context) error {
 	if err != nil {
 		return err
 	}
-	defer content.Close()
+	defer func() {
+		if err := content.Close(); err != nil {
+			slog.Warn("failed to close content file", "err", err)
+		}
+	}()
 
 	// stream the binary data directly to the browser
 	return c.Stream(http.StatusOK, contentType, content)

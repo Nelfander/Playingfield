@@ -37,7 +37,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("WS Connection failed: %v", err)
 	}
-	defer c.Close()
+	defer func() {
+		if err := c.Close(); err != nil {
+			log.Printf("failed to close websocket client connection in test_chat: %v", err) // no need to slog for this script
+		}
+	}()
 	fmt.Println("✅ WebSocket Connected")
 
 	// 3. Start Listener
@@ -80,7 +84,11 @@ func getAuthToken(email, password string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			log.Printf("failed to close HTTP response body in test_chat: %v", err) // no need to slog for script
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("bad status: %d", resp.StatusCode)
@@ -89,6 +97,8 @@ func getAuthToken(email, password string) (string, error) {
 	var result struct {
 		Token string `json:"token"`
 	}
-	json.NewDecoder(resp.Body).Decode(&result)
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		log.Printf("failed to decode JSON response in test_chat script: %v", err)
+	}
 	return result.Token, nil
 }

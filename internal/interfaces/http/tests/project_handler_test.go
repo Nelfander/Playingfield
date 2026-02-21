@@ -15,6 +15,7 @@ import (
 	custom "github.com/nelfander/Playingfield/internal/interfaces/http"
 	"github.com/nelfander/Playingfield/internal/interfaces/http/handlers"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // setupProjectHandler creates the environment for project tests
@@ -52,7 +53,7 @@ func TestCreateProject(t *testing.T) {
 	assert.Equal(t, http.StatusCreated, rec.Code)
 
 	var resp map[string]interface{}
-	json.Unmarshal(rec.Body.Bytes(), &resp)
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
 	assert.Equal(t, "New Portfolio", resp["name"])
 	assert.Equal(t, float64(100), resp["owner_id"])
 }
@@ -99,7 +100,7 @@ func TestUpdateProject(t *testing.T) {
 
 	// verify the response contains the updated description
 	var resp map[string]interface{}
-	json.Unmarshal(rec.Body.Bytes(), &resp)
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
 	assert.Equal(t, "New Shiny Name", resp["name"])
 	assert.Equal(t, "Updated through the API", resp["description"])
 }
@@ -108,9 +109,15 @@ func TestListProjects(t *testing.T) {
 	handler, fakeRepo, e := setupProjectHandler()
 	//  Seed the fake database with some projects
 	ownerID := int64(100)
-	fakeRepo.CreateProject(context.Background(), projects.Project{Name: "Project 1", OwnerID: ownerID})
-	fakeRepo.CreateProject(context.Background(), projects.Project{Name: "Project 2", OwnerID: ownerID})
-	fakeRepo.CreateProject(context.Background(), projects.Project{Name: "Other User Project", OwnerID: 999})
+	if _, err := fakeRepo.CreateProject(context.Background(), projects.Project{Name: "Project 1", OwnerID: ownerID}); err != nil {
+		t.Fatalf("failed to create test project 1: %v", err)
+	}
+	if _, err := fakeRepo.CreateProject(context.Background(), projects.Project{Name: "Project 2", OwnerID: ownerID}); err != nil {
+		t.Fatalf("failed to create test project 2: %v", err)
+	}
+	if _, err := fakeRepo.CreateProject(context.Background(), projects.Project{Name: "Other User Project", OwnerID: 999}); err != nil {
+		t.Fatalf("failed to create other user's test project: %v", err)
+	}
 
 	//  Setup Request
 	req := httptest.NewRequest(http.MethodGet, "/projects", nil)

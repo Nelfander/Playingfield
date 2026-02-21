@@ -82,22 +82,32 @@ func (h *WSHandler) HandleConnection(c echo.Context) error {
 
 	if tcpConn, ok := conn.UnderlyingConn().(*net.TCPConn); ok {
 		// enable TCP Keep-Alive
-		tcpConn.SetKeepAlive(true)
+		if err := tcpConn.SetKeepAlive(true); err != nil {
+			slog.Warn("failed to enable TCP keep-alive", "remote_addr", tcpConn.RemoteAddr(), "err", err)
+		}
 		// how long to wait before starting probes
-		tcpConn.SetKeepAlivePeriod(30 * time.Second)
+		if err := tcpConn.SetKeepAlivePeriod(30 * time.Second); err != nil {
+			slog.Warn("failed to set TCP keep-alive period", "remote_addr", tcpConn.RemoteAddr(), "err", err)
+		}
 	}
 
 	// include the ProjectID so the Hub knows where to route messages
 	client := ws.NewClient(claims.UserID, projectID, conn)
 
-	// Ensure cleanup happens exactly once
+	// ensure cleanup happens exactly once
 	var once sync.Once
 	cleanup := func() {
 		once.Do(func() {
-			// Master kill switch: this forces ReadMessage to return err immediately
-			conn.SetReadDeadline(time.Now())
-			conn.SetWriteDeadline(time.Now())
-			conn.Close()
+			// master kill switch: this forces ReadMessage to return err immediately
+			if err := conn.SetReadDeadline(time.Now()); err != nil {
+				slog.Warn("failed to force read deadline in cleanup", "user_id", claims.UserID, "err", err)
+			}
+			if err := conn.SetWriteDeadline(time.Now()); err != nil {
+				slog.Warn("failed to force write deadline in cleanup", "user_id", claims.UserID, "err", err)
+			}
+			if err := conn.Close(); err != nil {
+				slog.Warn("failed to close connection in cleanup", "user_id", claims.UserID, "err", err)
+			}
 
 			select {
 			case h.hub.Unregister <- client:
@@ -125,11 +135,19 @@ func (h *WSHandler) HandleConnection(c echo.Context) error {
 			select {
 			case message, ok := <-client.Send:
 				// deadline: if the write takes > 10s, kill the connection
-				conn.SetWriteDeadline(time.Now().Add(writeWait))
+				if err := conn.SetWriteDeadline(time.Now().Add(writeWait)); err != nil {
+					slog.Warn("failed to set write deadline during pong handler",
+						"remote_addr", conn.RemoteAddr(),
+						"err", err)
+				}
 
 				if !ok {
 					// the Hub closed the channel (example: server shutting down)
-					conn.WriteMessage(websocket.CloseMessage, []byte{})
+					if err := conn.WriteMessage(websocket.CloseMessage, []byte{}); err != nil {
+						slog.Warn("failed to send websocket close message",
+							"remote_addr", conn.RemoteAddr(),
+							"err", err)
+					}
 					return
 				}
 				if err := conn.WriteMessage(websocket.TextMessage, message); err != nil {
@@ -137,7 +155,11 @@ func (h *WSHandler) HandleConnection(c echo.Context) error {
 				}
 			case <-ticker.C:
 				// send a Ping every ~54 seconds
-				conn.SetWriteDeadline(time.Now().Add(writeWait))
+				if err := conn.SetWriteDeadline(time.Now().Add(writeWait)); err != nil {
+					slog.Warn("failed to set write deadline in write pump",
+						"remote_addr", conn.RemoteAddr(),
+						"err", err)
+				}
 				if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 					return
 				}
@@ -152,9 +174,17 @@ func (h *WSHandler) HandleConnection(c echo.Context) error {
 	// configure the connection to handle Pongs and set deadlines
 	defer cleanup()               // Trigger cleanup when this loop breaks
 	conn.SetReadLimit(512 * 1024) // max message size 512KB
-	conn.SetReadDeadline(time.Now().Add(pongWait))
+	if err := conn.SetReadDeadline(time.Now().Add(pongWait)); err != nil {
+		slog.Warn("failed to reset read deadline after pong",
+			"remote_addr", conn.RemoteAddr(),
+			"err", err)
+	}
 	conn.SetPongHandler(func(string) error {
-		conn.SetReadDeadline(time.Now().Add(pongWait))
+		if err := conn.SetReadDeadline(time.Now().Add(pongWait)); err != nil {
+			slog.Warn("failed to reset read deadline after pong",
+				"remote_addr", conn.RemoteAddr(),
+				"err", err)
+		}
 		return nil
 	})
 

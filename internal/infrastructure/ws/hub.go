@@ -72,7 +72,9 @@ func (h *Hub) cleanup() {
 
 			// close the actual WebSocket connection
 			if client.Conn != nil {
-				client.Conn.Close()
+				if err := client.Conn.Close(); err != nil {
+					slog.Warn("failed to close websocket connection", "err", err)
+				}
 			}
 
 			// safe close for internal done signal
@@ -134,9 +136,25 @@ func (h *Hub) Run() {
 			}
 
 			if client.Conn != nil {
-				client.Conn.SetWriteDeadline(time.Now()) // Immediate timeout
-				client.Conn.SetReadDeadline(time.Now())  // Immediate timeout
-				client.Conn.Close()
+				// Immediate timeout + close – log failures but don't fail the operation
+				if err := client.Conn.SetWriteDeadline(time.Now()); err != nil {
+					slog.Warn("failed to set write deadline for forced disconnect",
+						"user_id", client.UserID,
+						"project_id", client.ProjectID,
+						"err", err)
+				}
+				if err := client.Conn.SetReadDeadline(time.Now()); err != nil {
+					slog.Warn("failed to set read deadline for forced disconnect",
+						"user_id", client.UserID,
+						"project_id", client.ProjectID,
+						"err", err)
+				}
+				if err := client.Conn.Close(); err != nil {
+					slog.Warn("failed to close websocket connection during forced disconnect",
+						"user_id", client.UserID,
+						"project_id", client.ProjectID,
+						"err", err)
+				}
 			}
 
 			// signal this specific connection to stop

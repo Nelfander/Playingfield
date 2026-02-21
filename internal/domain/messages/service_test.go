@@ -7,6 +7,7 @@ import (
 	"github.com/nelfander/Playingfield/internal/domain/projects"
 	"github.com/nelfander/Playingfield/internal/infrastructure/ws"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestMessageService(t *testing.T) {
@@ -20,7 +21,7 @@ func TestMessageService(t *testing.T) {
 		svc := NewService(msgRepo, projRepo, testHub)
 
 		p, _ := projRepo.CreateProject(ctx, projects.Project{Name: "Backend Team", OwnerID: 1})
-		projRepo.AddUserToProject(ctx, p.ID, 1, "owner")
+		require.NoError(t, projRepo.AddUserToProject(ctx, p.ID, 1, "owner"))
 
 		// Success: Owner sends message
 		res, err := svc.SendProjectMessage(ctx, 1, p.ID, "Hello")
@@ -45,8 +46,8 @@ func TestMessageService(t *testing.T) {
 
 		//  Setup: UserA and UserB share a project, Stranger is alone
 		p, _ := projRepo.CreateProject(ctx, projects.Project{Name: "Shared", OwnerID: userA})
-		projRepo.AddUserToProject(ctx, p.ID, userA, "owner")
-		projRepo.AddUserToProject(ctx, p.ID, userB, "member")
+		require.NoError(t, projRepo.AddUserToProject(ctx, p.ID, userA, "owner"))
+		require.NoError(t, projRepo.AddUserToProject(ctx, p.ID, userB, "member"))
 
 		//  Success: UserA and UserB can talk
 		res, err := svc.SendDirectMessage(ctx, userA, userB, "Hey partner")

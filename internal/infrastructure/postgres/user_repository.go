@@ -86,7 +86,11 @@ func (r *UserRepository) ScrubUser(ctx context.Context, userID int64) error {
 		slog.Error("database: failed to begin transaction", "error", err)
 		return fmt.Errorf("db: begin tx: %w", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() {
+		if err := tx.Rollback(ctx); err != nil {
+			slog.Error("failed to rollback transaction", "err", err)
+		}
+	}()
 
 	qtx := r.queries.WithTx(tx)
 

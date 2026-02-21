@@ -16,6 +16,7 @@ import (
 	custom "github.com/nelfander/Playingfield/internal/interfaces/http"
 	"github.com/nelfander/Playingfield/internal/interfaces/http/handlers"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func setupTaskHandler() (*handlers.TaskHandler, *tasks.FakeRepository, *projects.FakeRepository, *echo.Echo) {
@@ -54,7 +55,7 @@ func TestCreateTask_Handler(t *testing.T) {
 		assert.Equal(t, http.StatusCreated, rec.Code)
 
 		var resp map[string]interface{}
-		json.Unmarshal(rec.Body.Bytes(), &resp)
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
 		assert.Equal(t, "Task from API", resp["title"])
 	})
 }
@@ -95,14 +96,20 @@ func TestListTasks_Handler(t *testing.T) {
 	ownerID := int64(100)
 
 	// Seed 1 Project and 2 Tasks
-	p, _ := fakeProjRepo.CreateProject(context.Background(), projects.Project{Name: "List Project", OwnerID: ownerID})
+	p, err := fakeProjRepo.CreateProject(context.Background(), projects.Project{Name: "List Project", OwnerID: ownerID})
+	require.NoError(t, err, "failed to create test project")
 
 	// manually add the owner to the project members in the fake repo
 	// because we are bypassing the ProjectService.CreateProject logic
-	_ = fakeProjRepo.AddUserToProject(context.Background(), p.ID, ownerID, "owner")
+	require.NoError(t, fakeProjRepo.AddUserToProject(context.Background(), p.ID, ownerID, "owner"),
+		"failed to add owner to project members")
 
-	fakeTaskRepo.CreateTask(context.Background(), &tasks.Task{ProjectID: p.ID, Title: "Task A"})
-	fakeTaskRepo.CreateTask(context.Background(), &tasks.Task{ProjectID: p.ID, Title: "Task B"})
+	if _, err := fakeTaskRepo.CreateTask(context.Background(), &tasks.Task{ProjectID: p.ID, Title: "Task A"}); err != nil {
+		t.Fatalf("failed to create test task 'Task A': %v", err)
+	}
+	if _, err := fakeTaskRepo.CreateTask(context.Background(), &tasks.Task{ProjectID: p.ID, Title: "Task B"}); err != nil {
+		t.Fatalf("failed to create test task 'Task B': %v", err)
+	}
 
 	t.Run("member can list tasks", func(t *testing.T) {
 		// Simulating GET /projects/:id/tasks
@@ -122,7 +129,7 @@ func TestListTasks_Handler(t *testing.T) {
 		assert.Equal(t, http.StatusOK, rec.Code)
 
 		var resp []map[string]interface{}
-		json.Unmarshal(rec.Body.Bytes(), &resp)
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
 		assert.Len(t, resp, 2)
 	})
 }
@@ -159,7 +166,7 @@ func TestGetTaskHistory_Handler(t *testing.T) {
 		assert.Equal(t, http.StatusOK, rec.Code)
 
 		var resp []map[string]interface{}
-		json.Unmarshal(rec.Body.Bytes(), &resp)
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
 		assert.NotEmpty(t, resp)
 		assert.Equal(t, "CREATED", resp[0]["action"])
 	})

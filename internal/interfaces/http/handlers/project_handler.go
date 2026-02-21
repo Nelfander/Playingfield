@@ -88,14 +88,13 @@ func (h *ProjectHandler) Update(c echo.Context) error {
 	if err := c.Bind(&req); err != nil {
 		return err
 	}
-
 	// get the requester's id from the context (auth middleware)
-	userClaims := c.Get("user").(*auth.Claims)
-	requesterID := userClaims.UserID
-
-	if userClaims == nil {
+	userClaims, ok := c.Get("user").(*auth.Claims)
+	if !ok || userClaims == nil {
 		return echo.ErrUnauthorized
 	}
+
+	requesterID := userClaims.UserID
 
 	// call the Service
 	updatedProject, err := h.service.UpdateProject(c.Request().Context(), requesterID, projectID, req.Name, req.Description)
