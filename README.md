@@ -58,7 +58,7 @@ Unlike typical boilerplate task boards, it combines:
 * **Live Timestamps:** Every message is stamped with a human-readable time (e.g., 14:05) for better context.
 * **History Persistence:** New members can see previous project discussions instantly upon joining.
 
-- Live chat in project rooms with typing indicators  
+**Live chat sync across multiple clients** 
   ![Chat messages appearing instantly on clients](assets/Chat-Sync.gif)
 
 ### 📋 Collaborative Task Management
@@ -71,10 +71,10 @@ Unlike typical boilerplate task boards, it combines:
 * **Signal-Driven Refresh:** Leverages a lightweight "Pulse" synchronization logic where task changes trigger instant UI re-validation across all collaborator screens via WebSockets.
 * **Persistent History:** Every task is backed by a robust database schema, ensuring assignments and statuses are preserved across sessions. Every action—from status updates to file uploads—is recorded in a "Git-like" timeline so members can see what was changed, when, and by whom.
 
-- Real-time collaboration on Kanban boards with WebSocket sync  
+**Real-time collaboration on Kanban boards with WebSocket sync**  
   ![Task movement & real-time update across tabs](assets/Task-Assigning-And-History.gif)
 
-  - File attachments on tasks with atomic upload + gallery refresh  
+**File attachments on tasks with atomic upload + gallery refresh**
   ![File upload appearing live in the gallery](assets/File-Upload-And-Download.gif)
 
 ### ⚡ Real-Time Synchronization (WebSockets)
