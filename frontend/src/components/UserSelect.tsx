@@ -6,11 +6,12 @@ interface User {
 }
 
 interface UserSelectProps {
+    value: string; // Added to make the component controlled
     onUserChange: (userId: string) => void;
     excludeIds: number[]; // IDs to hide from the list
 }
 
-const UserSelect: React.FC<UserSelectProps> = ({ onUserChange, excludeIds }) => {
+const UserSelect: React.FC<UserSelectProps> = ({ value, onUserChange, excludeIds }) => {
     const [users, setUsers] = useState<User[]>([]);
 
     useEffect(() => {
@@ -25,7 +26,7 @@ const UserSelect: React.FC<UserSelectProps> = ({ onUserChange, excludeIds }) => 
                 // Normalize data format
                 const allUsersRaw: any[] = Array.isArray(data) ? data : (data.value || []);
 
-                // Map to consistent User interface to handle potential case differences (id vs ID)
+                // Map to consistent User interface
                 const normalizedUsers: User[] = allUsersRaw.map(u => ({
                     ID: u.ID || u.id,
                     Email: u.Email || u.email
@@ -34,8 +35,6 @@ const UserSelect: React.FC<UserSelectProps> = ({ onUserChange, excludeIds }) => 
                 // Filter logic
                 const filtered = normalizedUsers.filter(user => {
                     if (!user || !user.ID) return false;
-
-                    // Convert both to Numbers to ensure comparison works regardless of type
                     return !excludeIds.map(Number).includes(Number(user.ID));
                 });
 
@@ -49,10 +48,11 @@ const UserSelect: React.FC<UserSelectProps> = ({ onUserChange, excludeIds }) => 
 
     return (
         <select
+            style={styles.select}
             onChange={(e: ChangeEvent<HTMLSelectElement>) => onUserChange(e.target.value)}
-            value="" // Force reset to placeholder after selection
+            value={value} // Now uses the value passed from the parent state
         >
-            <option value="" disabled>-- Select a User --</option>
+            <option value="">-- Select a User --</option>
             {users.map(u => (
                 <option key={u.ID.toString()} value={u.ID.toString()}>
                     {u.Email || "Deleted User"}
@@ -61,6 +61,18 @@ const UserSelect: React.FC<UserSelectProps> = ({ onUserChange, excludeIds }) => 
             {users.length === 0 && <option disabled>No other users to add</option>}
         </select>
     );
+};
+
+// Optional: basic styling to make it look clean
+const styles = {
+    select: {
+        padding: '8px',
+        borderRadius: '4px',
+        border: '1px solid #ddd',
+        flex: 1,
+        marginRight: '8px',
+        fontSize: '14px'
+    }
 };
 
 export default UserSelect;

@@ -58,6 +58,9 @@ Unlike typical boilerplate task boards, it combines:
 * **Live Timestamps:** Every message is stamped with a human-readable time (e.g., 14:05) for better context.
 * **History Persistence:** New members can see previous project discussions instantly upon joining.
 
+- Live chat in project rooms with typing indicators  
+  ![Chat messages appearing instantly on clients](assets/Chat-Sync.gif)
+
 ### 📋 Collaborative Task Management
 * **Kanban-Style Organization:** High-visibility board layout grouping tasks into `To Do`, `In Progress`, and `Done` columns for clear project tracking.
 * **Granular Task Ownership:** Ability to create tasks with specific descriptions and assign them to any verified project member.
@@ -67,6 +70,12 @@ Unlike typical boilerplate task boards, it combines:
 * **Atomic Deletion Sync:** A precision-engineered cleanup flow that ensures physical files are purged from the storage bucket immediately before their metadata is removed from Postgres, preventing "storage leaks" and orphan data.
 * **Signal-Driven Refresh:** Leverages a lightweight "Pulse" synchronization logic where task changes trigger instant UI re-validation across all collaborator screens via WebSockets.
 * **Persistent History:** Every task is backed by a robust database schema, ensuring assignments and statuses are preserved across sessions. Every action—from status updates to file uploads—is recorded in a "Git-like" timeline so members can see what was changed, when, and by whom.
+
+- Real-time collaboration on Kanban boards with WebSocket sync  
+  ![Task movement & real-time update across tabs](assets/Task-Assigning-And-History.gif)
+
+  - File attachments on tasks with atomic upload + gallery refresh  
+  ![File upload appearing live in the gallery](assets/File-Upload-And-Download.gif)
 
 ### ⚡ Real-Time Synchronization (WebSockets)
 * **Global Hub:** A custom WebSocket Hub manages concurrent client connections and room-based broadcasting.

@@ -165,6 +165,16 @@ export const useWebSockets = (
                     break;
                 }
 
+                case "ATTACHMENT_CREATED":
+                case "ATTACHMENT_DELETED": {
+                    const projectId = parseInt(parts[1], 10);
+                    const taskId = parseInt(parts[2], 10); // Backend sends project_id:task_id
+                    if (!isNaN(projectId) && !isNaN(taskId)) {
+                        callbacks.current.onTaskUpdated(projectId, taskId);
+                    }
+                    break;
+                }
+
                 default:
                     console.warn("Unknown WebSocket action received:", action);
             }

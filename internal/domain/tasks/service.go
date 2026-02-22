@@ -171,7 +171,7 @@ func (s *Service) GetTaskHistory(ctx context.Context, requesterID int64, taskID 
 		return nil, fmt.Errorf("task not found: %w", err)
 	}
 
-	// 2. Authorization Check: Is the requester a member of this project?
+	//  Authorization Check: Is the requester a member of this project?
 	// We use the projectRepo's membership check logic here
 	members, err := s.projectRepo.ListUsersInProject(ctx, task.ProjectID)
 	if err != nil {
@@ -231,7 +231,7 @@ func (s *Service) UploadAttachment(ctx context.Context, requesterID int64, taskI
 		return nil, fmt.Errorf("failed to verify project ownership: %w", err)
 	}
 
-	// ss requester the owner OR the assignee?
+	// is requester the owner OR the assignee?
 	isOwner := project.OwnerID == requesterID
 	isAssignee := task.AssignedTo != nil && *task.AssignedTo == requesterID
 
@@ -268,6 +268,11 @@ func (s *Service) UploadAttachment(ctx context.Context, requesterID int64, taskI
 		"file_name", fileName,
 		"size_mb", fmt.Sprintf("%.2f MB", float64(fileSize)/(1024*1024)),
 	)
+
+	if s.hub != nil {
+		notification := fmt.Sprintf("ATTACHMENT_CREATED:%d:%d", project.ID, taskID)
+		s.hub.Broadcast <- []byte(notification)
+	}
 
 	return created, nil
 }
@@ -327,6 +332,11 @@ func (s *Service) DeleteAttachment(ctx context.Context, requesterID int64, attac
 		"file_name", att.FileName,
 		"deleted_by", requesterID,
 	)
+
+	if s.hub != nil {
+		notification := fmt.Sprintf("ATTACHMENT_DELETED:%d:%d", project.ID, att.TaskID)
+		s.hub.Broadcast <- []byte(notification)
+	}
 
 	return nil
 }

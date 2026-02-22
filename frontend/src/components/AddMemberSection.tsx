@@ -20,7 +20,11 @@ const AddMemberSection: React.FC<AddMemberSectionProps> = ({ projectId, onAdd, e
         <div className="inner-add-section">
             <p>Add Member to Project</p>
             <div className="add-member-controls">
-                <UserSelect onUserChange={setSelectedId} excludeIds={excludeIds} />
+                <UserSelect
+                    value={selectedId} // Pass the state here!
+                    onUserChange={setSelectedId}
+                    excludeIds={excludeIds}
+                />
                 <button onClick={handleAdd} className="btn-success">Add</button>
             </div>
         </div>

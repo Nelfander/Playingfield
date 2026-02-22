@@ -54,7 +54,7 @@ const TaskBoard: React.FC<TaskBoardProps> = ({ projectId, refreshTick, isOwner, 
     const [hoveredUploadId, setHoveredUploadId] = useState<number | null>(null);
     const [commitMessage, setCommitMessage] = useState("");
     const [newStatus, setNewStatus] = useState<'TODO' | 'IN_PROGRESS' | 'DONE'>('TODO');
-    const [newAssignedTo, setNewAssignedTo] = useState<string>(""); // Track assignment change
+    const [newAssignedTo, setNewAssignedTo] = useState<string>("");
     const [isAddingTask, setIsAddingTask] = useState(false);
     const [newTaskForm, setNewTaskForm] = useState({ title: '', description: '', assigned_to: '' });
     const [history, setHistory] = useState<TaskActivity[]>([]);
@@ -63,11 +63,10 @@ const TaskBoard: React.FC<TaskBoardProps> = ({ projectId, refreshTick, isOwner, 
     const token = localStorage.getItem('token');
     const currentUserId = token ? JSON.parse(atob(token.split('.')[1])).user_id : null;
 
+    // This effect triggers whenever the parent's WebSocket receives a message
+    // and increments the refreshTick.
     useEffect(() => {
-        const timer = setTimeout(() => {
-            fetchTasks();
-        }, 150);
-        return () => clearTimeout(timer);
+        fetchTasks();
     }, [projectId, refreshTick]);
 
     const fetchTasks = async () => {
@@ -76,6 +75,7 @@ const TaskBoard: React.FC<TaskBoardProps> = ({ projectId, refreshTick, isOwner, 
                 headers: { Authorization: `Bearer ${token}` }
             });
             const data = await res.json();
+
             if (Array.isArray(data)) {
                 const tasksWithFiles = await Promise.all(data.map(async (task: Task) => {
                     try {
@@ -84,7 +84,8 @@ const TaskBoard: React.FC<TaskBoardProps> = ({ projectId, refreshTick, isOwner, 
                         });
                         const attachments = await fileRes.json();
                         return { ...task, attachments: Array.isArray(attachments) ? attachments : [] };
-                    } catch {
+                    } catch (err) {
+                        console.error(`Failed to fetch attachments for task ${task.id}`, err);
                         return { ...task, attachments: [] };
                     }
                 }));
@@ -124,6 +125,8 @@ const TaskBoard: React.FC<TaskBoardProps> = ({ projectId, refreshTick, isOwner, 
             if (res.ok) {
                 setIsAddingTask(false);
                 setNewTaskForm({ title: '', description: '', assigned_to: '' });
+                // fetchTasks() is called by the WebSocket broadcast usually, 
+                // but calling it here ensures instant feedback for the creator.
                 fetchTasks();
             }
         } catch (err) { console.error(err); }
@@ -160,7 +163,6 @@ const TaskBoard: React.FC<TaskBoardProps> = ({ projectId, refreshTick, isOwner, 
             ...currentTask,
             status: newStatus,
             message: commitMessage,
-            // If owner, send the new assignment, otherwise keep existing
             assigned_to: isOwner ? (newAssignedTo ? Number(newAssignedTo) : null) : currentTask.assigned_to
         };
 
@@ -284,7 +286,6 @@ const TaskBoard: React.FC<TaskBoardProps> = ({ projectId, refreshTick, isOwner, 
                             </select>
                         </div>
 
-                        {/* ONLY SHOW ASSIGNMENT TO OWNER */}
                         {isOwner && (
                             <div style={{ marginBottom: '10px' }}>
                                 <label style={{ fontSize: '0.7rem', color: '#666' }}>Assign To:</label>

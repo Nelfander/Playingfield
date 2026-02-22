@@ -77,6 +77,7 @@ function App() {
     (pId) => handleTaskSignal(pId),
     (pId) => handleTaskSignal(pId),
     (pId) => handleTaskSignal(pId),
+
     // --- NEW GLOBAL HANDLERS ---
     (uId) => handleUserScrubbed(uId),
     (uId, status) => handleUserStatusUpdated(uId, status),
@@ -298,18 +299,22 @@ function App() {
 
           {selectedProjectId && (
             <div className="chat-sidebar">
-              <button onClick={() => setSelectedProjectId(null)} style={{ marginBottom: '10px' }}>Close Chat</button>
-              <ChatBox projectId={selectedProjectId} token={token} />
+              <ChatBox
+                projectId={selectedProjectId}
+                token={token!}
+                onClose={() => setSelectedProjectId(null)} // Now the "X" in ChatBox works!
+              />
             </div>
           )}
-
           {selectedDMUserId && (
             <div className="chat-sidebar">
-              <button onClick={() => setSelectedDMUserId(null)} style={{ marginBottom: '10px' }}>Close Chat</button>
               <DirectMessageBox
                 otherUserId={selectedDMUserId}
                 otherUserEmail={selectedDMUserEmail}
                 token={token!}
+                // Note: You might want to update DirectMessageBox similarly 
+                // with an onClose prop if you want its "X" to work too
+                onClose={() => setSelectedDMUserId(null)}
               />
             </div>
           )}

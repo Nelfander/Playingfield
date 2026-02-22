@@ -5,12 +5,14 @@ interface DirectMessageBoxProps {
     otherUserId: number;
     otherUserEmail: string;
     token: string;
+    onClose: () => void;
 }
 
 export const DirectMessageBox: React.FC<DirectMessageBoxProps> = ({
     otherUserId,
     otherUserEmail,
-    token
+    token,
+    onClose
 }) => {
     const {
         messages,
@@ -28,25 +30,20 @@ export const DirectMessageBox: React.FC<DirectMessageBoxProps> = ({
     const typingTimeoutRef = useRef<any>(null);
     const currentUserId = Number(localStorage.getItem("userId"));
 
-    // --- 1. Identify the last overall message and the last message I sent ---
     const lastOverallMessage = messages.length > 0 ? messages[messages.length - 1] : null;
 
-    // Find the ID of the most recent message sent by me that has been read
     const lastReadMessageByMe = [...messages]
         .reverse()
         .find(m => Number(m.sender_id) === currentUserId && m.read_at);
 
-    // --- 2. Trigger Read Receipt when new messages arrive from the other user ---
     useEffect(() => {
         if (lastOverallMessage) {
             if (Number(lastOverallMessage.sender_id) === otherUserId && !lastOverallMessage.read_at) {
-                console.log("📖 Sending read receipt for message:", lastOverallMessage.id);
                 sendReadReceipt(lastOverallMessage.id, otherUserId);
             }
         }
     }, [messages, otherUserId, sendReadReceipt, lastOverallMessage]);
 
-    // --- 3. Fetch History ---
     useEffect(() => {
         const fetchHistory = async () => {
             try {
@@ -65,7 +62,6 @@ export const DirectMessageBox: React.FC<DirectMessageBoxProps> = ({
         if (otherUserId && token) fetchHistory();
     }, [otherUserId, token, setMessages]);
 
-    // --- 4. Scroll to Bottom ---
     useEffect(() => {
         if (messageListRef.current) {
             messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
@@ -74,9 +70,7 @@ export const DirectMessageBox: React.FC<DirectMessageBoxProps> = ({
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setInputValue(e.target.value);
-        if (!typingTimeoutRef.current) {
-            sendTypingStatus(true, otherUserId);
-        }
+        if (!typingTimeoutRef.current) sendTypingStatus(true, otherUserId);
         if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
         typingTimeoutRef.current = setTimeout(() => {
             sendTypingStatus(false, otherUserId);
@@ -104,47 +98,42 @@ export const DirectMessageBox: React.FC<DirectMessageBoxProps> = ({
     return (
         <div style={styles.container}>
             <div style={styles.header}>
-                <span>Chat with {otherUserEmail}</span>
-                <span style={{ color: isConnected ? '#4caf50' : '#f44336', fontSize: '0.8rem' }}>
-                    {isConnected ? ' ● Online' : ' ● Offline'}
-                </span>
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    <span style={styles.headerTitle}>Chat with {otherUserEmail.split('@')[0]}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <div style={{
+                            width: '8px', height: '8px', borderRadius: '50%',
+                            background: isConnected ? '#4caf50' : '#f44336',
+                            boxShadow: isConnected ? '0 0 8px #4caf50' : 'none'
+                        }} />
+                        <span style={styles.statusText}>{isConnected ? 'Online' : 'Offline'}</span>
+                    </div>
+                </div>
+                <button style={styles.closeBtn} onClick={onClose} title="Close Chat">✕</button>
             </div>
 
             <div ref={messageListRef} style={styles.messageList}>
                 {(messages || []).map((m, i) => {
                     const isMe = Number(m.sender_id) === currentUserId;
                     const time = formatTime(m.created_at);
-
-                    // --- REFINED SEEN LOGIC ---
-                    // 1. Is it a message I sent?
-                    // 2. Is it the most recently read message of mine?
-                    // 3. Has the other person NOT replied yet? (Last message in chat is still from me)
                     const isLastReadByMe = lastReadMessageByMe?.id === m.id;
                     const otherHasNotReplied = Number(lastOverallMessage?.sender_id) === currentUserId;
                     const showSeen = isMe && isLastReadByMe && otherHasNotReplied;
 
                     return (
-                        <div
-                            key={m.id || i}
-                            style={{
-                                ...styles.messageItem,
-                                alignSelf: isMe ? 'flex-end' : 'flex-start',
-                                backgroundColor: isMe ? '#007bff' : '#f1f1f1',
-                                color: isMe ? '#fff' : '#000',
-                            }}
-                        >
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: '10px' }}>
-                                <small style={{ ...styles.sender, color: isMe ? '#e0e0e0' : '#888' }}>
-                                    {isMe ? "Me" : otherUserEmail}
-                                </small>
-                                {time && <small style={{ fontSize: '0.6rem', color: isMe ? '#ccc' : '#999' }}>{time}</small>}
-                            </div>
-                            <div style={{ marginTop: '2px' }}>{m.content}</div>
-                            {showSeen && (
-                                <div style={{ textAlign: 'right', fontSize: '0.6rem', marginTop: '2px', color: '#e0e0e0', fontWeight: 'bold' }}>
-                                    ✓ Seen
+                        <div key={m.id || i} style={{ ...styles.messageWrapper, alignItems: isMe ? 'flex-end' : 'flex-start' }}>
+                            <div style={{
+                                ...styles.bubble,
+                                backgroundColor: isMe ? '#007bff' : '#ffffff',
+                                color: isMe ? '#fff' : '#333',
+                                borderRadius: isMe ? '16px 16px 2px 16px' : '16px 16px 16px 2px',
+                                border: isMe ? 'none' : '1px solid #e0e0e0',
+                            }}>
+                                <div style={styles.messageContent}>{m.content}</div>
+                                <div style={{ ...styles.timeLabel, color: isMe ? 'rgba(255,255,255,0.7)' : '#999', textAlign: isMe ? 'right' : 'left' }}>
+                                    {time} {showSeen && " • Seen"}
                                 </div>
-                            )}
+                            </div>
                         </div>
                     );
                 })}
@@ -152,35 +141,63 @@ export const DirectMessageBox: React.FC<DirectMessageBoxProps> = ({
 
             <div style={styles.typingShelf}>
                 {isTyping && Number(typingUserId) === Number(otherUserId) && (
-                    <span style={styles.typingIndicator}>
-                        {otherUserEmail} is typing...
-                    </span>
+                    <div style={styles.typingIndicator}>{otherUserEmail.split('@')[0]} is typing...</div>
                 )}
             </div>
 
             <div style={styles.inputArea}>
-                <input
-                    style={styles.input}
-                    value={inputValue}
-                    onChange={handleInputChange}
-                    onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-                    placeholder="Type a message..."
-                />
-                <button style={styles.button} onClick={handleSend}>Send</button>
+                <div style={styles.inputWrapper}>
+                    <input
+                        style={styles.input}
+                        value={inputValue}
+                        onChange={handleInputChange}
+                        onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+                        placeholder="Write a message..."
+                    />
+                    <button style={styles.sendButton} onClick={handleSend}>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <line x1="22" y1="2" x2="11" y2="13"></line>
+                            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                        </svg>
+                    </button>
+                </div>
             </div>
         </div>
     );
 };
 
 const styles: { [key: string]: React.CSSProperties } = {
-    container: { border: '1px solid #ccc', borderRadius: '8px', width: '350px', display: 'flex', flexDirection: 'column', height: '450px', background: '#fff' },
-    header: { padding: '10px', borderBottom: '1px solid #eee', display: 'flex', justifyContent: 'space-between', fontWeight: 'bold' },
-    messageList: { flex: 1, overflowY: 'auto', padding: '10px', display: 'flex', flexDirection: 'column', gap: '12px' },
-    messageItem: { padding: '8px 12px', borderRadius: '12px', maxWidth: '80%', wordBreak: 'break-word', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' },
-    sender: { fontSize: '0.7rem', fontWeight: 'bold' },
-    typingShelf: { height: '22px', paddingLeft: '12px', display: 'flex', alignItems: 'center', background: '#fff' },
-    typingIndicator: { fontSize: '0.75rem', color: '#007bff', fontStyle: 'italic', fontWeight: '500' },
-    inputArea: { padding: '10px', borderTop: '1px solid #eee', display: 'flex', gap: '5px' },
-    input: { flex: 1, padding: '8px', borderRadius: '4px', border: '1px solid #ddd' },
-    button: { padding: '8px 15px', background: '#007bff', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }
+    container: {
+        width: '380px',
+        height: '550px',
+        display: 'flex',
+        flexDirection: 'column',
+        background: '#f7f9fc',
+        borderRadius: '20px',
+        boxShadow: '0 12px 28px rgba(0,0,0,0.12)',
+        overflow: 'hidden',
+        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif'
+    },
+    header: {
+        padding: '16px 20px',
+        background: '#ffffff',
+        borderBottom: '1px solid #eef2f7',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center'
+    },
+    headerTitle: { fontWeight: 700, fontSize: '1rem', color: '#1a1d21' },
+    statusText: { fontSize: '0.75rem', color: '#71767c', fontWeight: 500 },
+    closeBtn: { background: 'none', border: 'none', color: '#b0b7c3', cursor: 'pointer', fontSize: '1.2rem', padding: '4px', lineHeight: 1 },
+    messageList: { flex: 1, overflowY: 'auto', padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' },
+    messageWrapper: { display: 'flex', flexDirection: 'column', maxWidth: '85%' },
+    bubble: { padding: '10px 14px', boxShadow: '0 2px 4px rgba(0,0,0,0.02)', position: 'relative' },
+    messageContent: { fontSize: '0.95rem', lineHeight: '1.4' },
+    timeLabel: { fontSize: '0.65rem', marginTop: '4px', fontWeight: 500 },
+    typingShelf: { height: '28px', padding: '0 20px', display: 'flex', alignItems: 'center' },
+    typingIndicator: { fontSize: '0.8rem', color: '#007bff', fontWeight: 500 },
+    inputArea: { padding: '15px 20px 20px 20px', background: '#ffffff' },
+    inputWrapper: { display: 'flex', alignItems: 'center', background: '#f0f2f5', borderRadius: '25px', padding: '5px 5px 5px 15px' },
+    input: { flex: 1, background: 'transparent', border: 'none', padding: '10px 0', outline: 'none', fontSize: '0.95rem', color: '#333' },
+    sendButton: { background: '#007bff', color: '#fff', border: 'none', borderRadius: '50%', width: '38px', height: '38px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', marginLeft: '10px' }
 };

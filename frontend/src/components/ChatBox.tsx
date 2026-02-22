@@ -4,19 +4,19 @@ import { useChat } from '../hooks/useChat';
 interface ChatBoxProps {
     projectId: number;
     token: string;
+    onClose: () => void; // New prop to handle closing the chat
 }
 
-export const ChatBox: React.FC<ChatBoxProps> = ({ projectId, token }) => {
+export const ChatBox: React.FC<ChatBoxProps> = ({ projectId, token, onClose }) => {
     const {
         messages,
         setMessages,
         sendMessage,
-        sendReadReceipt,
         sendTypingStatus,
         isConnected,
         isTyping,
         typingUserId,
-        typingUserEmail // <--- Now pulled directly from the hook!
+        typingUserEmail
     } = useChat(token, projectId);
 
     const [inputValue, setInputValue] = useState("");
@@ -63,7 +63,7 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ projectId, token }) => {
         if (projectId && token) fetchHistory();
     }, [projectId, token, setMessages]);
 
-    // 3. Scroll to bottom only when NEW MESSAGES arrive
+    // 3. Scroll to bottom
     useEffect(() => {
         if (messageListRef.current) {
             messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
@@ -100,13 +100,30 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ projectId, token }) => {
 
     return (
         <div style={styles.container}>
+            {/* Header with Status Indicator */}
             <div style={styles.header}>
-                <span>{projectName || `Project ${projectId}`}</span>
-                <span style={{ color: isConnected ? '#4caf50' : '#f44336', fontSize: '0.8rem' }}>
-                    {isConnected ? ' ● Online' : ' ● Offline'}
-                </span>
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    <span style={styles.headerTitle}>{projectName || `Project ${projectId}`}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <div style={{
+                            width: '8px', height: '8px', borderRadius: '50%',
+                            background: isConnected ? '#4caf50' : '#f44336',
+                            boxShadow: isConnected ? '0 0 8px #4caf50' : 'none'
+                        }} />
+                        <span style={styles.statusText}>{isConnected ? 'Active' : 'Disconnected'}</span>
+                    </div>
+                </div>
+                {/* Functional Close Button */}
+                <button
+                    style={styles.closeBtn}
+                    onClick={onClose}
+                    title="Close Chat"
+                >
+                    ✕
+                </button>
             </div>
 
+            {/* Message Area */}
             <div ref={messageListRef} style={styles.messageList}>
                 {(messages || []).map((m, i) => {
                     const isMe = Number(m.sender_id) === currentUserId;
@@ -116,56 +133,145 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ projectId, token }) => {
                         <div
                             key={m.id || i}
                             style={{
-                                ...styles.messageItem,
-                                alignSelf: isMe ? 'flex-end' : 'flex-start',
-                                backgroundColor: isMe ? '#007bff' : '#f1f1f1',
-                                color: isMe ? '#fff' : '#000',
+                                ...styles.messageWrapper,
+                                alignItems: isMe ? 'flex-end' : 'flex-start',
                             }}
                         >
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: '10px' }}>
-                                <small style={{ ...styles.sender, color: isMe ? '#e0e0e0' : '#888' }}>
-                                    {isMe ? "Me" : m.sender_email || `User ${m.sender_id}`}
-                                </small>
-                                <small style={{ fontSize: '0.6rem', color: isMe ? '#ccc' : '#999' }}>{time}</small>
+                            {!isMe && <span style={styles.senderLabel}>{m.sender_email?.split('@')[0] || `User ${m.sender_id}`}</span>}
+                            <div
+                                style={{
+                                    ...styles.bubble,
+                                    backgroundColor: isMe ? '#007bff' : '#ffffff',
+                                    color: isMe ? '#fff' : '#333',
+                                    borderRadius: isMe ? '16px 16px 2px 16px' : '16px 16px 16px 2px',
+                                    border: isMe ? 'none' : '1px solid #e0e0e0',
+                                }}
+                            >
+                                <div style={styles.messageContent}>{m.content}</div>
+                                <div style={{
+                                    ...styles.timeLabel,
+                                    color: isMe ? 'rgba(255,255,255,0.7)' : '#999',
+                                    textAlign: isMe ? 'right' : 'left'
+                                }}>
+                                    {time}
+                                </div>
                             </div>
-                            <div style={{ marginTop: '2px' }}>{m.content}</div>
                         </div>
                     );
                 })}
             </div>
 
-            {/* STICKY TYPING SHELF: Displays email from hook, fallback to ID if needed */}
+            {/* Typing Indicator Overlay */}
             <div style={styles.typingShelf}>
                 {isTyping && typingUserId !== currentUserId && (
                     <div style={styles.typingIndicator}>
-                        {typingUserEmail || `User ${typingUserId}`} is typing...
+                        <span className="typing-dots">{typingUserEmail || `User ${typingUserId}`} is typing</span>
                     </div>
                 )}
             </div>
 
+            {/* Input Bar */}
             <div style={styles.inputArea}>
-                <input
-                    style={styles.input}
-                    value={inputValue}
-                    onChange={handleInputChange}
-                    onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-                    placeholder="Type a message..."
-                />
-                <button style={styles.button} onClick={handleSend}>Send</button>
+                <div style={styles.inputWrapper}>
+                    <input
+                        style={styles.input}
+                        value={inputValue}
+                        onChange={handleInputChange}
+                        onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+                        placeholder="Write a message..."
+                    />
+                    <button style={styles.sendButton} onClick={handleSend}>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <line x1="22" y1="2" x2="11" y2="13"></line>
+                            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                        </svg>
+                    </button>
+                </div>
             </div>
         </div>
     );
 };
 
 const styles: { [key: string]: React.CSSProperties } = {
-    container: { border: '1px solid #ccc', borderRadius: '8px', width: '350px', display: 'flex', flexDirection: 'column', height: '450px', background: '#fff' },
-    header: { padding: '10px', borderBottom: '1px solid #eee', display: 'flex', justifyContent: 'space-between', fontWeight: 'bold' },
-    messageList: { flex: 1, overflowY: 'auto', padding: '10px', display: 'flex', flexDirection: 'column', gap: '12px' },
-    messageItem: { padding: '8px 12px', borderRadius: '12px', maxWidth: '80%', wordBreak: 'break-word', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' },
-    sender: { fontSize: '0.7rem', fontWeight: 'bold' },
-    typingShelf: { height: '22px', paddingLeft: '12px', display: 'flex', alignItems: 'center', background: '#fff' },
-    typingIndicator: { fontSize: '0.75rem', color: '#007bff', fontStyle: 'italic', fontWeight: '500' },
-    inputArea: { padding: '10px', borderTop: '1px solid #eee', display: 'flex', gap: '5px' },
-    input: { flex: 1, padding: '8px', borderRadius: '4px', border: '1px solid #ddd' },
-    button: { padding: '8px 15px', background: '#007bff', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }
+    container: {
+        width: '400px',
+        height: '600px',
+        display: 'flex',
+        flexDirection: 'column',
+        background: '#f7f9fc',
+        borderRadius: '20px',
+        boxShadow: '0 12px 28px rgba(0,0,0,0.12)',
+        overflow: 'hidden',
+        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif'
+    },
+    header: {
+        padding: '16px 20px',
+        background: '#ffffff',
+        borderBottom: '1px solid #eef2f7',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center'
+    },
+    headerTitle: { fontWeight: 700, fontSize: '1.1rem', color: '#1a1d21' },
+    statusText: { fontSize: '0.75rem', color: '#71767c', fontWeight: 500 },
+    closeBtn: {
+        background: 'none',
+        border: 'none',
+        color: '#b0b7c3',
+        cursor: 'pointer',
+        fontSize: '1.2rem',
+        padding: '4px',
+        lineHeight: 1,
+        transition: 'color 0.2s ease'
+    },
+    messageList: {
+        flex: 1,
+        overflowY: 'auto',
+        padding: '20px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '16px'
+    },
+    messageWrapper: { display: 'flex', flexDirection: 'column', maxWidth: '85%' },
+    senderLabel: { fontSize: '0.7rem', fontWeight: 600, color: '#8a94a6', marginBottom: '4px', marginLeft: '4px' },
+    bubble: {
+        padding: '10px 14px',
+        boxShadow: '0 2px 4px rgba(0,0,0,0.02)',
+        position: 'relative'
+    },
+    messageContent: { fontSize: '0.95rem', lineHeight: '1.4' },
+    timeLabel: { fontSize: '0.65rem', marginTop: '4px', fontWeight: 500 },
+    typingShelf: { height: '28px', padding: '0 20px', display: 'flex', alignItems: 'center' },
+    typingIndicator: { fontSize: '0.8rem', color: '#007bff', fontWeight: 500 },
+    inputArea: { padding: '15px 20px 25px 20px', background: '#ffffff' },
+    inputWrapper: {
+        display: 'flex',
+        alignItems: 'center',
+        background: '#f0f2f5',
+        borderRadius: '25px',
+        padding: '5px 5px 5px 15px'
+    },
+    input: {
+        flex: 1,
+        background: 'transparent',
+        border: 'none',
+        padding: '10px 0',
+        outline: 'none',
+        fontSize: '0.95rem',
+        color: '#333'
+    },
+    sendButton: {
+        background: '#007bff',
+        color: '#fff',
+        border: 'none',
+        borderRadius: '50%',
+        width: '38px',
+        height: '38px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        cursor: 'pointer',
+        transition: 'transform 0.2s ease',
+        marginLeft: '10px'
+    }
 };
