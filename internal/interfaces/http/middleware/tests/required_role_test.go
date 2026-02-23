@@ -25,12 +25,16 @@ func TestRequireRole_AdminAllowed(t *testing.T) {
 
 	c := e.NewContext(req, rec)
 
-	handler := middleware.RequireRole(jwtManager, "admin")(func(c echo.Context) error {
+	// Apply JWTMiddleware first, then RequireRole
+	next := func(c echo.Context) error {
 		return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
-	})
+	}
 
-	err := handler(c)
+	chained := middleware.JWTMiddleware(jwtManager)(
+		middleware.RequireRole(nil, auth.RoleAdmin)(next),
+	)
 
+	err := chained(c)
 	assert.NoError(t, err)
 	assert.Equal(t, http.StatusOK, rec.Code)
 }
@@ -47,12 +51,15 @@ func TestRequireRole_UserForbidden(t *testing.T) {
 
 	c := e.NewContext(req, rec)
 
-	handler := middleware.RequireRole(jwtManager, "admin")(func(c echo.Context) error {
+	next := func(c echo.Context) error {
 		return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
-	})
+	}
 
-	err := handler(c)
+	chained := middleware.JWTMiddleware(jwtManager)(
+		middleware.RequireRole(nil, auth.RoleAdmin)(next),
+	)
 
+	err := chained(c)
 	assert.NoError(t, err)
 	assert.Equal(t, http.StatusForbidden, rec.Code)
 }

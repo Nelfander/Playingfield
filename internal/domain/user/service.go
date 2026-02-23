@@ -32,8 +32,8 @@ type Service interface {
 	RegisterUser(ctx context.Context, email, hashedPassword string) (*User, error)
 	Login(ctx context.Context, email, password string) (*User, error)
 	ListAllUsers(ctx context.Context) ([]UserListRow, error)
-	AdminScrubUser(ctx context.Context, adminID int64, targetUserID int64) error
-	ToggleUserStatus(ctx context.Context, userID int64) error
+	AdminScrubUser(ctx context.Context, actor *auth.Claims, targetUserID int64) error
+	ToggleUserStatus(ctx context.Context, actor *auth.Claims, targetUserID int64) error
 }
 
 func NewService(repo Repository, hub *ws.Hub) Service {
@@ -117,20 +117,37 @@ func (s *service) ListAllUsers(ctx context.Context) ([]UserListRow, error) {
 	return filteredUsers, nil
 }
 
-func (s *service) AdminScrubUser(ctx context.Context, requesterID int64, targetUserID int64) error {
-	// compare IDs before doing anything else
-	if requesterID == targetUserID {
-		slog.Warn("Self-scrub attempt blocked", "admin_id", requesterID)
-		return fmt.Errorf("self-preservation active: you cannot delete the account you are currently logged into")
+// Deletes user but keeps history
+func (s *service) AdminScrubUser(ctx context.Context, actor *auth.Claims, targetUserID int64) error {
+	if actor == nil {
+		return fmt.Errorf("missing authentication claims")
 	}
 
-	slog.Info("admin initiating user scrub", "admin_id", requesterID, "target_user_id", targetUserID)
+	if !auth.IsAdmin(actor.Role) {
+		slog.Warn("non-admin attempted to scrub user",
+			"user_id", actor.UserID,
+			"role", actor.Role,
+			"target_id", targetUserID)
+		return fmt.Errorf("only administrators can scrub users")
+	}
+
+	if actor.UserID == targetUserID {
+		slog.Warn("self-scrub attempt blocked",
+			"user_id", actor.UserID)
+		return fmt.Errorf("cannot scrub your own account")
+	}
+
+	slog.Info("admin scrubbing user",
+		"admin_id", actor.UserID,
+		"role", actor.Role,
+		"target_id", targetUserID)
 
 	// proceed to the repo only if the check passes
-	err := s.repo.ScrubUser(ctx, targetUserID)
-	if err != nil {
-		slog.Error("failed to scrub user", "target_id", targetUserID, "error", err)
-		return fmt.Errorf("service: scrub user failed: %w", err)
+	if err := s.repo.ScrubUser(ctx, targetUserID); err != nil {
+		slog.Error("failed to scrub user",
+			"target_id", targetUserID,
+			"error", err)
+		return fmt.Errorf("failed to scrub user: %w", err)
 	}
 
 	slog.Info("user scrubbed successfully", "target_id", targetUserID)
@@ -142,23 +159,47 @@ func (s *service) AdminScrubUser(ctx context.Context, requesterID int64, targetU
 	return nil
 }
 
-func (s *service) ToggleUserStatus(ctx context.Context, userID int64) error {
-	// fetch the user to see current status
-	u, err := s.repo.GetByID(ctx, userID)
-	if err != nil {
-		return fmt.Errorf("service: toggle status failed to fetch user: %w", err)
+func (s *service) ToggleUserStatus(ctx context.Context, actor *auth.Claims, targetUserID int64) error {
+	if actor == nil {
+		return fmt.Errorf("missing authentication claims")
 	}
 
-	// switch
+	if !auth.IsAdmin(actor.Role) {
+		slog.Warn("non-admin attempted to toggle user status",
+			"user_id", actor.UserID,
+			"role", actor.Role,
+			"target_id", targetUserID)
+		return fmt.Errorf("only administrators can toggle user status")
+	}
+
+	if actor.UserID == targetUserID {
+		return fmt.Errorf("cannot toggle your own account status")
+	}
+
+	u, err := s.repo.GetByID(ctx, targetUserID)
+	if err != nil {
+		return fmt.Errorf("failed to fetch user: %w", err)
+	}
+
 	newStatus := "active"
 	if u.Status == "active" {
 		newStatus = "inactive"
 	}
 
+	slog.Info("user status toggled",
+		"admin_id", actor.UserID,
+		"target_id", targetUserID,
+		"from", u.Status,
+		"to", newStatus)
+
+	if err := s.repo.UpdateUserStatus(ctx, targetUserID, newStatus); err != nil {
+		return fmt.Errorf("failed to update user status: %w", err)
+	}
+
 	if s.hub != nil {
-		notification := fmt.Sprintf("USER_UPDATED:%d:%s", userID, newStatus)
+		notification := fmt.Sprintf("USER_UPDATED:%d:%s", targetUserID, newStatus)
 		s.hub.Broadcast <- []byte(notification)
 	}
 
-	return s.repo.UpdateUserStatus(ctx, userID, newStatus)
+	return nil
 }

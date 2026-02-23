@@ -650,6 +650,38 @@ Validated through service-to-hub integration tests.
 ## 🛠 <b>Development History</b>
 <details><summary>(Click to expand)</summary>
 
+### Feb 23, 2026: Role System Cleanup & Admin User Management Hardening
+
+#### Phase 1: Central Role Definitions
+* **Created new file:** `internal/auth/roles.go`
+* **Defined clean string constants** to eliminate "magic strings" throughout the codebase:
+    * `RoleUser = "user"`
+    * `RoleAdmin = "admin"`
+* **Added helper functions:** `IsAdmin(role string) bool` and `IsValid(role string) bool`.
+* **Purpose:** Created a single source of truth for role values to prevent typos and simplify future refactoring.
+
+#### Phase 2: Middleware Refactoring (`RequireRole`)
+* **Optimized performance:** Removed duplicate JWT parsing/verification. The middleware now trusts the claims already stored in the Echo context by the primary `JWTMiddleware`.
+* **Streamlined logic:** Instead of re-reading headers, it now simply reads `c.Get("user").(*auth.Claims)`.
+* **Result:** Faster execution and cleaner code by removing redundant cryptographic operations.
+
+#### Phase 3: Route Registration Cleanup
+* **Consistency:** Replaced hardcoded `"admin"` strings with the new `auth.RoleAdmin` constant in the admin group setup.
+    * `adminGroup.Use(middleware.RequireRole(jwtManager, auth.RoleAdmin))`
+
+#### Phase 4: Service-layer Defense (User Management)
+* **`AdminScrubUser` Refactor:** Updated signature to `AdminScrubUser(ctx, actor *auth.Claims, targetID int64)`.
+    * **Internal Security:** Added an explicit `IsAdmin` check inside the service layer as a second line of defense.
+    * **Self-Protection:** Retained logic to prevent admins from scrubbing their own accounts.
+* **`ToggleUserStatus` Refactor:** Received identical treatment—now requires full `*auth.Claims`, enforces admin role checks, and blocks self-deactivation.
+* **Test Suite:** Updated all affected tests to pass minimal valid claims objects.
+
+#### Phase 5: Admin Scope Decision
+* **Strategic Choice:** While "Super-User" mode (seeing all projects/tasks) was considered, the decision was made to **maintain normal visibility rules** for projects and tasks.
+* **Reasoning:** * Prevents UI clutter for admins who are also active collaborators.
+    * Ensures admins only see projects they are actually involved in, maintaining a focused workflow.
+* **Current Admin Powers:** Remains focused on high-level management: Listing all users, scrubbing users (anonymization/cleanup), and toggling account status.
+
 <details>
 <summary><b>Feb 19, 2026: Identity Scrubbing Resilience & Permission-Aware Task State</b> (Click to expand) </summary>
 

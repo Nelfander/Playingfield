@@ -168,10 +168,10 @@ func Run() {
 	}))
 
 	// --- Admin Group ---
-	// Only accessible by users with the 'admin' role
+	// Only accessible by users with the admin role (auth.RoleAdmin)
 	adminGroup := e.Group("/admin")
 	adminGroup.Use(middleware.JWTMiddleware(jwtManager))
-	adminGroup.Use(middleware.RequireRole(jwtManager, "admin"))
+	adminGroup.Use(middleware.RequireRole(jwtManager, auth.RoleAdmin))
 
 	// --- Auth Group ---
 	authGroup := e.Group("")

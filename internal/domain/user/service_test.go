@@ -122,9 +122,14 @@ func TestAdminScrubUser_Service(t *testing.T) {
 		{ID: targetID, Email: "fire_me@example.com", PasswordHash: "secret", Status: "active"},
 	}
 
+	adminClaims := &auth.Claims{
+		UserID: adminID,
+		Role:   auth.RoleAdmin,
+	}
+
 	t.Run("successful scrub", func(t *testing.T) {
 		// Pass adminID AND targetID
-		err := svc.AdminScrubUser(ctx, adminID, targetID)
+		err := svc.AdminScrubUser(ctx, adminClaims, targetID)
 		assert.NoError(t, err)
 
 		// verify the user is still in the slice but "scrubbed"
@@ -137,7 +142,7 @@ func TestAdminScrubUser_Service(t *testing.T) {
 
 	t.Run("scrub non-existent user returns error", func(t *testing.T) {
 		// pass adminID AND fake targetID
-		err := svc.AdminScrubUser(ctx, adminID, 999)
+		err := svc.AdminScrubUser(ctx, adminClaims, 999)
 		assert.Error(t, err)
 	})
 
@@ -151,11 +156,11 @@ func TestAdminScrubUser_Service(t *testing.T) {
 		})
 
 		// attempt the prohibited self-scrub
-		err := svc.AdminScrubUser(ctx, adminID, adminID)
+		err := svc.AdminScrubUser(ctx, adminClaims, adminID)
 
 		// it must return an error
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "self-preservation active")
+		assert.Contains(t, err.Error(), "cannot scrub your own account")
 
 		// the data must remain unchanged
 		found := false
@@ -172,7 +177,7 @@ func TestAdminScrubUser_Service(t *testing.T) {
 	t.Run("scrubbed user disappears from list", func(t *testing.T) {
 		// Before scrub: 2 users
 		// After scrub: ListAllUsers should only return 1
-		err := svc.AdminScrubUser(ctx, adminID, targetID)
+		err := svc.AdminScrubUser(ctx, adminClaims, targetID)
 		assert.NoError(t, err)
 
 		activeUsers, _ := svc.ListAllUsers(ctx)

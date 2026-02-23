@@ -146,7 +146,7 @@ func (h *UserHandler) ScrubUser(c echo.Context) error {
 	}
 
 	// call service layer with both the Admin's ID and the Target's ID
-	if err := h.service.AdminScrubUser(c.Request().Context(), claims.UserID, targetUserID); err != nil {
+	if err := h.service.AdminScrubUser(c.Request().Context(), claims, targetUserID); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
@@ -165,7 +165,7 @@ func (h *UserHandler) AdminListAllUsers(c echo.Context) error {
 // POST /admin/users/:id/toggle
 func (h *UserHandler) ToggleStatus(c echo.Context) error {
 	idParam := c.Param("id")
-	targetUserID, err := strconv.ParseInt(idParam, 10, 64)
+	userID, err := strconv.ParseInt(idParam, 10, 64)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid user id")
 	}
@@ -176,11 +176,11 @@ func (h *UserHandler) ToggleStatus(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusUnauthorized, "invalid or missing auth claims")
 	}
 
-	if claims.UserID == targetUserID {
-		return echo.NewHTTPError(http.StatusBadRequest, "cannot deactivate your own admin account")
+	if claims.UserID == userID {
+		return echo.NewHTTPError(http.StatusForbidden, "cannot toggle your own account")
 	}
 
-	if err := h.service.ToggleUserStatus(c.Request().Context(), targetUserID); err != nil {
+	if err := h.service.ToggleUserStatus(c.Request().Context(), claims, userID); err != nil {
 		return err
 	}
 

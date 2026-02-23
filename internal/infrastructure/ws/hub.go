@@ -136,7 +136,7 @@ func (h *Hub) Run() {
 			}
 
 			if client.Conn != nil {
-				// Immediate timeout + close – log failures but don't fail the operation
+				// immediate timeout + close – log failures but don't fail the operation
 				if err := client.Conn.SetWriteDeadline(time.Now()); err != nil {
 					slog.Warn("failed to set write deadline for forced disconnect",
 						"user_id", client.UserID,
