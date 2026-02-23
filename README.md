@@ -89,6 +89,22 @@ Unlike typical boilerplate task boards, it combines:
 * **Ownership Enforcement:** Destructive actions (deleting projects/tasks, removing members) are restricted to the project owner via backend middleware.
 Updating or creating actions are the same.
 
+## 🛡️ Administrative Actions & Permissions
+
+The system implements a robust Role-Based Access Control (RBAC) system. Users assigned the `admin` role (defined in `internal/auth/roles.go`) have access to specialized management tools via the **Admin Panel**.
+
+### User Management
+* **Toggle Account Status**: Admins can activate or deactivate any user. 
+    * *Real-time Enforcement*: Deactivating a user sends a WebSocket signal that triggers an immediate `forceLogout` on the client side.
+* **User Scrubbing**: A hardened cleanup process that anonymizes a user's identity and removes them from all projects.
+    * *Service-Layer Defense*: This action requires a valid Admin JWT and performs a secondary role-check within the service logic to prevent unauthorized API calls.
+
+### System Architecture
+* **Live Dashboard**: The Admin view utilizes a `adminRefreshTick` synchronized via WebSockets, ensuring the user list is always up-to-date as new users register.
+* **Security Middleware**: All administrative routes are protected by the `RequireRole` middleware, which validates claims directly from the Echo context for high-performance authorization.
+
+> **Note**: To maintain a clean UX, Admins follow standard visibility rules for Projects and Tasks. They only see projects they own or have been explicitly added to, keeping their workspace focused on active collaborations.
+
 ### 🛡️ Resilience & Traffic Control
 * **Tiered Rate Limiting (Token Bucket):** Implemented a high-performance middleware using `golang.org/x/time/rate`. It dynamically adjusts throughput based on identity:
     * **Anonymous Tier:** Strict IP-based limits (5 req/sec) to mitigate brute-force attacks and bot scraping.
