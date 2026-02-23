@@ -89,7 +89,7 @@ Unlike typical boilerplate task boards, it combines:
 * **Ownership Enforcement:** Destructive actions (deleting projects/tasks, removing members) are restricted to the project owner via backend middleware.
 Updating or creating actions are the same.
 
-## 🛡️ Administrative Actions & Permissions
+### 🛡️ Administrative Actions & Permissions
 
 The system implements a robust Role-Based Access Control (RBAC) system. Users assigned the `admin` role (defined in `internal/auth/roles.go`) have access to specialized management tools via the **Admin Panel**.
 
