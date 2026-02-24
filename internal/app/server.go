@@ -29,6 +29,7 @@ import (
 	"github.com/nelfander/Playingfield/internal/interfaces/http"
 	"github.com/nelfander/Playingfield/internal/interfaces/http/handlers"
 	"github.com/nelfander/Playingfield/internal/interfaces/http/middleware"
+	"github.com/nelfander/Playingfield/internal/metrics"
 	"github.com/nelfander/Playingfield/pkg/config"
 )
 
@@ -144,6 +145,9 @@ func Run() {
 
 	// --- Echo server ---
 	e := echo.New()
+
+	// Expose Prometheus metrics
+	e.GET("/metrics", echo.WrapHandler(metrics.Handler()))
 
 	// Override default error handler to centralize JSON formatting and slog logging.
 	// This prevents sensitive internal error leakage to the client.

@@ -183,4 +183,36 @@ func TestAdminScrubUser_Service(t *testing.T) {
 		activeUsers, _ := svc.ListAllUsers(ctx)
 		assert.Len(t, activeUsers, 1) // Only the admin or other users remain
 	})
+
+	t.Run("non-admin cannot scrub user", func(t *testing.T) {
+		// fresh repo state
+		repo := NewFakeRepository()
+		svc := NewService(repo, nil)
+		ctx := context.Background()
+
+		targetID := int64(1)
+		nonAdminID := int64(2)
+
+		repo.Users = []User{
+			{ID: targetID, Email: "victim@example.com", PasswordHash: "secret", Status: "active"},
+			{ID: nonAdminID, Email: "user@example.com", PasswordHash: "hash", Status: "active"},
+		}
+
+		nonAdminClaims := &auth.Claims{
+			UserID: nonAdminID,
+			Role:   auth.RoleUser, // not admin
+		}
+
+		err := svc.AdminScrubUser(ctx, nonAdminClaims, targetID)
+
+		// must fail
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "admin")
+
+		// ensure target user was NOT modified
+		u := repo.Users[0]
+		assert.Equal(t, "victim@example.com", u.Email)
+		assert.Equal(t, "secret", u.PasswordHash)
+		assert.Equal(t, "active", u.Status)
+	})
 }

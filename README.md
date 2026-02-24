@@ -373,7 +373,39 @@ The following snapshots verify the goroutine lifecycle and resource reclamation:
 * Deploy **AWS Deployment**.
 
 ---
+## Deployment Plan (AWS – Using Free Tier Credits)
 
+Goal: Deploy frontend (static React), backend (Go container), PostgreSQL DB, and S3 storage with low cost (~$0–20/mo at low traffic after free tier).
+
+### Components
+- **Frontend**: React build → AWS S3 bucket (static hosting) + CloudFront CDN (HTTPS, caching, global edge).
+- **Backend**: Multi-stage Docker image → AWS ECR (registry) → AWS ECS Fargate + Application Load Balancer (ALB) for full WebSocket support, auto-HTTPS, scaling.
+  - Why ECS Fargate over App Runner? App Runner does **not** reliably support WebSockets (stateful/long-lived connections) as of 2026 — see AWS roadmap & community reports. ECS + ALB handles WS upgrades natively.
+- **Database**: AWS RDS PostgreSQL (start with db.t4g.micro / free tier eligible).
+- **Storage**: AWS S3 buckets for file attachments (replace MinIO config with S3 endpoint + IAM role auth).
+- **Observability (phase 1)**: Prometheus metrics exposed at `/metrics` → later scrape with Amazon Managed Prometheus (AMP) or self-hosted Prometheus on ECS.
+- **Domain & HTTPS**: Free ACM certificates + Route 53 (optional custom domain).
+
+### High-Level Steps 
+1. **Frontend** → Build React → upload to S3 → create CloudFront distribution.
+2. **Backend Docker** → Build & push multi-stage image to ECR.
+3. **RDS Postgres** → Provision instance, note endpoint/user/pass.
+4. **ECS Setup**:
+   - VPC (default ok) + subnets.
+   - ALB (internet-facing, HTTPS via ACM).
+   - ECS Cluster (Fargate).
+   - Task Definition (your ECR image, env vars for DB/S3/JWT).
+   - Service (attach to ALB target group, health check on `/health`).
+5. **S3** → Create bucket, update backend config/env to use S3 SDK.
+6. **Test** → Hit ALB domain → WebSocket via `wss://your-alb-domain/ws/...`.
+
+### Future Additions
+- Auto-scaling (CPU-based or custom via WS active connections metric).
+- Prometheus + Grafana (self-hosted on ECS or Amazon Managed).
+- CI/CD (GitHub Actions → ECR push → ECS update).
+- Security: VPC private subnets, security groups, WAF, IAM roles only.
+
+---
 
 ## 🚀 Quick Start
 <details>
@@ -667,7 +699,53 @@ Validated through service-to-hub integration tests.
 ## 🛠 <b>Development History</b>
 <details><summary>(Click to expand)</summary>
 
-### Feb 23, 2026: Role System Cleanup & Admin User Management Hardening
+<details>
+<summary><b>Feb 24, 2026: Prometheus Metrics Instrumentation + Security Test + Deployment Plan</b> (Click to expand)</summary>
+
+#### Phase 1: Prometheus Client Integration
+* **Added dependencies:**
+  - `github.com/prometheus/client_golang/prometheus`
+  - `github.com/prometheus/client_golang/prometheus/promhttp`
+* **Created dedicated metrics package:** `internal/metrics/metrics.go`
+  - Defined two custom metrics:
+    - Gauge: `playingfield_websocket_active_connections_total`
+    - CounterVec: `playingfield_websocket_messages_total` (labels: `room_type`, `direction`)
+  - Registered metrics in `init()`
+  - Exposed clean `Handler()` function returning `http.Handler`
+* **Updated server setup** (`internal/app/server.go`):
+  - Replaced old `/metrics` route with `echo.WrapHandler(metrics.Handler())`
+  - Removed direct Prometheus imports and registration calls from `app` package
+* **Result:** Fully working `/metrics` endpoint showing both Go runtime stats and custom WebSocket metrics (initially at 0)
+
+#### Phase 2: Live WebSocket Connection Tracking
+* **Broke import cycle** by moving metrics to `internal/metrics`
+* **Updated WebSocket hub** (`internal/infrastructure/ws/hub.go`):
+  - Added import: `"github.com/nelfander/Playingfield/internal/metrics"`
+  - In `Register` case → `metrics.ActiveWSConnections.Inc()`
+  - In `Unregister` case → `metrics.ActiveWSConnections.Dec()`
+* **Verification:** Manually tested with multiple WS connections (frontend + wscat)
+  - Gauge correctly increments on connect, decrements on disconnect
+  - Visible in real-time at `/metrics`
+
+#### Phase 3: Admin Security Test Addition
+* **Added unit test** in user service test suite: "non-admin cannot scrub user"
+ 
+#### Phase 4: AWS Deployment Plan Documentation
+* **Added comprehensive deployment section** to README:
+  * **Frontend**: S3 + CloudFront
+  * **Backend**: Multi-stage Docker → ECR → ECS Fargate + ALB  
+    (chosen over App Runner due to reliable WebSocket support)
+  * **Database**: RDS PostgreSQL
+  * **Storage**: S3 (replacing MinIO)
+  * **Observability starter**: `/metrics` endpoint ready for Prometheus scraping
+  * **Networking**: VPC, security groups, ACM HTTPS, health checks
+  * **Future**: Auto-scaling, Amazon Managed Prometheus (AMP), Grafana, CI/CD
+
+* **Reasoning documented**: App Runner lacks native long-lived WebSocket support → ECS Fargate + ALB is safer for real-time chat/task sync
+</details>
+
+<details>
+<summary><b>Feb 23, 2026: Role System Cleanup & Admin User Management Hardening</b> (Click to expand) </summary>
 
 #### Phase 1: Central Role Definitions
 * **Created new file:** `internal/auth/roles.go`
@@ -698,6 +776,7 @@ Validated through service-to-hub integration tests.
 * **Reasoning:** * Prevents UI clutter for admins who are also active collaborators.
     * Ensures admins only see projects they are actually involved in, maintaining a focused workflow.
 * **Current Admin Powers:** Remains focused on high-level management: Listing all users, scrubbing users (anonymization/cleanup), and toggling account status.
+</details>
 
 <details>
 <summary><b>Feb 19, 2026: Identity Scrubbing Resilience & Permission-Aware Task State</b> (Click to expand) </summary>

@@ -65,7 +65,7 @@ func CustomHTTPErrorHandler(err error, c echo.Context) {
 	// --- Rate Limiter ---
 	case errors.Is(err, middleware.ErrRateLimitExceeded):
 		code = http.StatusTooManyRequests
-		message = "Slow down! You're sending too many requests."
+		message = "Retry-After! You're sending too many requests."
 
 	// --- Echo and System errors! ---
 	default:

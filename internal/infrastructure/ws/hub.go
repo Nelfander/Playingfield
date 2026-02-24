@@ -1,11 +1,14 @@
 package ws
 
 import (
+	"errors"
 	"log/slog"
+	"net"
 	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/nelfander/Playingfield/internal/metrics"
 )
 
 // client represents a single connected user
@@ -113,6 +116,8 @@ func (h *Hub) Run() {
 				h.ProjectRooms[client.ProjectID][client] = true
 			}
 
+			metrics.ActiveWSConnections.Inc()
+
 			h.mu.Unlock()
 
 		case client := <-h.Unregister:
@@ -135,21 +140,23 @@ func (h *Hub) Run() {
 				}
 			}
 
+			metrics.ActiveWSConnections.Dec()
+
 			if client.Conn != nil {
 				// immediate timeout + close – log failures but don't fail the operation
-				if err := client.Conn.SetWriteDeadline(time.Now()); err != nil {
+				if err := client.Conn.SetWriteDeadline(time.Now()); err != nil && !errors.Is(err, net.ErrClosed) {
 					slog.Warn("failed to set write deadline for forced disconnect",
 						"user_id", client.UserID,
 						"project_id", client.ProjectID,
 						"err", err)
 				}
-				if err := client.Conn.SetReadDeadline(time.Now()); err != nil {
+				if err := client.Conn.SetReadDeadline(time.Now()); err != nil && !errors.Is(err, net.ErrClosed) {
 					slog.Warn("failed to set read deadline for forced disconnect",
 						"user_id", client.UserID,
 						"project_id", client.ProjectID,
 						"err", err)
 				}
-				if err := client.Conn.Close(); err != nil {
+				if err := client.Conn.Close(); err != nil && !errors.Is(err, net.ErrClosed) {
 					slog.Warn("failed to close websocket connection during forced disconnect",
 						"user_id", client.UserID,
 						"project_id", client.ProjectID,
