@@ -729,6 +729,38 @@ Validated through service-to-hub integration tests.
 <details><summary>(Click to expand)</summary>
 
 <details>
+<summary><b>Feb 25, 2026: Derived Metrics + Real-time Grafana Dashboard + Observability Stack</b> (Click to expand)</summary>
+
+#### Phase 1: Derived & Composite Metrics (PromQL)
+* **Leveraged PromQL expressions** in Grafana to derive insights without modifying Go code:
+  - **Idle vs. Active Sessions:** Calculated using `total_ws_connections - active_chat_connections` to monitor background overhead.
+  - **Message Intensity:** Implemented `rate(messages_total[1m])` with breakdowns for `per-direction` (inbound/outbound) and `room-type`.
+* **Result:** Immediate operational visibility into usage patterns at zero additional instrumentation cost.
+
+#### Phase 2: Real-time Dashboarding (Grafana)
+* **Built a local Grafana dashboard** featuring live-updating panels for development feedback:
+  - **Gauges:** Real-time tracking of current active chat connections and total WebSocket sessions.
+  - **Time Series:** Visualizing message-per-second spikes during active conversations.
+  - **Stats:** Cumulative total of messages processed since service start.
+* **Verification:** Dashboard successfully reflects instant state changes when users log in, open chats, or disconnect.
+
+#### Phase 3: Zero-Cost Local Monitoring Stack
+* **Engineered a self-contained observability environment** using Docker Compose:
+  - **Prometheus:** Configured to scrape the Go `/metrics` endpoint every 15 seconds.
+  - **Grafana:** Pre-configured and accessible locally at `localhost:3001`.
+  - **Modular Setup:** Isolated the stack into `docker-compose-observability.yml` to keep the core app environment lightweight.
+* **Outcome:** A "one-command" monitoring setup (`docker compose up -d`) with no external dependencies or cloud costs.
+
+#### Phase 4: Future-Ready Production Path
+* **Aligned local instrumentation with AWS best practices:**
+  - **Standardization:** `/metrics` output follows Prometheus conventions for seamless ingestion by **Amazon Managed Prometheus (AMP)**.
+  - **Cardinality Management:** Metric labels were reviewed to ensure they remain performant under production loads.
+  - **Infrastructure-as-Code Ready:** Designed the stack to transition from local Docker containers to **AWS ECS Fargate** and **Amazon Managed Grafana** with minimal configuration changes.
+  - **Secret Management:** Externalized Grafana/Prometheus configs to `.env`, ready for **AWS Secrets Manager** integration.
+
+</details>
+
+<details>
 <summary><b>Feb 24, 2026: Prometheus Metrics Instrumentation + Security Test + Deployment Plan</b> (Click to expand)</summary>
 
 #### Phase 1: Prometheus Client Integration
