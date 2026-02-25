@@ -1,0 +1,23 @@
+global:
+  scrape_interval:     15s     # How frequently Prometheus scrapes targets
+  evaluation_interval: 15s     # How frequently to evaluate rules 
+
+# Alertmanager configuration (commented out for now)
+# alerting:
+#   alertmanagers:
+#     - static_configs:
+#         - targets: ['alertmanager:9093']
+
+rule_files:
+  # - "first_rules.yml"    # will add later if I want alerts
+
+scrape_configs:
+  - job_name: 'playingfield-local'
+    static_configs:
+      - targets: ['host.docker.internal:880']   
+    metrics_path: /metrics                       
+
+  # scrape Prometheus itself (good for debugging)
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']

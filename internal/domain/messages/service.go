@@ -8,6 +8,7 @@ import (
 
 	"github.com/nelfander/Playingfield/internal/domain/projects"
 	"github.com/nelfander/Playingfield/internal/infrastructure/ws"
+	"github.com/nelfander/Playingfield/internal/metrics"
 )
 
 type Service struct {
@@ -76,6 +77,9 @@ func (s *Service) SendProjectMessage(ctx context.Context, senderID int64, projec
 		return nil, fmt.Errorf("failed to save project message: %w", err)
 	}
 
+	// count the message as received by the service
+	metrics.WSMessagesTotal.WithLabelValues("project", "received").Inc()
+
 	// broadcast via websocket hub
 	if s.hub != nil {
 		broadcastData := map[string]interface{}{
@@ -87,6 +91,9 @@ func (s *Service) SendProjectMessage(ctx context.Context, senderID int64, projec
 			slog.Error("failed to marshal project message for broadcast", "error", err)
 		} else {
 			s.hub.BroadcastToProject(projectID, payload)
+
+			// count as sent (once per broadcast)
+			metrics.WSMessagesTotal.WithLabelValues("project", "sent").Inc()
 		}
 	}
 
@@ -119,6 +126,10 @@ func (s *Service) SendDirectMessage(ctx context.Context, senderID, receiverID in
 	if err != nil {
 		return nil, fmt.Errorf("failed to save direct message: %w", err)
 	}
+
+	// count received
+	metrics.WSMessagesTotal.WithLabelValues("dm", "received").Inc()
+
 	if s.hub != nil {
 		broadcastData := map[string]interface{}{
 			"type": "new_direct_message",
@@ -131,6 +142,9 @@ func (s *Service) SendDirectMessage(ctx context.Context, senderID, receiverID in
 		} else {
 			s.hub.SendToUser(receiverID, payload)
 			s.hub.SendToUser(senderID, payload)
+
+			// count sent (once per message — seen by two users)
+			metrics.WSMessagesTotal.WithLabelValues("dm", "sent").Inc()
 		}
 	}
 

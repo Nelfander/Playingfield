@@ -116,12 +116,24 @@ func (h *Hub) Run() {
 				h.ProjectRooms[client.ProjectID][client] = true
 			}
 
+			// counts ALL of the open WS
 			metrics.ActiveWSConnections.Inc()
+
+			// only count the real chat connections
+			if client.ProjectID != 0 {
+				metrics.ActiveChatConnections.Inc()
+			}
 
 			h.mu.Unlock()
 
 		case client := <-h.Unregister:
 			h.mu.Lock()
+
+			// decrement chat-specific only if it had project context
+			if client.ProjectID != 0 {
+				metrics.ActiveChatConnections.Dec()
+			}
+
 			// remove specific connection from user's map
 			if connections, ok := h.clients[client.UserID]; ok {
 				delete(connections, client)

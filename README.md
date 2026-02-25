@@ -116,11 +116,40 @@ The system implements a robust Role-Based Access Control (RBAC) system. Users as
 * **CORS-Aware Throttling:** Optimized the middleware to recognize OPTIONS pre-flight signatures, preventing "False-Positive" rate-limiting of browser security handshakes.
 
 ### 🛠️ Reliability & Observability
-* **Storage Provider Abstraction:** Abstracted storage logic into a `StorageProvider` interface, allowing the application to swap between local MinIO and AWS S3 with zero code changes in the domain layer.
-* **Centralized Error Translation:** Implemented a Global Error Handler that acts as a bridge between internal domain errors and HTTP responses. It ensures that internal truths are logged for developers while users receive clean, safe, and actionable error messages.
-* **Structured Telemetry (slog):** The system uses machine-readable JSON logging in production. It follows a "Leveled" approach where low-level database traces are hidden by default, and only actionable events trigger alerts.
-* **Recursive Error Wrapping:** Using Go's `%w` verb to wrap errors as they move up the stack. This preserves the original error (like a DB connection timeout) while adding "Domain Context."
-* **Defensive Mapping:** Data is strictly mapped between the Database (Postgres/sqlc) and the Domain (Go structs), ensuring database changes never break business rules.
+
+#### Reliability by Design
+- **Storage Abstraction Layer:** Introduced a `StorageProvider` interface decoupling domain logic from infrastructure, enabling seamless switching between MinIO (local) and AWS S3 without domain-layer changes.
+- **Centralized Error Translation:** Implemented a global error handler that maps domain errors to safe, consistent HTTP responses while preserving full internal context for logging and debugging.
+- **Recursive Error Wrapping:** Standardized Go `%w` error wrapping across layers to retain root causes (e.g., DB timeouts) while enriching errors with domain context.
+- **Defensive Data Mapping:** Enforced strict mapping boundaries between Postgres/sqlc models and domain structs to prevent persistence-layer changes from leaking into business logic.
+
+#### Observability & Telemetry
+- **Structured Logging (slog):** Production-grade JSON logging with leveled output; low-level traces suppressed by default while actionable failures surface clearly.
+- **Prometheus Instrumentation:** Exposed a production-safe `/metrics` endpoint with low-cardinality, namespaced metrics.
+  - `playingfield_websocket_active_connections_total`
+  - `playingfield_websocket_active_chat_connections_total`
+  - `playingfield_websocket_messages_total{direction, room_type}`
+- **Operationally Meaningful Metrics Design:** Explicit separation between:
+  - General WebSocket sessions (connected users)
+  - Active chat sessions (ProjectID ≠ 0)  
+  Enables derived insight such as idle vs active session tracking.
+- **Service-Layer Message Counting:** Message counters increment only after successful persistence and before broadcast, ensuring accuracy and semantic correctness.
+- **Derived PromQL Insights (Zero Extra Instrumentation):**
+  - Idle sessions = total connections − active chat connections
+  - Message rate/sec via `rate(messages_total[1m])`
+  - Per-direction and per-room-type breakdown for chat intensity analysis
+  - **Real-time Feedback Loop:** Dashboard panels update instantly during development (e.g., WS gauge toggles on chat open/close, rate spikes during message bursts), enabling rapid iteration and confidence in real-time features.
+
+#### Local Ops & Production Readiness
+- **Containerized Observability Stack:** Built a self-contained Prometheus + Grafana environment via `docker-compose-observability.yml`.
+  - Prometheus scraping `/metrics` every 15s
+  - Grafana dashboard (localhost:3001) with real-time panels:
+    - Active connections (gauge)
+    - Active chat sessions (gauge)
+    - Messages per second (time series)
+    - Cumulative messages (stat)
+- **Secrets & Configuration Hygiene:** Externalized credentials into `.env`, excluded via `.gitignore`, and standardized Docker variable substitution (`${VAR}`).
+- **Production-Ready Path:** Metrics naming, label strategy, and endpoint design align with Prometheus best practices and are ready for migration to managed environments (e.g., AMP + Managed Grafana on ECS Fargate) without refactoring.
 
 ---
 

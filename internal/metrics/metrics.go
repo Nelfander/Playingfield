@@ -15,6 +15,13 @@ var (
 		Help:      "Current number of active WebSocket connections",
 	})
 
+	ActiveChatConnections = prometheus.NewGauge(prometheus.GaugeOpts{
+		Namespace: "playingfield",
+		Subsystem: "websocket",
+		Name:      "active_chat_connections_total",
+		Help:      "Current number of WebSocket connections with a project chat context (ProjectID ≠ 0)",
+	})
+
 	WSMessagesTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: "playingfield",
 		Subsystem: "websocket",
@@ -26,6 +33,7 @@ var (
 func init() {
 	prometheus.MustRegister(ActiveWSConnections)
 	prometheus.MustRegister(WSMessagesTotal)
+	prometheus.MustRegister(ActiveChatConnections)
 }
 
 // Handler returns the standard Prometheus metrics HTTP handler
