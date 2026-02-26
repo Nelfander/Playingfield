@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import ProjectUsers, { type UserInProject } from './ProjectUsers';
 import AddMemberSection from './AddMemberSection';
 import TaskBoard from './TaskBoard';
-
+import { apiUrl } from '../config/env';
 
 interface Project {
     id: number;
@@ -20,6 +20,8 @@ interface ProjectListProps {
     showUsersMap: Record<number, boolean>;
     showTasksMap: Record<number, boolean>;
     taskRefreshTick: number;
+    unreadProjects: Record<number, boolean>;
+    unreadDMs: Record<number, boolean>;
     toggleProjectUsers: (id: number) => void;
     toggleTasks: (id: number) => void;
     removeUser: (projectId: number, userId: number) => void;
@@ -41,6 +43,8 @@ const ProjectList: React.FC<ProjectListProps> = ({
     showUsersMap,
     showTasksMap,
     taskRefreshTick,
+    unreadProjects,
+    unreadDMs,
     toggleProjectUsers,
     toggleTasks,
     removeUser,
@@ -64,7 +68,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
 
     const handleUpdate = async (projectId: number) => {
         try {
-            const response = await fetch(`http://localhost:880/projects/${projectId}`, {
+            const response = await fetch(apiUrl(`projects/${projectId}`), {
                 method: 'PUT',
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -88,7 +92,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
     const handleDeleteClick = async (projectId: number, projectName: string) => {
         if (window.confirm(`Are you sure you want to delete "${projectName}"?`)) {
             try {
-                const response = await fetch(`http://localhost:880/projects/${projectId}`, {
+                const response = await fetch(apiUrl(`projects/${projectId}`), {
                     method: 'DELETE',
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
@@ -105,14 +109,14 @@ const ProjectList: React.FC<ProjectListProps> = ({
     return (
         <div className="projects-container">
             {projects.map((project) => {
-                // Defensive check for the project object itself
                 if (!project || !project.id) return null;
 
                 const isOwner = Number(project.owner_id) === Number(currentUserId);
                 const isEditing = editingProjectId === project.id;
-
-                // Get current members safely
                 const currentMembers = projectUsersMap[project.id] || [];
+
+                // CHECK IF THIS SPECIFIC PROJECT HAS AN UNREAD MESSAGE
+                const hasUnread = unreadProjects[project.id] === true;
 
                 return (
                     <div key={project.id} className="project-card">
@@ -134,13 +138,40 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                 </div>
 
                                 <div style={{ display: 'flex', gap: '8px' }}>
-                                    <button
-                                        className="btn-chat"
-                                        onClick={() => onSelectProject(project.id)}
-                                        style={{ backgroundColor: '#1890ff', color: 'white', padding: '5px 10px', fontSize: '0.8rem', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
-                                    >
-                                        💬 Chat
-                                    </button>
+                                    {/* --- CHAT BUTTON SECTION --- */}
+                                    <div style={{ position: 'relative', display: 'inline-block' }}>
+                                        <button
+                                            className="btn-chat"
+                                            onClick={() => onSelectProject(project.id)}
+                                            style={{
+                                                backgroundColor: '#1890ff',
+                                                color: 'white',
+                                                padding: '5px 10px',
+                                                fontSize: '0.8rem',
+                                                border: 'none',
+                                                borderRadius: '4px',
+                                                cursor: 'pointer'
+                                            }}
+                                        >
+                                            💬 Chat
+                                        </button>
+
+                                        {/* RED DOT LOGIC */}
+                                        {hasUnread && (
+                                            <span style={{
+                                                position: 'absolute',
+                                                top: '-5px',
+                                                right: '-5px',
+                                                width: '12px',
+                                                height: '12px',
+                                                backgroundColor: '#ff4d4f',
+                                                borderRadius: '50%',
+                                                border: '2px solid white',
+                                                boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+                                                zIndex: 10
+                                            }} />
+                                        )}
+                                    </div>
 
                                     {isOwner && !isEditing && (
                                         <button
@@ -206,6 +237,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                 <div className="accordion-content">
                                     <ProjectUsers
                                         users={currentMembers}
+                                        unreadDMs={unreadDMs}
                                         onRemove={isOwner ? (uId) => removeUser(project.id, uId) : undefined}
                                         onMessage={onStartDM}
                                     />
@@ -213,7 +245,6 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                         <AddMemberSection
                                             projectId={project.id}
                                             onAdd={handleAddMember}
-                                            // DEFENSIVE: Filter out any null IDs before passing to AddMemberSection
                                             excludeIds={currentMembers
                                                 .filter(u => u && u.id)
                                                 .map(u => u.id)

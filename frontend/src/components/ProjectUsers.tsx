@@ -8,12 +8,13 @@ export interface UserInProject {
 
 interface ProjectUsersProps {
     users: UserInProject[];
-    // The '?' makes it optional, fixing the ts(2322) error
+    // NEW: Added unreadDMs to the interface to fix ts(2322)
+    unreadDMs: Record<number, boolean>;
     onRemove?: (userId: number) => void;
     onMessage?: (userId: number, userEmail: string) => void;
 }
 
-const ProjectUsers: React.FC<ProjectUsersProps> = ({ users, onRemove, onMessage }) => {
+const ProjectUsers: React.FC<ProjectUsersProps> = ({ users, unreadDMs, onRemove, onMessage }) => {
     return (
         <div className="member-list">
             {users.map((user) => (
@@ -26,12 +27,30 @@ const ProjectUsers: React.FC<ProjectUsersProps> = ({ users, onRemove, onMessage 
                     <div style={{ display: 'flex', gap: '5px' }}>
                         {/* Message button - shows for all users */}
                         {onMessage && (
-                            <button
-                                className="btn-primary-sm"
-                                onClick={() => onMessage(user.id, user.email)}
-                            >
-                                Message
-                            </button>
+                            <div style={{ position: 'relative', display: 'inline-block' }}>
+                                <button
+                                    className="btn-primary-sm"
+                                    onClick={() => onMessage(user.id, user.email)}
+                                >
+                                    Message
+                                </button>
+
+                                {/* THE RED DOT FOR DMS */}
+                                {unreadDMs[user.id] && (
+                                    <span style={{
+                                        position: 'absolute',
+                                        top: '-4px',
+                                        right: '-4px',
+                                        width: '10px',
+                                        height: '10px',
+                                        backgroundColor: '#ff4d4f',
+                                        borderRadius: '50%',
+                                        border: '2px solid white',
+                                        boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+                                        zIndex: 10
+                                    }} />
+                                )}
+                            </div>
                         )}
 
                         {/* Only show the remove button if onRemove was passed (Owner check) */}

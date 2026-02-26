@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { WS_BASE_URL } from '../config/env';
 
 export interface DirectMessage {
     id: number;
@@ -32,7 +33,7 @@ export const useDirectChat = (token: string | null, otherUserId?: number) => {
         if (!token || !otherUserId) return;
 
         // Using projectId=0 to signify Direct Messaging mode to the server
-        const wsUrl = `ws://localhost:880/ws?token=${token}&projectId=0`;
+        const wsUrl = `${WS_BASE_URL}/ws?token=${token}&projectId=0`;
 
         if (socket.current) {
             socket.current.close();

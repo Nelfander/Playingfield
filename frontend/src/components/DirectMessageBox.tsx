@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useDirectChat } from '../hooks/useDirectChat';
+import { apiUrl } from '../config/env';
 
 interface DirectMessageBoxProps {
     otherUserId: number;
@@ -47,7 +48,7 @@ export const DirectMessageBox: React.FC<DirectMessageBoxProps> = ({
     useEffect(() => {
         const fetchHistory = async () => {
             try {
-                const response = await fetch(`http://localhost:880/messages/direct/${otherUserId}`, {
+                const response = await fetch(apiUrl(`messages/direct/${otherUserId}`), {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 if (response.ok) {

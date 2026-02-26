@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useChat } from '../hooks/useChat';
+import { apiUrl } from '../config/env';
 
 interface ChatBoxProps {
     projectId: number;
@@ -30,7 +31,7 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ projectId, token, onClose }) =
     useEffect(() => {
         const fetchProjectDetails = async () => {
             try {
-                const response = await fetch(`http://localhost:880/projects/${projectId}`, {
+                const response = await fetch(apiUrl(`projects/${projectId}`), {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 if (response.ok) {
@@ -48,7 +49,7 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ projectId, token, onClose }) =
     useEffect(() => {
         const fetchHistory = async () => {
             try {
-                const res = await fetch(`http://localhost:880/projects/${projectId}/messages`, {
+                const res = await fetch(apiUrl(`projects/${projectId}/messages`), {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 if (res.ok) {

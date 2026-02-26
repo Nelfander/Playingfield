@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { WS_BASE_URL } from '../config/env';
 
 export interface Message {
     id: number;
@@ -33,7 +34,7 @@ export const useChat = (token: string | null, projectId?: number) => {
     useEffect(() => {
         if (!token || !projectId) return;
 
-        const wsUrl = `ws://localhost:880/ws?token=${token}&projectId=${projectId}`;
+        const wsUrl = `${WS_BASE_URL}/ws?token=${token}&projectId=${projectId}`;
         if (socket.current) socket.current.close();
 
         const ws = new WebSocket(wsUrl);

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import ProjectList from "./components/ProjectList";
 import LoginForm from "./components/LoginForm";
 import CreateProjectModal from "./components/CreateProjectModal";
@@ -7,7 +7,9 @@ import { DirectMessageBox } from "./components/DirectMessageBox";
 import { type UserInProject } from "./components/ProjectUsers";
 import { useWebSockets } from "./hooks/useWebSockets";
 import AdminDashboard from "./components/AdminDashboard";
+import { apiUrl } from './config/env';
 import "./App.css";
+
 
 type Project = {
   id: number;
@@ -34,14 +36,41 @@ function App() {
   const currentUserId = Number(localStorage.getItem("userId")) || 0;
   const userRole = localStorage.getItem("role");
 
-  const [taskRefreshTick, setTaskRefreshTick] = useState(0);
-  const [adminRefreshTick, setAdminRefreshTick] = useState(0); // For live admin panel updates
+  // --- PERSISTENT UNREAD MESSAGE STATES ---
+  const [unreadProjects, setUnreadProjects] = useState<Record<number, boolean>>(() => {
+    const saved = localStorage.getItem("unreadProjects");
+    return saved ? JSON.parse(saved) : {};
+  });
 
-  // --- Global Logout / Force Kick Logic ---
+  const [unreadDMs, setUnreadDMs] = useState<Record<number, boolean>>(() => {
+    const saved = localStorage.getItem("unreadDMs");
+    return saved ? JSON.parse(saved) : {};
+  });
+
+  // Sync to localStorage whenever unread state changes
+  useEffect(() => {
+    localStorage.setItem("unreadProjects", JSON.stringify(unreadProjects));
+  }, [unreadProjects]);
+
+  useEffect(() => {
+    localStorage.setItem("unreadDMs", JSON.stringify(unreadDMs));
+  }, [unreadDMs]);
+
+  const [taskRefreshTick, setTaskRefreshTick] = useState(0);
+  const [adminRefreshTick, setAdminRefreshTick] = useState(0);
+
+  // --- SURGICAL LOGOUT (Does not wipe notifications) ---
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("userId");
+    localStorage.removeItem("role");
+    // We keep unreadProjects and unreadDMs in storage
+    window.location.reload();
+  };
+
   const forceLogout = (reason: string) => {
     alert(reason);
-    localStorage.clear();
-    window.location.reload();
+    handleLogout();
   };
 
   // --- WebSocket Handlers ---
@@ -54,9 +83,7 @@ function App() {
     if (userId === currentUserId) {
       forceLogout("Your account has been deleted by an administrator.");
     }
-    // If we are an admin watching the dashboard, refresh the list
     setAdminRefreshTick(prev => prev + 1);
-    // Refresh projects to remove the deleted user from UI
     fetchProjects();
   };
 
@@ -65,6 +92,31 @@ function App() {
       forceLogout("Your account has been deactivated.");
     }
     setAdminRefreshTick(prev => prev + 1);
+  };
+
+  // --- CHAT SIGNAL HANDLERS ---
+  const handleNewChatMessage = (projectId: number, senderId: number) => {
+    // FIX: Force numbers for comparison to avoid string-type bugs
+    const pId = Number(projectId);
+    const sId = Number(senderId);
+    const myId = Number(currentUserId);
+    const activeP = selectedProjectId !== null ? Number(selectedProjectId) : null;
+
+    console.log(`New Msg: Project ${pId}, Sender ${sId}, ActiveProject ${activeP}`);
+
+    if (sId !== myId && activeP !== pId) {
+      setUnreadProjects(prev => ({ ...prev, [pId]: true }));
+    }
+  };
+
+  const handleNewDM = (senderId: number) => {
+    const sId = Number(senderId);
+    const myId = Number(currentUserId);
+    const activeDM = selectedDMUserId !== null ? Number(selectedDMUserId) : null;
+
+    if (sId !== myId && activeDM !== sId) {
+      setUnreadDMs(prev => ({ ...prev, [sId]: true }));
+    }
   };
 
   useWebSockets(
@@ -77,21 +129,20 @@ function App() {
     (pId) => handleTaskSignal(pId),
     (pId) => handleTaskSignal(pId),
     (pId) => handleTaskSignal(pId),
-
-    // --- NEW GLOBAL HANDLERS ---
     (uId) => handleUserScrubbed(uId),
     (uId, status) => handleUserStatusUpdated(uId, status),
-    // --- USER_CREATED HANDLER ---
     (uId) => {
       console.log(`New user detected: ${uId}`);
       setAdminRefreshTick(prev => prev + 1);
-    }
+    },
+    handleNewChatMessage,
+    handleNewDM
   );
 
   async function fetchUsersData(projectId: number) {
     if (!token) return;
     try {
-      const res = await fetch(`http://localhost:880/projects/users?project_id=${projectId}`, {
+      const res = await fetch(apiUrl(`projects/users?project_id=${projectId}`), {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
@@ -104,7 +155,7 @@ function App() {
   async function fetchProjects() {
     if (!token) return;
     try {
-      const res = await fetch("http://localhost:880/projects", {
+      const res = await fetch(apiUrl("projects"), {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
@@ -142,13 +193,14 @@ function App() {
     });
   }
 
-  function handleLiveUserAdded(projectId: number, userId: number, role: string) {
+  function handleLiveUserAdded(projectId: number, userId: number, _role: string) {
     const isMe = userId === currentUserId;
     if (isMe) {
       fetchProjects();
       setShowProjects(true);
     } else {
       fetchUsersData(projectId);
+
     }
   }
 
@@ -174,7 +226,7 @@ function App() {
     if (!confirmAdd) return;
 
     try {
-      const res = await fetch("http://localhost:880/projects/users", {
+      const res = await fetch(apiUrl("projects/users"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -205,7 +257,7 @@ function App() {
   async function removeUser(projectID: number, userID: number) {
     if (!window.confirm("Are you sure you want to remove this member?")) return;
     try {
-      await fetch(`http://localhost:880/projects/users`, {
+      await fetch(apiUrl("projects/users"), {
         method: "DELETE",
         headers: {
           "Authorization": `Bearer ${token}`,
@@ -221,6 +273,12 @@ function App() {
   }
 
   function handleStartDM(userId: number, userEmail: string) {
+    // Clear DM dot when conversation starts
+    setUnreadDMs(prev => {
+      const updated = { ...prev };
+      delete updated[userId];
+      return updated;
+    });
     setSelectedDMUserId(userId);
     setSelectedDMUserEmail(userEmail);
     setSelectedProjectId(null);
@@ -243,7 +301,7 @@ function App() {
           <AdminDashboard
             token={token}
             currentUserId={currentUserId}
-            refreshTick={adminRefreshTick} // Pass tick to trigger re-fetches in AdminPanel
+            refreshTick={adminRefreshTick}
           />
         </div>
       ) : (
@@ -267,10 +325,7 @@ function App() {
                 </button>
               )}
 
-              <button onClick={() => {
-                localStorage.clear();
-                window.location.reload();
-              }}>
+              <button onClick={handleLogout}>
                 Logout
               </button>
             </div>
@@ -290,10 +345,23 @@ function App() {
               onUserAdded={handleLiveUserAdded}
               onProjectCreated={handleLiveProjectCreated}
               onUserRemoved={handleLiveUserRemoved}
-              onSelectProject={(id) => setSelectedProjectId(id)}
+              // Clear project dot when Chat is clicked
+              onSelectProject={(id) => {
+                const pId = Number(id);
+                setUnreadProjects(prev => {
+                  const updated = { ...prev };
+                  delete updated[pId];
+                  return updated;
+                });
+                setSelectedProjectId(pId);
+                setSelectedDMUserId(null); // Close DMs if project chat is selected
+              }}
               onStartDM={handleStartDM}
               onProjectUpdated={fetchProjects}
               taskRefreshTick={taskRefreshTick}
+              // Pass down the unread states
+              unreadProjects={unreadProjects}
+              unreadDMs={unreadDMs}
             />
           </div>
 
@@ -302,7 +370,7 @@ function App() {
               <ChatBox
                 projectId={selectedProjectId}
                 token={token!}
-                onClose={() => setSelectedProjectId(null)} // Now the "X" in ChatBox works!
+                onClose={() => setSelectedProjectId(null)}
               />
             </div>
           )}
@@ -312,8 +380,6 @@ function App() {
                 otherUserId={selectedDMUserId}
                 otherUserEmail={selectedDMUserEmail}
                 token={token!}
-                // Note: You might want to update DirectMessageBox similarly 
-                // with an onClose prop if you want its "X" to work too
                 onClose={() => setSelectedDMUserId(null)}
               />
             </div>
@@ -324,7 +390,7 @@ function App() {
             onClose={() => setIsModalOpen(false)}
             onCreate={async (name, desc) => {
               try {
-                const res = await fetch("http://localhost:880/projects", {
+                const res = await fetch(apiUrl("projects"), {
                   method: "POST",
                   headers: {
                     "Content-Type": "application/json",

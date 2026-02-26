@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
+import { apiUrl } from '../config/env';
 
 // Props updated to include refreshTick for real-time UI sync
 interface AdminDashboardProps {
@@ -13,7 +14,7 @@ const AdminDashboard = ({ token, currentUserId, refreshTick }: AdminDashboardPro
     // Using useCallback so we can safely include it in the useEffect dependency array
     const fetchAdminData = useCallback(async () => {
         try {
-            const userRes = await fetch("http://localhost:880/admin/users", {
+            const userRes = await fetch(apiUrl("admin/users"), {
                 headers: { Authorization: `Bearer ${token}` },
             });
             const userData = await userRes.json();
@@ -31,7 +32,7 @@ const AdminDashboard = ({ token, currentUserId, refreshTick }: AdminDashboardPro
 
     const handleToggleStatus = async (userId: number) => {
         try {
-            const res = await fetch(`http://localhost:880/admin/users/${userId}/toggle`, {
+            const res = await fetch(apiUrl(`admin/users/${userId}/toggle`), {
                 method: "POST",
                 headers: { Authorization: `Bearer ${token}` },
             });
@@ -52,7 +53,7 @@ const AdminDashboard = ({ token, currentUserId, refreshTick }: AdminDashboardPro
     const handleScrub = async (userId: number, email: string) => {
         if (!window.confirm(`⚠️ PERMANENT DESTRUCTION: Scrub all data for ${email}?`)) return;
         try {
-            const res = await fetch(`http://localhost:880/admin/users/${userId}`, {
+            const res = await fetch(apiUrl(`admin/users/${userId}`), {
                 method: "DELETE",
                 headers: { Authorization: `Bearer ${token}` },
             });

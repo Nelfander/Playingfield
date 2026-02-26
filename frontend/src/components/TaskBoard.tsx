@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { apiUrl } from '../config/env';
 
 interface Attachment {
     id: number;
@@ -71,7 +72,7 @@ const TaskBoard: React.FC<TaskBoardProps> = ({ projectId, refreshTick, isOwner, 
 
     const fetchTasks = async () => {
         try {
-            const res = await fetch(`http://localhost:880/projects/${projectId}/tasks`, {
+            const res = await fetch(apiUrl(`projects/${projectId}/tasks`), {
                 headers: { Authorization: `Bearer ${token}` }
             });
             const data = await res.json();
@@ -79,7 +80,7 @@ const TaskBoard: React.FC<TaskBoardProps> = ({ projectId, refreshTick, isOwner, 
             if (Array.isArray(data)) {
                 const tasksWithFiles = await Promise.all(data.map(async (task: Task) => {
                     try {
-                        const fileRes = await fetch(`http://localhost:880/tasks/${task.id}/attachments`, {
+                        const fileRes = await fetch(apiUrl(`tasks/${task.id}/attachments`), {
                             headers: { Authorization: `Bearer ${token}` }
                         });
                         const attachments = await fileRes.json();
@@ -101,7 +102,7 @@ const TaskBoard: React.FC<TaskBoardProps> = ({ projectId, refreshTick, isOwner, 
 
     const formatActivityDetails = (details: string) => {
         if (!details) return "";
-        return details.replace(/user (\d+)/g, (match, id) => {
+        return details.replace(/user (\d+)/g, (_match, id) => {
             const member = members.find(m => m.id === parseInt(id));
             return member ? member.email : `User ${id}`;
         });
@@ -117,7 +118,7 @@ const TaskBoard: React.FC<TaskBoardProps> = ({ projectId, refreshTick, isOwner, 
             assigned_to: newTaskForm.assigned_to ? Number(newTaskForm.assigned_to) : null
         };
         try {
-            const res = await fetch(`http://localhost:880/tasks`, {
+            const res = await fetch(apiUrl('tasks'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
                 body: JSON.stringify(payload),
@@ -135,7 +136,7 @@ const TaskBoard: React.FC<TaskBoardProps> = ({ projectId, refreshTick, isOwner, 
     const handleDeleteTask = async (taskId: number) => {
         if (!window.confirm("Are you sure you want to delete this task?")) return;
         try {
-            const res = await fetch(`http://localhost:880/tasks/${taskId}`, {
+            const res = await fetch(apiUrl(`tasks/${taskId}`), {
                 method: 'DELETE',
                 headers: { Authorization: `Bearer ${token}` }
             });
@@ -145,7 +146,7 @@ const TaskBoard: React.FC<TaskBoardProps> = ({ projectId, refreshTick, isOwner, 
 
     const fetchHistory = async (taskId: number) => {
         try {
-            const res = await fetch(`http://localhost:880/tasks/${taskId}/history`, {
+            const res = await fetch(apiUrl(`tasks/${taskId}/history`), {
                 headers: { Authorization: `Bearer ${token}` }
             });
             const data = await res.json();
@@ -167,7 +168,7 @@ const TaskBoard: React.FC<TaskBoardProps> = ({ projectId, refreshTick, isOwner, 
         };
 
         try {
-            const res = await fetch(`http://localhost:880/tasks/${taskId}`, {
+            const res = await fetch(apiUrl(`tasks/${taskId}`), {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
                 body: JSON.stringify(payload),
@@ -186,7 +187,7 @@ const TaskBoard: React.FC<TaskBoardProps> = ({ projectId, refreshTick, isOwner, 
         const formData = new FormData();
         formData.append('file', file);
         try {
-            const res = await fetch(`http://localhost:880/tasks/${taskId}/attachments`, {
+            const res = await fetch(apiUrl(`tasks/${taskId}/attachments`), {
                 method: 'POST',
                 headers: { Authorization: `Bearer ${token}` },
                 body: formData,
@@ -203,7 +204,7 @@ const TaskBoard: React.FC<TaskBoardProps> = ({ projectId, refreshTick, isOwner, 
     const handleDeleteAttachment = async (attachmentId: number) => {
         if (!window.confirm("Delete this attachment forever?")) return;
         try {
-            const res = await fetch(`http://localhost:880/tasks/attachments/${attachmentId}`, {
+            const res = await fetch(apiUrl(`tasks/attachments/${attachmentId}`), {
                 method: 'DELETE',
                 headers: { Authorization: `Bearer ${token}` }
             });
@@ -217,7 +218,7 @@ const TaskBoard: React.FC<TaskBoardProps> = ({ projectId, refreshTick, isOwner, 
 
     const handleDownload = async (attachmentId: number, fileName: string) => {
         try {
-            const response = await fetch(`http://localhost:880/tasks/attachments/${attachmentId}/file`, {
+            const response = await fetch(apiUrl(`tasks/attachments/${attachmentId}/file`), {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             const blob = await response.blob();

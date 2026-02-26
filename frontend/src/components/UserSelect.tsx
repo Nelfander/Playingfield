@@ -1,4 +1,5 @@
 import React, { useState, useEffect, type ChangeEvent } from 'react';
+import { apiUrl } from '../config/env';
 
 interface User {
     ID: number;
@@ -18,7 +19,7 @@ const UserSelect: React.FC<UserSelectProps> = ({ value, onUserChange, excludeIds
         const fetchUsers = async () => {
             const token = localStorage.getItem('token');
             try {
-                const response = await fetch('http://localhost:880/users', {
+                const response = await fetch(apiUrl('users'), {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 const data = await response.json();
