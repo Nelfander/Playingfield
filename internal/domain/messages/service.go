@@ -92,6 +92,10 @@ func (s *Service) SendProjectMessage(ctx context.Context, senderID int64, projec
 		} else {
 			s.hub.BroadcastToProject(projectID, payload)
 
+			// simple ping for the red dot notification in UI
+			ping := fmt.Sprintf("MESSAGE_CREATED:%d:%d", projectID, senderID)
+			s.hub.BroadcastToProject(projectID, []byte(ping))
+
 			// count as sent (once per broadcast)
 			metrics.WSMessagesTotal.WithLabelValues("project", "sent").Inc()
 		}
@@ -142,6 +146,10 @@ func (s *Service) SendDirectMessage(ctx context.Context, senderID, receiverID in
 		} else {
 			s.hub.SendToUser(receiverID, payload)
 			s.hub.SendToUser(senderID, payload)
+
+			// simple ping for the red dot notification in UI
+			ping := fmt.Sprintf("DM_CREATED:%d", senderID)
+			s.hub.SendToUser(receiverID, []byte(ping))
 
 			// count sent (once per message — seen by two users)
 			metrics.WSMessagesTotal.WithLabelValues("dm", "sent").Inc()

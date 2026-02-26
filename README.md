@@ -729,6 +729,39 @@ Validated through service-to-hub integration tests.
 <details><summary>(Click to expand)</summary>
 
 <details>
+<summary><b>Feb 26, 2026: AWS ECS Fargate Migration + CloudFront/S3 Integration + Production Readiness</b> (Click to expand)</summary>
+
+#### Phase 1: AWS ECS Fargate Deployment
+* **Containerized and Deployed Go Echo Backend** to Amazon ECS using Fargate (Serverless).
+* **Environment Injection:** Successfully configured AWS Task Definitions to inject sensitive credentials (`DATABASE_URL`, `JWT_SECRET`) and operational variables (`APP_PORT`).
+* **Automated Lifecycle:** Established a "Force New Deployment" workflow to ensure the latest ECR image and Task revisions are synchronized.
+* **Result:** Backend transitioned from a local Docker environment to a scalable, cloud-native infrastructure on AWS.
+
+#### Phase 2: Network & Permission Engineering
+* **Resolved Port Binding Conflicts:** Diagnosed and bypassed Linux kernel restrictions on "Privileged Ports" (<1024).
+* **The 8080 Pivot:** Shifted infrastructure to port `8080` (High Port), successfully bypassing the need for root-user overrides in the ECS UI.
+* **Security Group Orchestration:** Configured AWS VPC Security Groups to allow inbound TCP traffic on `8080`, creating a secure bridge between the public internet and the container.
+
+#### Phase 3: S3 & CloudFront Distribution (Static Assets & CDN)
+* **Storage Decoupling:** Provisioned an **Amazon S3** bucket to handle persistent file storage, moving away from local container storage.
+* **Content Delivery (CDN):** Implemented **Amazon CloudFront** to serve as a globally distributed edge cache:
+  - **Latency Reduction:** Optimized asset delivery by serving files from edge locations closer to users.
+  - **Security:** Established a path for future HTTPS termination and Origin Access Control (OAC) to keep the S3 bucket private.
+* **Result:** Successfully offloaded static asset management from the Go server, significantly reducing backend CPU/Memory overhead.
+
+#### Phase 4: Database Integration & Health Verification
+* **External Managed Database Connectivity:** Established a secure handshake between AWS ECS and a remote PostgreSQL instance (Neon).
+* **Operational Verification:** Validated the deployment via `/health` endpoint checks, confirming the server is actively listening and communicating with the data layer.
+* **Outcome:** Achievement of a "Running" task state with logs confirming `database connection established successfully`.
+
+#### Phase 5: Frontend-Backend Handshake (IP-Based)
+* **Dynamic Endpoint Configuration:** Updated the Vite-based frontend to point to the live AWS Public IP.
+* **Protocol Realignment:** Switched from `https/wss` (SSL) to `http/ws` to support direct IP communication for current development testing.
+* **Vite Environment Sync:** Aligned `VITE_API_BASE_URL` and `VITE_WS_BASE_URL` with the ephemeral public IP of the Fargate task.
+
+</details>
+
+<details>
 <summary><b>Feb 25, 2026: Derived Metrics + Real-time Grafana Dashboard + Observability Stack</b> (Click to expand)</summary>
 
 #### Phase 1: Derived & Composite Metrics (PromQL)
