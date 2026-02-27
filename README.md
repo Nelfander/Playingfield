@@ -729,6 +729,37 @@ Validated through service-to-hub integration tests.
 <details><summary>(Click to expand)</summary>
 
 <details>
+<summary><b>Feb 27, 2026: Load Balancing, Networking Resolution & Full-Stack Cloud Integration</b> (Click to expand)</summary>
+
+#### Phase 1: Application Load Balancer (ALB) & Routing Orchestration
+* **ALB Deployment:** Provisioned a frontend-facing Application Load Balancer in `eu-central-1` to act as a stable entry point, replacing ephemeral Public IPs.
+* **Target Group Optimization:** Configured a Target Group with Port `8080` mapping and custom Health Check paths (`/health`), achieving a "Healthy" status for the Fargate task.
+* **DNS Stabilization:** Successfully routed traffic through the ALB DNS, ensuring the backend address remains persistent even when ECS tasks are replaced or scaled.
+
+#### Phase 2: Security Group & Circular Dependency Resolution
+* **Self-Referencing Rules:** Solved the "Inbound/Outbound" lockout by configuring the shared Security Group to allow internal communication on Port `8080`.
+* **Port 80/443 Enablement:** Opened the "Front Door" for HTTP/HTTPS traffic to reach the ALB, while maintaining restricted access to the underlying Fargate containers.
+* **Result:** Resolved 504 Gateway Timeouts and 503 Service Unavailable errors, establishing a clean communication flow from the internet to the Go Echo server.
+
+#### Phase 3: Cloud-Native Storage & SDK Alignment
+* **S3/MinIO SDK Bridge:** Refactored the Go storage provider logic to transition from local MinIO mock testing to real **Amazon S3** integration.
+* **Environment Variable Refinement:** - **S3_ENDPOINT:** Configured regional endpoint resolution for `eu-central-1`.
+  - **S3_USE_PATH_STYLE:** Aligned with AWS Virtual-Host addressing (`false`) to ensure SDK compatibility.
+* **Result:** Successfully reached the AWS S3 API, transitioning from "Connection Refused" to an "InvalidAccessKeyId" state, indicating the networking bridge to AWS Storage is fully intact.
+
+#### Phase 4: Managed Database (Neon) & Backend Stability
+* **Remote Handshake:** Verified the persistence of the connection to the Neon PostgreSQL instance from within the AWS VPC.
+* **Log Verification:** Confirmed stable operation with logs reporting `database connection established successfully` and the Echo framework initializing correctly in a Fargate environment.
+* **Production Logs:** Eliminated "Zombie" tasks by resolving the 127.0.0.1 (localhost) binding issues that previously caused task crashes.
+
+#### Phase 5: HTTPS/SSL Security & Mixed Content Resolution
+* **CloudFront-to-ALB Tunnel:** Linked the CloudFront Distribution to the ALB, enabling a fully encrypted HTTPS path for the production URL.
+* **Mixed Content Diagnosis:** Identified the "Blocked Insecure Resource" error caused by the frontend attempting to call a raw `http` IP while hosted on a secure `https` CloudFront domain.
+* **Outcome:** Defined the final handshake fix—migrating all frontend API requests to the unified CloudFront URL to ensure browser-level security compliance.
+
+</details>
+
+<details>
 <summary><b>Feb 26, 2026: AWS ECS Fargate Migration + CloudFront/S3 Integration + Production Readiness</b> (Click to expand)</summary>
 
 #### Phase 1: AWS ECS Fargate Deployment
