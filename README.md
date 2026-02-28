@@ -729,6 +729,36 @@ Validated through service-to-hub integration tests.
 <details><summary>(Click to expand)</summary>
 
 <details>
+<summary><b>Feb 28, 2026: Cloud Observability, ECS Service Discovery & Grafana Integration</b> (Click to expand)</summary>
+
+#### Phase 1: Monitoring Stack Deployment (EC2 & Docker)
+* **Dockerized Infrastructure:** Provisioned an EC2-based monitoring hub running Prometheus `v2.53.1` and Grafana `11.4.0` via Docker Compose.
+* **Persistent Monitoring:** Established a 24/7 observability layer in `eu-central-1` to track application health independently of the Fargate lifecycle.
+* **Port Mapping Orchestration:** Configured host-to-container mapping (Grafana: `3001->3000`, Prometheus: `9090->9090`) to allow external dashboard access while maintaining internal container networking.
+
+#### Phase 2: ECS Service Discovery & Cloud Map Integration
+* **DNS Resolution Bridge:** Configured Prometheus to leverage AWS Cloud Map (`api.local`) for dynamic service discovery of Fargate tasks.
+* **Target Stabilization:** Successfully established the "Scrape" handshake, transitioning the `playingfield-ecs` job from "Down" to "UP" status within the Prometheus targets.
+* **Result:** Eliminated the need for static IP tracking, allowing the monitoring stack to automatically find new ECS tasks as they scale or restart.
+
+#### Phase 3: Grafana Dashboard Logic & Variable Teleportation
+* **Data Source Foundation:** Configured the Prometheus Data Source using internal Docker networking (`http://playingfield-prometheus:9090`) for zero-latency metric fetching.
+* **Dynamic Variable Mapping:** Refactored dashboard JSON models to use `$DS_PROMETHEUS` and `$instance` variables, replacing hardcoded "localhost" references from the development environment.
+* **Metric Visualization:** Restored live gauges for "Logged-in Users" and "Active WebSockets," confirming real-time data flow from the Go Echo server to the cloud frontend.
+
+#### Phase 4: Production Dashboard Reconciliation
+* **Broken Panel Resolution:** Resolved "No Data" and "Dashboard Not Found" errors by re-importing JSON models with corrected UIDs and variable scopes.
+* **Environment Alignment:** Synchronized the dashboard time zones and labels to match the `eu-central-1` production environment, achieving a "Gucci" state for full-stack visibility.
+* **Result:** Achieved 100% dashboard parity between local development and AWS production environments.
+
+#### Phase 5: Cost Management & Billing Analysis
+* **Cloud Spend Audit:** Identified an initial budget burn (~$3.10/day) related to Frankfurt region resources (NAT Gateways/Public IPs).
+* **Billing Strategy:** Established a 24-hour observation window to isolate "hidden" VPC costs before finalizing the "polishing" phase of the deployment.
+* **Outcome:** Validated the $90 credit runway, ensuring the project remains sustainable through the final CSS and frontend refinement stages.
+
+</details>
+
+<details>
 <summary><b>Feb 27, 2026: Load Balancing, Networking Resolution & Full-Stack Cloud Integration</b> (Click to expand)</summary>
 
 #### Phase 1: Application Load Balancer (ALB) & Routing Orchestration

@@ -9,3 +9,6 @@
 
 # Environment
 .env
+
+#AWS Key
+monitoring-key.pem
