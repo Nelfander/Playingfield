@@ -396,3 +396,19 @@ button:active {
 .btn-danger:hover {
   background-color: #cc0000;
 }
+
+
+@media (max-width: 768px) {
+  .project-list-container h1 {
+    font-size: 1.8rem;
+  }
+
+  .project-card {
+    padding: 20px;
+  }
+
+  .app-container {
+    padding: 30px 10px;
+    /* Less padding on the edges of the screen */
+  }
+}
