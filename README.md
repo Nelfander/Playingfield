@@ -404,13 +404,13 @@ The following snapshots verify the goroutine lifecycle and resource reclamation:
 ---
 ## Deployment Plan (AWS – Using Free Tier Credits)
 
-Goal: Deploy frontend (static React), backend (Go container), PostgreSQL DB, and S3 storage with low cost (~$0–20/mo at low traffic after free tier).
+Goal: Deploy frontend (static React), backend (Go container), PostgreSQL DB, and S3 storage with low cost.
 
 ### Components
 - **Frontend**: React build → AWS S3 bucket (static hosting) + CloudFront CDN (HTTPS, caching, global edge).
 - **Backend**: Multi-stage Docker image → AWS ECR (registry) → AWS ECS Fargate + Application Load Balancer (ALB) for full WebSocket support, auto-HTTPS, scaling.
   - Why ECS Fargate over App Runner? App Runner does **not** reliably support WebSockets (stateful/long-lived connections) as of 2026 — see AWS roadmap & community reports. ECS + ALB handles WS upgrades natively.
-- **Database**: AWS RDS PostgreSQL (start with db.t4g.micro / free tier eligible).
+- **Database**: AWS RDS PostgreSQL 
 - **Storage**: AWS S3 buckets for file attachments (replace MinIO config with S3 endpoint + IAM role auth).
 - **Observability (phase 1)**: Prometheus metrics exposed at `/metrics` → later scrape with Amazon Managed Prometheus (AMP) or self-hosted Prometheus on ECS.
 - **Domain & HTTPS**: Free ACM certificates + Route 53 (optional custom domain).
@@ -423,7 +423,7 @@ Goal: Deploy frontend (static React), backend (Go container), PostgreSQL DB, and
    - VPC (default ok) + subnets.
    - ALB (internet-facing, HTTPS via ACM).
    - ECS Cluster (Fargate).
-   - Task Definition (your ECR image, env vars for DB/S3/JWT).
+   - Task Definition (ECR image, env vars for DB/S3/JWT).
    - Service (attach to ALB target group, health check on `/health`).
 5. **S3** → Create bucket, update backend config/env to use S3 SDK.
 6. **Test** → Hit ALB domain → WebSocket via `wss://your-alb-domain/ws/...`.
@@ -475,14 +475,14 @@ The frontend is mainly for visual demo — use these examples to test some of th
 
   ```powershell
   # 1. Login and get JWT token
-  $login = Invoke-RestMethod -Method POST -Uri http://localhost:880/login -ContentType "application/json" -Body '{"email":"me@example.com","password":"supersecret"}'
+  $login = Invoke-RestMethod -Method POST -Uri http://localhost:8080/login -ContentType "application/json" -Body '{"email":"me@example.com","password":"supersecret"}'
   $token = $login.token
 
   # 2. Create a project
-  Invoke-RestMethod -Method POST -Uri http://localhost:880/projects -Headers @{ Authorization = "Bearer $token" } -ContentType "application/json" -Body '{"name":"Ball","description":"First Ball project"}'
+  Invoke-RestMethod -Method POST -Uri http://localhost:8080/projects -Headers @{ Authorization = "Bearer $token" } -ContentType "application/json" -Body '{"name":"Ball","description":"First Ball project"}'
 
   # 3. List your projects
-  Invoke-RestMethod -Method GET -Uri http://localhost:880/projects -Headers @{ Authorization = "Bearer $token" }
+  Invoke-RestMethod -Method GET -Uri http://localhost:8080/projects -Headers @{ Authorization = "Bearer $token" }
 
   # 4. Upload a file attachment to a task (example with curl)
   $filePath = "C:\path\to\your\test-file.png"

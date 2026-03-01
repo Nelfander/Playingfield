@@ -10,7 +10,6 @@ import AdminDashboard from "./components/AdminDashboard";
 import { apiUrl } from './config/env';
 import "./App.css";
 
-
 type Project = {
   id: number;
   name: string;
@@ -32,6 +31,9 @@ function App() {
   const [selectedDMUserId, setSelectedDMUserId] = useState<number | null>(null);
   const [selectedDMUserEmail, setSelectedDMUserEmail] = useState<string>("");
 
+  // --- ONBOARDING STATE ---
+  const [showInstructions, setShowInstructions] = useState(true);
+
   const token = localStorage.getItem("token");
   const currentUserId = Number(localStorage.getItem("userId")) || 0;
   const userRole = localStorage.getItem("role");
@@ -47,7 +49,6 @@ function App() {
     return saved ? JSON.parse(saved) : {};
   });
 
-  // Sync to localStorage whenever unread state changes
   useEffect(() => {
     localStorage.setItem("unreadProjects", JSON.stringify(unreadProjects));
   }, [unreadProjects]);
@@ -59,12 +60,10 @@ function App() {
   const [taskRefreshTick, setTaskRefreshTick] = useState(0);
   const [adminRefreshTick, setAdminRefreshTick] = useState(0);
 
-  // --- SURGICAL LOGOUT (Does not wipe notifications) ---
   const handleLogout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("userId");
     localStorage.removeItem("role");
-    // We keep unreadProjects and unreadDMs in storage
     window.location.reload();
   };
 
@@ -94,15 +93,11 @@ function App() {
     setAdminRefreshTick(prev => prev + 1);
   };
 
-  // --- CHAT SIGNAL HANDLERS ---
   const handleNewChatMessage = (projectId: number, senderId: number) => {
-    // FIX: Force numbers for comparison to avoid string-type bugs
     const pId = Number(projectId);
     const sId = Number(senderId);
     const myId = Number(currentUserId);
     const activeP = selectedProjectId !== null ? Number(selectedProjectId) : null;
-
-    console.log(`New Msg: Project ${pId}, Sender ${sId}, ActiveProject ${activeP}`);
 
     if (sId !== myId && activeP !== pId) {
       setUnreadProjects(prev => ({ ...prev, [pId]: true }));
@@ -176,6 +171,7 @@ function App() {
     } else {
       await fetchProjects();
       setShowProjects(true);
+      setShowInstructions(false); // Hide instructions when user takes action
     }
   }
 
@@ -200,7 +196,6 @@ function App() {
       setShowProjects(true);
     } else {
       fetchUsersData(projectId);
-
     }
   }
 
@@ -273,7 +268,6 @@ function App() {
   }
 
   function handleStartDM(userId: number, userEmail: string) {
-    // Clear DM dot when conversation starts
     setUnreadDMs(prev => {
       const updated = { ...prev };
       delete updated[userId];
@@ -306,8 +300,56 @@ function App() {
         </div>
       ) : (
         <div className="main-layout" style={{ display: 'flex', gap: '20px', padding: '20px' }}>
-          <div className="project-list-container" style={{ flex: 1 }}>
+          <div className="project-list-container" style={{ flex: 1, position: 'relative' }}>
+
+            {/* --- HELP ICON --- */}
+            <button
+              onClick={() => setShowInstructions(!showInstructions)}
+              className="help-icon-btn"
+              title="Need help?"
+            >
+              ?
+            </button>
+
             <h1>My Projects</h1>
+
+            {/* --- ONBOARDING GUIDE --- */}
+            {showInstructions && (
+              <div className="onboarding-guide">
+                <h2>Welcome to the Team Space 🏔️</h2>
+                <div className="guide-steps">
+                  <div className="step">
+                    <span>🚀</span>
+                    <p><strong>Create:</strong> Use the green button below to start a new project board.</p>
+                  </div>
+                  <div className="step">
+                    <span>👥</span>
+                    <p><strong>Invite:</strong> Inside a project, click the <strong>Add Member arrow</strong> to add other users to the project.</p>
+                  </div>
+                  <div className="step">
+                    <span>💬</span>
+                    <p><strong>Chat:</strong> Each project features a dedicated real-time chat room. Click the <strong>Chat icon</strong> to open the chat window or click the <strong>Message icon</strong> next to a user's name to directly message them.</p>
+                  </div>
+                  <div className="step">
+                    <span>📋</span>
+                    <p><strong>Tasks:</strong> Inside a project, click the <strong>Add New Task</strong> to create a new task. Assign tasks to project members and enable them to edit them.</p>
+                  </div>
+                  <div className="step">
+                    <span>📤</span>
+                    <p><strong>Attach Files:</strong> Attach files to tasks and upload them for everybody to download.</p>
+                  </div>
+                  <div className="step">
+                    <span>📖</span>
+                    <p><strong>History:</strong> Read the history of tasks and see who has done what.</p>
+                  </div>
+
+                </div>
+                <button className="dismiss-btn" onClick={() => setShowInstructions(false)}>
+                  Got it, thanks!
+                </button>
+              </div>
+            )}
+
             <div className="button-group">
               <button onClick={handleProjectToggle}>
                 {showProjects ? "Hide Projects" : "Load Projects"}
@@ -345,7 +387,6 @@ function App() {
               onUserAdded={handleLiveUserAdded}
               onProjectCreated={handleLiveProjectCreated}
               onUserRemoved={handleLiveUserRemoved}
-              // Clear project dot when Chat is clicked
               onSelectProject={(id) => {
                 const pId = Number(id);
                 setUnreadProjects(prev => {
@@ -354,12 +395,11 @@ function App() {
                   return updated;
                 });
                 setSelectedProjectId(pId);
-                setSelectedDMUserId(null); // Close DMs if project chat is selected
+                setSelectedDMUserId(null);
               }}
               onStartDM={handleStartDM}
               onProjectUpdated={fetchProjects}
               taskRefreshTick={taskRefreshTick}
-              // Pass down the unread states
               unreadProjects={unreadProjects}
               unreadDMs={unreadDMs}
             />
@@ -402,6 +442,7 @@ function App() {
                 setProjects(p => [...p, newP]);
                 setIsModalOpen(false);
                 setShowProjects(true);
+                setShowInstructions(false); // Hide instructions when a project is successfully created
                 fetchUsersData(newP.id);
               } catch (err) { console.error(err); }
             }}
