@@ -299,9 +299,9 @@ function App() {
           />
         </div>
       ) : (
-        <div className="main-layout" style={{ display: 'flex', gap: '20px', padding: '20px' }}>
-          <div className="project-list-container" style={{ flex: 1, position: 'relative' }}>
-
+        <div className="main-layout">
+          {/* LEFT SIDE: Project List Container */}
+          <div className="project-list-container">
             {/* --- HELP ICON --- */}
             <button
               onClick={() => setShowInstructions(!showInstructions)}
@@ -328,11 +328,11 @@ function App() {
                   </div>
                   <div className="step">
                     <span>💬</span>
-                    <p><strong>Chat:</strong> Each project features a dedicated real-time chat room. Click the <strong>Chat icon</strong> to open the chat window or click the <strong>Message icon</strong> next to a user's name to directly message them.</p>
+                    <p><strong>Chat:</strong> Each project features a dedicated real-time chat room. Click the <strong>Chat icon</strong> to open the sticky chat window.</p>
                   </div>
                   <div className="step">
                     <span>📋</span>
-                    <p><strong>Tasks:</strong> Inside a project, click the <strong>Add New Task</strong> to create a new task. Assign tasks to project members and enable them to edit them.</p>
+                    <p><strong>Tasks:</strong> Inside a project, click the <strong>Add New Task</strong> to create a new task.</p>
                   </div>
                   <div className="step">
                     <span>📤</span>
@@ -342,7 +342,6 @@ function App() {
                     <span>📖</span>
                     <p><strong>History:</strong> Read the history of tasks and see who has done what.</p>
                   </div>
-
                 </div>
                 <button className="dismiss-btn" onClick={() => setShowInstructions(false)}>
                   Got it, thanks!
@@ -405,23 +404,23 @@ function App() {
             />
           </div>
 
-          {selectedProjectId && (
+          {/* RIGHT SIDE: Sticky Chat Sidebar Container */}
+          {(selectedProjectId || selectedDMUserId) && (
             <div className="chat-sidebar">
-              <ChatBox
-                projectId={selectedProjectId}
-                token={token!}
-                onClose={() => setSelectedProjectId(null)}
-              />
-            </div>
-          )}
-          {selectedDMUserId && (
-            <div className="chat-sidebar">
-              <DirectMessageBox
-                otherUserId={selectedDMUserId}
-                otherUserEmail={selectedDMUserEmail}
-                token={token!}
-                onClose={() => setSelectedDMUserId(null)}
-              />
+              {selectedProjectId ? (
+                <ChatBox
+                  projectId={selectedProjectId}
+                  token={token!}
+                  onClose={() => setSelectedProjectId(null)}
+                />
+              ) : (
+                <DirectMessageBox
+                  otherUserId={selectedDMUserId!}
+                  otherUserEmail={selectedDMUserEmail}
+                  token={token!}
+                  onClose={() => setSelectedDMUserId(null)}
+                />
+              )}
             </div>
           )}
 
@@ -442,7 +441,7 @@ function App() {
                 setProjects(p => [...p, newP]);
                 setIsModalOpen(false);
                 setShowProjects(true);
-                setShowInstructions(false); // Hide instructions when a project is successfully created
+                setShowInstructions(false);
                 fetchUsersData(newP.id);
               } catch (err) { console.error(err); }
             }}

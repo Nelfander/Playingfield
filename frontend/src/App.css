@@ -452,21 +452,22 @@ button:active {
 
 /* The Help Icon Button */
 .help-icon-btn {
-  position: absolute;
-  top: 0;
-  right: 0;
-  width: 35px;
-  height: 35px;
+  position: relative;
+  /* Changed from absolute */
+  display: block;
+  margin: 0 auto 20px auto;
+  /* Centers it and adds space below */
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.2);
   color: white;
   border: 1px solid rgba(255, 255, 255, 0.4);
   cursor: pointer;
   font-weight: bold;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  font-size: 1.2rem;
   transition: all 0.3s ease;
+  z-index: 10;
 }
 
 .help-icon-btn:hover {
@@ -483,5 +484,57 @@ button:active {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+/* --- STICKY CHAT LOGIC --- */
+
+/* The wrapper around the ChatBox or DirectMessageBox */
+/* --- CLEAN STICKY CHAT --- */
+.chat-sidebar {
+  position: sticky;
+  top: 40px;
+  /* Gives it some breathing room from the top */
+  width: 400px;
+  /* Remove background/shadow here so the internal ChatBox component can shine */
+  background: transparent;
+  display: flex;
+  flex-direction: column;
+  z-index: 100;
+  flex-shrink: 0;
+  height: fit-content;
+  /* Only as tall as the chat itself */
+}
+
+/* Ensure the layout doesn't squash the left side */
+.main-layout {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 40px;
+  padding: 20px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+/* Optional: If the project cards feel too narrow now, let them grow */
+.project-list-container {
+  flex: 1;
+  min-width: 0;
+}
+
+/* On smaller screens,  disable sticky and stack them */
+@media (max-width: 1100px) {
+  .main-layout {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .chat-sidebar {
+    position: relative;
+    top: 0;
+    width: 100%;
+    height: 500px;
+    margin-top: 20px;
   }
 }
