@@ -45,6 +45,11 @@ export const useDirectChat = (token: string | null, otherUserId?: number) => {
         ws.onopen = () => {
             console.log(`✅ Connected for DM with user: ${otherUserId}`);
             setIsConnected(true);
+            ws.send(JSON.stringify({
+                type: "chat_open",
+                receiver_id: otherUserId,
+                project_id: 0
+            }));
         };
 
         ws.onmessage = (event) => {

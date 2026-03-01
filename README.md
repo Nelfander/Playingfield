@@ -729,6 +729,35 @@ Validated through service-to-hub integration tests.
 <details><summary>(Click to expand)</summary>
 
 <details>
+<summary><b>March 1, 2026: S3 Production Migration, IAM Security & CloudFront Integration</b> (Click to expand)</summary>
+
+#### Phase 1: AWS S3 Production Infrastructure
+* **Bucket Provisioning:** Formally decommissioned local MinIO storage in favor of a production S3 bucket (`playingfield-uploads-prod`) in `eu-central-1`.
+* **Public Access Configuration:** Orchestrated a "Public-Read" strategy by disabling "Block All Public Access" and implementing a Bucket Policy for `s3:GetObject` to ensure high-speed asset delivery.
+* **Storage Schema Migration:** Performed a surgical cleanup of the Neon Postgres database, removing legacy `localhost:9000` references from the `task_attachments` table to prevent 404 dead links in production.
+
+#### Phase 2: IAM Security & Credential Handshake
+* **Programmatic Access:** Provisioned a dedicated IAM User (`playingfield-app`) with `AmazonS3FullAccess` to facilitate backend-to-storage communication.
+* **Access Key Rotation:** Resolved a `403 Forbidden (InvalidAccessKeyId)` "Final Boss" error by rotating legacy MinIO credentials out for real AWS Access Keys (`AKIA...`) in the ECS Task Definition.
+* **Least Privilege Preparation:** Verified that while the backend has "Write" access, the public internet is restricted to "Read-Only," maintaining a secure project boundary.
+
+#### Phase 3: Go SDK v2 Refactoring & Environment Alignment
+* **Endpoint Resolution Fix:** Refactored the S3 client initialization in `server.go` to handle empty `S3_ENDPOINT` strings, allowing the SDK to automatically resolve the official AWS regional endpoints.
+* **Path-Style Modernization:** Switched from "Path-Style" (MinIO default) to "Virtual-Host Style" (`S3_USE_PATH_STYLE=false`) to align with modern S3 standards and CloudFront compatibility.
+* **Public URL Orchestration:** Configured the `S3_PUBLIC_URL` variable to point to the CloudFront distribution, ensuring user-uploaded assets are served via the edge-cached global network.
+
+#### Phase 4: CloudFront Edge Delivery Setup
+* **Global CDN Integration:** Connected the S3 bucket origin to CloudFront (`https://d3tucazxq1wbf6.cloudfront.net`) to reduce latency and provide an SSL-secured layer for all project attachments.
+* **Caching Strategy:** Verified that the frontend successfully resolves images through the CDN, bypassing the direct S3 bucket URL for improved performance and reduced data transfer costs.
+
+#### Phase 5: Deployment Reconciliation & Health Validation
+* **ECS Rolling Update:** Performed a "Force New Deployment" in ECS Fargate to propagate the new S3 configuration across the cluster.
+* **Observability Recovery:** Observed and resolved a temporary 30-second "No Data" gap in Grafana during the task swap, confirming that Prometheus successfully re-discovered the new task IP via Cloud Map.
+* **End-to-End Success:** Confirmed "Gucci" status via backend logs: `Successfully connected to S3/MinIO storage`, validating full-stack connectivity between Go, Postgres, and S3.
+
+</details>
+
+<details>
 <summary><b>Feb 28, 2026: Cloud Observability, ECS Service Discovery & Grafana Integration</b> (Click to expand)</summary>
 
 #### Phase 1: Monitoring Stack Deployment (EC2 & Docker)

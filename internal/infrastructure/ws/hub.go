@@ -18,6 +18,7 @@ type Client struct {
 	Conn      *websocket.Conn
 	Send      chan []byte   // a channel to send messages to this specific user
 	done      chan struct{} // internal shutdown signal
+	IsActive  bool
 }
 
 // Hub maintains the set of active clients and project rooms
@@ -116,23 +117,26 @@ func (h *Hub) Run() {
 				h.ProjectRooms[client.ProjectID][client] = true
 			}
 
-			// counts ALL of the open WS
-			metrics.ActiveWSConnections.Inc()
-
 			// only count the real chat connections
 			if client.ProjectID != 0 {
 				metrics.ActiveChatConnections.Inc()
+				client.IsActive = true
 			}
+
+			// counts ALL of the open WS
+			metrics.ActiveWSConnections.Inc()
 
 			h.mu.Unlock()
 
 		case client := <-h.Unregister:
 			h.mu.Lock()
 
-			// decrement chat-specific only if it had project context
-			if client.ProjectID != 0 {
+			// Only decrement if we actually incremented earlier
+			if client.IsActive {
 				metrics.ActiveChatConnections.Dec()
 			}
+
+			metrics.ActiveWSConnections.Dec()
 
 			// remove specific connection from user's map
 			if connections, ok := h.clients[client.UserID]; ok {
@@ -151,8 +155,6 @@ func (h *Hub) Run() {
 					}
 				}
 			}
-
-			metrics.ActiveWSConnections.Dec()
 
 			if client.Conn != nil {
 				// immediate timeout + close – log failures but don't fail the operation

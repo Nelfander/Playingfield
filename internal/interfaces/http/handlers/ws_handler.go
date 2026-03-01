@@ -15,6 +15,7 @@ import (
 	"github.com/nelfander/Playingfield/internal/domain/messages"
 	"github.com/nelfander/Playingfield/internal/infrastructure/auth"
 	"github.com/nelfander/Playingfield/internal/infrastructure/ws"
+	"github.com/nelfander/Playingfield/internal/metrics"
 )
 
 const (
@@ -204,10 +205,20 @@ func (h *WSHandler) HandleConnection(c echo.Context) error {
 			continue
 		}
 
+		// triggers if: not already active AND (it's the manual signal OR an actual message)
+		if !client.IsActive && (msg.Type == "chat_open" || msg.Type == "direct_message" || msg.Type == "project_chat") {
+			metrics.ActiveChatConnections.Inc()
+			client.IsActive = true
+			slog.Info("connection promoted to active chat", "user_id", client.UserID, "type", msg.Type)
+		}
+
 		ctx := context.Background()
 		var chatErr error
 
 		switch msg.Type {
+		case "chat_open":
+			// this is basically for grafana to see that the chat is open
+			continue
 		case "project_chat":
 			_, chatErr = h.chatService.SendProjectMessage(ctx, claims.UserID, msg.ProjectID, msg.Content)
 		case "direct_message":
