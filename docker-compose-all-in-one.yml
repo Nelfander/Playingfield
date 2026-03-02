@@ -1,0 +1,105 @@
+version: '3.8'
+
+services:
+  # --- FRONTEND (Vite/React + Nginx) ---
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.frontend
+      args:
+        - VITE_API_BASE_URL=http://localhost:8080
+        - VITE_WS_BASE_URL=ws://localhost:8080
+    container_name: playingfield-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - app
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 100M
+
+  # --- BACKEND (Go Echo) ---
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: playingfield-app
+    ports:
+      - "80:8080"
+    env_file:
+      - .env
+    restart: unless-stopped
+    depends_on:
+      - minio # Local users need MinIO to start first
+    deploy:
+      resources:
+        limits:
+          memory: 300M
+
+  # --- STORAGE (Local S3-Compatible) ---
+  minio:
+    image: minio/minio:latest
+    container_name: playingfield-minio
+    ports:
+      - "9000:9000" # API
+      - "9001:9001" # Dashboard
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-admin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-supersecret}
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 200M
+
+  # --- MONITORING (Prometheus) ---
+  prometheus:
+    image: prom/prometheus:v2.53.1
+    container_name: playingfield-prometheus
+    volumes:
+      - ./prometheus-prod.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=10d'
+    ports:
+      - "9090:9090"
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 200M
+
+  # --- MONITORING (Grafana) ---
+  grafana:
+    image: grafana/grafana:11.4.0
+    container_name: playingfield-grafana
+    ports:
+      - "3001:3000"
+    env_file:
+      - .env
+    volumes:
+      - grafana_data:/var/lib/grafana
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 200M
+
+  # --- HOST METRICS (Node Exporter) ---
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: playingfield-node-exporter
+    network_mode: "host"
+    restart: unless-stopped
+
+volumes:
+  minio_data:
+  prometheus_data:
+  grafana_data:

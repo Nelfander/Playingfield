@@ -1,3 +1,4 @@
+# Was the first version of the observability stack, now replaced by the combined stack in docker-compose-combined-prod2.yml
 version: '3.8'
 
 services:

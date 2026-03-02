@@ -1,0 +1,55 @@
+# Stage 1: Build the Vite app
+FROM node:20-alpine AS builder
+
+# Set working directory inside the container
+WORKDIR /app
+
+# --- CRUCIAL: Receive ARGS from Docker Compose for Vite ---
+ARG VITE_API_BASE_URL
+ARG VITE_WS_BASE_URL
+
+# Set them as ENV so Vite's build process can see them
+ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
+ENV VITE_WS_BASE_URL=$VITE_WS_BASE_URL
+
+# Copy package files first for better layer caching
+COPY package*.json ./
+RUN npm ci
+
+# Copy the rest of the frontend source
+COPY . .
+
+# Build for production (Vite will now bake the ARGs into the /dist folder)
+RUN npm run build
+
+# Stage 2: Serve with Nginx
+FROM nginx:alpine
+
+# Remove default nginx static files
+RUN rm -rf /usr/share/nginx/html/*
+
+# Copy the built Vite app (Vite outputs to /dist)
+COPY --from=builder /app/dist /usr/share/nginx/html
+
+# Custom nginx config for SPA routing support
+COPY <<EOF /etc/nginx/conf.d/default.conf
+server {
+    listen 80;
+    server_name localhost;
+
+    root /usr/share/nginx/html;
+    index index.html;
+
+    location / {
+        try_files \$uri \$uri/ /index.html;
+    }
+
+    client_max_body_size 10M;
+    add_header X-Content-Type-Options nosniff;
+    add_header X-Frame-Options DENY;
+    add_header X-XSS-Protection "1; mode=block";
+}
+EOF
+
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]

@@ -239,21 +239,21 @@ Choosing the right stack was a balance between Go's high-performance concurrency
 * **The Logic**: While I considered breaking these into microservices, I decided to keep the architecture monolithic. This allowed me to focus on learning Go's concurrency and internal package structures without the "network tax" and operational overhead of managing multiple independent services.
 * **Future-Proofing**: Because the code is organized into clean internal packages (Auth, Chat, Projects), the boundaries are already defined. If I needed to scale the Chat Hub independently on AWS in the future, it is already "seamed" for a clean break into a microservice.
 
-#### 10. Deployment: Containerized Environment  (TO-DO)
+#### 10. Deployment: Containerized Environment 
 * **Decision**: Docker-Compose Orchestration
 * **The "Why"**: I want a "one-command" setup. I dont want anyone to struggle with installing Postgres versions or configuring MinIO buckets manually. 
-* **The Logic**: By splitting the project into four containers (Frontend, Backend, DB, Storage), I create a modular environment. This makes the app "Infrastructure Agnostic"—I can run it on my local laptop, a Raspberry Pi, or scale it up to AWS ECS without changing a single line of application code.
+* **The Logic**: By splitting the project into modular containers, I create an "Infrastructure Agnostic" environment—allowing the app to run seamlessly on a local machine, a Raspberry Pi, or scale to AWS without changing application code.
 
 #### 11. Database Infrastructure: Neon (Serverless Postgres)
 * **Decision**: [Neon](https://neon.tech/)
-* **The "Why"**: I chose Neon over a standard self-hosted Postgres instance to leverage its serverless architecture. This allows for instant database branching—meaning I can create a copy of my production data for testing without any downtime or manual exports.
+* **The "Why"**: I chose Neon over a standard self-hosted Postgres instance to leverage its serverless architecture, allowing for instant database branching for safe production testing.
 * **The Logic**: Neon’s built-in connection pooling (via PgBouncer) is a perfect match for a Go backend. Since Go's `database/sql` opens multiple connections under high load, Neon ensures the database doesn't hit its connection limit, maintaining stability even during high-frequency WebSocket traffic.
 
 #### 12. Infrastructure Evolution: ECS/ALB to Cost-Optimized EC2
 * **The Transition**: Migrated from a managed AWS ECS (Fargate) + Application Load Balancer (ALB) stack to a self-managed Docker Compose environment on a single EC2 T3.micro.
 * **The "Why" (Financial Engineering)**: The ALB + Fargate "idle tax" was approximately $40/month. For a high-performance Go binary that consumes <150MB of RAM, the managed overhead was unnecessary. By moving to EC2 and using CloudFront as a direct Custom Origin, I reduced the infrastructure "burn rate" by ~75%.
 * **The "Why" (Network Efficiency)**: By co-locating the Backend, Prometheus, and Grafana on the same EC2 instance via a Docker bridge network, I eliminated cross-service latency and simplified the observability "sidecar" pattern.
-* **The Logic**: I leveraged CloudFront for SSL/TLS termination at the edge, allowing the EC2 to remain behind a lean Security Group while still providing a global, secure entry point for users. This architecture proves that "Enterprise Grade" doesn't have to mean "Enterprise Cost."
+* **The Logic**: I leveraged CloudFront for SSL/TLS termination at the edge, allowing the EC2 to remain behind a lean Security Group while still providing a global, secure entry point for users. 
 
 ---
 ## 📡 WebSocket Architecture & Concurrency
@@ -445,23 +445,60 @@ The following snapshots verify the goroutine lifecycle and resource reclamation:
 
 ## 🚀 Quick Start
 <details>
-<summary><b>Quick Start!</b> (Click to expand)</summary>
+<summary><b>Choose your setup method!</b> (Click to expand)</summary>
 
-Configuration is loaded from .env (example provided) or OS environment variables.
-No secrets are committed to the repository.
+### 0. Initial Configuration (Required)
+Before running either method, you must set up your environment variables:
+1. Configuration is loaded from .env (example provided)
+2. Open `.env` and ensure the credentials match your local setup (default values are provided for Docker).
+
+---
+
+### Method 1: The "Fast" Way (Docker-Only Demo)
+*Best for: Quick previews, recruiters, or full-stack testing without local dependencies.*
+
+1. **Clone & Launch**:
+   ```bash
+   git clone [https://github.com/Nelfander/Playingfield.git](https://github.com/Nelfander/Playingfield.git)
+   cd Playingfield
+   # This builds and starts Frontend, Backend, MinIO, Prometheus, and Grafana
+   docker-compose -f docker-compose-all-in-one.yml up --build
+   ```
+
+2. **Access the Ecosystem**:
+
+* **Frontend UI**: http://localhost:3000
+
+* **Backend API**: http://localhost:8080
+
+* **Grafana Metrics**: http://localhost:3001 (Default: admin/admin)
+
+* **MinIO Storage**: http://localhost:9001
+
+
+### Method 2: The "Contributor" Way (Local Code + Docker Services)
+
+### 0. Initial Configuration
+1. Configuration is loaded from .env (example provided)
+2. Ensure you have **Go 1.25+**, **Node.js/npm**, and **Docker** installed.
+
 Assuming you have Docker, Go 1.25+ (tested on 1.25.5), Node.js/npm installed:
 
-### 1. Repository & Infrastructure
-Clone the project and spin up the supporting services (PostgreSQL & MinIO):
+### Step 1: Launch Infrastructure
+Start the local storage and observability stack in the background:
+```bash
+# Start Storage (MinIO)
+docker-compose up -d
 
-   git clone https://github.com/Nelfander/Playingfield.git
-   cd Playingfield
-   docker-compose up -d
+# Start Monitoring (Prometheus & Grafana)
+docker-compose -f docker-compose-observability-prod.yml up -d
+```
 
-### 2. Backend Setup
+### Step 2. Backend Setup
+
 Configure your .env file, generate code, and launch the Go server:
 
-   Update .env with DB and MinIO credentials
+   Update .env 
 
    sqlc generate
 
@@ -474,11 +511,21 @@ In a new terminal, install dependencies and start the application:
 
    npm install
 
-   npm start
+   npm run dev
 
-### 4. Testing the API (via PowerShell, curl, or Postman)
+### 4. Verification
 
-The frontend is mainly for visual demo — use these examples to test some of the core endpoints:
+* **App UI**: http://localhost:5173
+
+* **API**: http://localhost:8080/health
+
+* **Metrics**: http://localhost:3001 (Grafana)
+
+* **Storage**: http://localhost:9001 (MinIO Console)
+
+### 5. Testing the API (via PowerShell, curl, or Postman)
+
+The frontend is mainly for visual demo — you can also use these examples to test some of the core endpoints:
 
   ```powershell
   # 1. Login and get JWT token
@@ -493,7 +540,7 @@ The frontend is mainly for visual demo — use these examples to test some of th
 
   # 4. Upload a file attachment to a task (example with curl)
   $filePath = "C:\path\to\your\test-file.png"
-  curl -X POST "http://localhost:880/tasks/1/attachments" \
+  curl -X POST "http://localhost:8080/tasks/1/attachments" \
   -H "Authorization: Bearer $token" \
   -F "file=@/path/to/your/test-file"
   ```
