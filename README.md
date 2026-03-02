@@ -249,6 +249,12 @@ Choosing the right stack was a balance between Go's high-performance concurrency
 * **The "Why"**: I chose Neon over a standard self-hosted Postgres instance to leverage its serverless architecture. This allows for instant database branching—meaning I can create a copy of my production data for testing without any downtime or manual exports.
 * **The Logic**: Neon’s built-in connection pooling (via PgBouncer) is a perfect match for a Go backend. Since Go's `database/sql` opens multiple connections under high load, Neon ensures the database doesn't hit its connection limit, maintaining stability even during high-frequency WebSocket traffic.
 
+#### 12. Infrastructure Evolution: ECS/ALB to Cost-Optimized EC2
+* **The Transition**: Migrated from a managed AWS ECS (Fargate) + Application Load Balancer (ALB) stack to a self-managed Docker Compose environment on a single EC2 T3.micro.
+* **The "Why" (Financial Engineering)**: The ALB + Fargate "idle tax" was approximately $40/month. For a high-performance Go binary that consumes <150MB of RAM, the managed overhead was unnecessary. By moving to EC2 and using CloudFront as a direct Custom Origin, I reduced the infrastructure "burn rate" by ~75%.
+* **The "Why" (Network Efficiency)**: By co-locating the Backend, Prometheus, and Grafana on the same EC2 instance via a Docker bridge network, I eliminated cross-service latency and simplified the observability "sidecar" pattern.
+* **The Logic**: I leveraged CloudFront for SSL/TLS termination at the edge, allowing the EC2 to remain behind a lean Security Group while still providing a global, secure entry point for users. This architecture proves that "Enterprise Grade" doesn't have to mean "Enterprise Cost."
+
 ---
 ## 📡 WebSocket Architecture & Concurrency
 
@@ -402,38 +408,39 @@ The following snapshots verify the goroutine lifecycle and resource reclamation:
 * Deploy **AWS Deployment**.
 
 ---
-## Deployment Plan (AWS – Using Free Tier Credits)
 
-Goal: Deploy frontend (static React), backend (Go container), PostgreSQL DB, and S3 storage with low cost.
+## Deployment Plan (AWS – Cost-Optimized & High-Performance)
+
+**Goal**: Deploy a full-stack real-time application (React/Go/Postgres) with maximum observability and minimum infrastructure overhead (<$5/month total).
 
 ### Components
-- **Frontend**: React build → AWS S3 bucket (static hosting) + CloudFront CDN (HTTPS, caching, global edge).
-- **Backend**: Multi-stage Docker image → AWS ECR (registry) → AWS ECS Fargate + Application Load Balancer (ALB) for full WebSocket support, auto-HTTPS, scaling.
-  - Why ECS Fargate over App Runner? App Runner does **not** reliably support WebSockets (stateful/long-lived connections) as of 2026 — see AWS roadmap & community reports. ECS + ALB handles WS upgrades natively.
-- **Database**: AWS RDS PostgreSQL 
-- **Storage**: AWS S3 buckets for file attachments (replace MinIO config with S3 endpoint + IAM role auth).
-- **Observability (phase 1)**: Prometheus metrics exposed at `/metrics` → later scrape with Amazon Managed Prometheus (AMP) or self-hosted Prometheus on ECS.
-- **Domain & HTTPS**: Free ACM certificates + Route 53 (optional custom domain).
+- **Frontend**: React Production Build → **AWS S3** (Static Hosting) + **CloudFront CDN** (TLS Termination, Edge Caching).
+- **Backend**: Multi-stage Go Docker Image → **Docker Hub** → **AWS EC2 (T3.micro)**. 
+  - *Why EC2 over ECS Fargate?* While ECS is scalable, a dedicated EC2 instance using **Docker Compose** allows for tighter resource control, zero ALB idle costs (~$20 savings), and co-location of observability tools (Prometheus/Grafana) on the same network bridge.
+- **Database**: **Neon Postgres** (Serverless) — Chosen for its instant branching and generous free tier compared to AWS RDS.
+- **Storage**: **AWS S3** (Production Bucket) — Replaced local MinIO with regional S3 storage, utilizing IAM programmatic access for secure file uploads.
+- **Observability Stack**: Self-hosted **Prometheus & Grafana** sidecars — Integrated via Docker Compose for real-time monitoring of WebSocket active connections, CPU/RAM saturation, and Go runtime metrics.
+- **Networking**: CloudFront-to-EC2 Custom Origin — Bypasses the need for an Application Load Balancer (ALB) by leveraging CloudFront's global edge for SSL, significantly reducing monthly AWS expenditure.
 
 ### High-Level Steps 
-1. **Frontend** → Build React → upload to S3 → create CloudFront distribution.
-2. **Backend Docker** → Build & push multi-stage image to ECR.
-3. **RDS Postgres** → Provision instance, note endpoint/user/pass.
-4. **ECS Setup**:
-   - VPC (default ok) + subnets.
-   - ALB (internet-facing, HTTPS via ACM).
-   - ECS Cluster (Fargate).
-   - Task Definition (ECR image, env vars for DB/S3/JWT).
-   - Service (attach to ALB target group, health check on `/health`).
-5. **S3** → Create bucket, update backend config/env to use S3 SDK.
-6. **Test** → Hit ALB domain → WebSocket via `wss://your-alb-domain/ws/...`.
+1. **Frontend Orchestration**: Build React assets → Sync to S3 → Provision CloudFront distribution with S3 Origin.
+2. **Container Registry**: Push optimized multi-stage Go backend image to Docker Hub.
+3. **Provisioning (Compute)**: 
+   - Launch Amazon Linux 2023 EC2 (T3.micro).
+   - Configure Security Groups (Port 80 for CloudFront, Ports 22/3001/9090 restricted to Admin IP).
+4. **Stack Deployment (Docker Compose)**:
+   - Define `playingfield-app`, `prometheus`, `grafana`, and `node-exporter` in a unified YAML.
+   - Map EC2 Port 80 to Container Port 8080 (Go Echo).
+   - Inject Production `.env` (Neon DB URL, S3 Keys, JWT Secrets).
+5. **CDN Routing**: Update CloudFront Origin from legacy ALB/S3 to the **EC2 Public DNS**, enabling the API to serve traffic through the CDN.
+6. **Validation**: Confirm "Healthy" status via Docker Healthchecks and verify WebSocket heartbeats (`ReadDeadline` logic) in backend logs.
 
-### Future Additions
-- Auto-scaling (CPU-based or custom via WS active connections metric).
-- Prometheus + Grafana (self-hosted on ECS or Amazon Managed).
-- CI/CD (GitHub Actions → ECR push → ECS update).
-- Security: VPC private subnets, security groups, WAF, IAM roles only.
+### Technical Wins & Resilience
+- **Zombie Connection Purge**: Implemented `SetReadDeadline` logic to auto-terminate "half-open" TCP WebSocket connections, preventing memory leaks.
+- **ALB-less Architecture**: Successfully routed traffic through CloudFront directly to EC2, maintaining HTTPS security while eliminating the $20/month ALB fee.
+- **Sidecar Observability**: Deploying Prometheus/Grafana on-instance provides instant visibility into the "Health" of the Go binary without external managed service costs.
 
+---
 ---
 
 ## 🚀 Quick Start
@@ -732,6 +739,31 @@ Validated through service-to-hub integration tests.
 
 ## 🛠 <b>Development History</b>
 <details><summary>(Click to expand)</summary>
+
+<details>
+<summary><b>March 2, 2026: Infrastructure De-stacking, Cost-Optimization & WebSocket Resilience</b> (Click to expand)</summary>
+
+#### Phase 1: High-Efficiency Infrastructure Migration (ALB to EC2)
+* **Architecture De-stacking**: Decommissioned the high-overhead AWS Application Load Balancer (ALB) and ECS Fargate cluster in favor of a "Lean" single-instance deployment on EC2 (T3.micro).
+* **Cost-Optimization Strategy**: Eliminated ~$40/month in idle AWS fees by routing CloudFront API traffic directly to an EC2 Custom Origin, bypassing the $20/month ALB while maintaining SSL/TLS termination at the edge.
+* **Security Group Hardening**: Refactored EC2 Inbound Rules to allow Port 80 (HTTP) for CloudFront origin fetches, while restricting Administrative ports (SSH, Grafana, Prometheus) to a secure management IP.
+
+#### Phase 2: Docker Compose Sidecar Orchestration
+* **Production Stack Consolidation**: Engineered a unified `docker-compose-combined-prod2.yml` stack, co-locating the Go Backend, Prometheus, and Grafana within a shared high-speed bridge network.
+* **Environment Synchronization**: Resolved a "Ghost Configuration" issue by surgically replacing local development variables (MinIO/Localhost) with production AWS/Neon credentials in the EC2 `.env` layer.
+* **Resource Constraint Tuning**: Implemented Docker `deploy:resources` limits (300MB RAM) to ensure the Go backend operates with high-density efficiency on low-tier hardware.
+
+#### Phase 3: Full-Stack Observability Migration
+* **Prometheus Discovery Refactor**: Re-aligned Prometheus scrape targets from dynamic ECS Task IPs to static Docker service names (`playingfield-app:8080`), ensuring zero-gap metric collection during the migration.
+* **Grafana Dashboard Reconciliation**: Successfully filtered out "Ghost" ECS metrics by implementing PromQL job-level filtering (`{job="playingfield-app"}`), isolating production EC2 telemetry from legacy cluster data.
+* **System Health Visibility**: Integrated the Node Exporter sidecar (Port 9100) to provide real-time hardware visibility (CPU/RAM/IO) directly alongside application-level metrics.
+
+#### Phase 4: Production Handover & Health Validation
+* **CloudFront Origin Swap**: Performed a surgical update of the CloudFront Distribution Origin, re-pointing the API domain from the legacy ALB DNS to the new EC2 Public IPv4 DNS.
+* **Healthcheck Calibration**: Overrode the Dockerfile's internal healthcheck with a custom `curl` shell command to handle `401 Unauthorized` responses as a "Live" status, achieving 100% (healthy) container state.
+* **End-to-End "Gucci" Verification**: Validated full-stack connectivity via real-time logs: `database connection established`, `Successfully connected to S3`, and `ws client registered`, confirming a successful 1:1 feature parity on the new architecture.
+
+</details>
 
 <details>
 <summary><b>March 1, 2026: S3 Production Migration, IAM Security & CloudFront Integration</b> (Click to expand)</summary>
