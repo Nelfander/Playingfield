@@ -5,6 +5,8 @@
 [![React](https://img.shields.io/badge/React-2023-%2361DAFB?style=flat-square&logo=react)](https://reactjs.org/)
 
 **[🚀 Live Demo: app.playingfield.com](https://d3tucazxq1wbf6.cloudfront.net)**
+Sign up (free, no credit card), create a project, add friends (or open two tabs), and see real-time magic happen.  
+Guided tour available on the landing page (question mark icon) – covers creating projects, inviting, chatting, dragging tasks, uploading files, etc.
 
 **Playingfield is a real-time, collaborative project and task management platform with live WebSocket sync, project-scoped chat, granular RBAC, file attachments, and structured domain logic — built for reliability and a production mindset, not just a demo app.**
 
@@ -81,6 +83,17 @@ Unlike typical boilerplate task boards, it combines:
 **File attachments on tasks with atomic upload + gallery refresh**
   ![File upload appearing live in the gallery](assets/File-Upload-And-Download.gif)
 
+> **👥 Member Addition – Small Team Optimized**  
+> 
+> For simplicity in small teams (designed for 10–20 person companies), project owners can add any existing active user directly via a searchable dropdown.
+> 
+> - Supervisor/admin typically creates/registers team accounts initially.
+> - Strict ownership enforcement: only project creators can add/remove members.
+> - Real-time sync: new members see full project history instantly via WebSocket.
+> 
+> *(Future: searchable by name/email + optional invite tokens for larger setups)*
+
+
 ### ⚡ Real-Time Synchronization (WebSockets)
 * **Global Hub:** A custom WebSocket Hub manages concurrent client connections and room-based broadcasting.
 * **Live Dashboard Updates:** * **Project/Task Membership:** Projects/Tasks appear/vanish from your dashboard instantly when you are added or removed by an owner.
@@ -97,13 +110,13 @@ Updating or creating actions are the same.
 
 The system implements a robust Role-Based Access Control (RBAC) system. Users assigned the `admin` role (defined in `internal/auth/roles.go`) have access to specialized management tools via the **Admin Panel**.
 
-### User Management
+## User Management
 * **Toggle Account Status**: Admins can activate or deactivate any user. 
     * *Real-time Enforcement*: Deactivating a user sends a WebSocket signal that triggers an immediate `forceLogout` on the client side.
 * **User Scrubbing**: A hardened cleanup process that anonymizes a user's identity and removes them from all projects.
     * *Service-Layer Defense*: This action requires a valid Admin JWT and performs a secondary role-check within the service logic to prevent unauthorized API calls.
 
-### System Architecture
+## System Architecture
 * **Live Dashboard**: The Admin view utilizes a `adminRefreshTick` synchronized via WebSockets, ensuring the user list is always up-to-date as new users register.
 * **Security Middleware**: All administrative routes are protected by the `RequireRole` middleware, which validates claims directly from the Echo context for high-performance authorization.
 
