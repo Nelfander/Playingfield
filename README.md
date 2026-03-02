@@ -721,6 +721,11 @@ Validated through service-to-hub integration tests.
     * **The `SetReadDeadline` Tripwire**: Implemented a sliding-window heartbeat. By calling `conn.SetReadDeadline(time.Now().Add(pongWait))` on every successful pong, the system now forces a hard-error in the `ReadPump` if the client remains silent for >30s, effectively self-destructing dead routines.
     * **Atomic `sync.Once` Cleanup**: Encapsulated socket closure and Hub unregistration within a `sync.Once` block. This guarantees that whether the failure originates in the `ReadPump` or `WritePump`, the resource release is executed exactly once, preventing "Close on Closed Channel" panics.
 
+### 14. Infrastructure Cost-Optimization & "Lean" Migration
+* **Issue**: The original AWS architecture utilized an Application Load Balancer (ALB) and Fargate ECS tasks. While highly scalable, the "idle cost" was ~$40/month regardless of traffic, making it inefficient for a high-performance Go backend that only consumes ~150MB of RAM.
+* **Solution**:
+    * **ALB-to-CloudFront Direct Origin**: Migrated the API origin from an ALB to a direct EC2 Custom Origin. By leveraging CloudFront to handle SSL/TLS termination at the edge, I eliminated the need for the $20/month Load Balancer.
+    * **Docker Compose Sidecar Pattern**: Re-architected the deployment into a single `docker-compose` stack on a T3.micro instance. This allowed the Backend, Prometheus, and Grafana to share the same network namespace and resources, reducing monthly overhead by ~75% while maintaining full observability.
 </details>
 
 ---
