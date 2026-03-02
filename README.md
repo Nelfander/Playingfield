@@ -1,7 +1,10 @@
-## Playingfield
+# 🏟️ Playingfield 
 
-[<image-card alt="CI" src="https://github.com/Nelfander/Playingfield/actions/workflows/ci.yml/badge.svg" ></image-card>](https://github.com/Nelfander/Playingfield/actions/workflows/ci.yml)
 [![CI](https://github.com/Nelfander/Playingfield/actions/workflows/ci.yml/badge.svg)](https://github.com/Nelfander/Playingfield/actions/workflows/ci.yml)
+[![Go Version](https://img.shields.io/badge/Go-1.25+-00ADD8?style=flat-square&logo=go)](https://go.dev/)
+[![React](https://img.shields.io/badge/React-2023-%2361DAFB?style=flat-square&logo=react)](https://reactjs.org/)
+
+**[🚀 Live Demo: app.playingfield.com](https://d3tucazxq1wbf6.cloudfront.net)**
 
 **Playingfield is a real-time, collaborative project and task management platform with live WebSocket sync, project-scoped chat, granular RBAC, file attachments, and structured domain logic — built for reliability and a production mindset, not just a demo app.**
 
@@ -436,11 +439,9 @@ The following snapshots verify the goroutine lifecycle and resource reclamation:
 6. **Validation**: Confirm "Healthy" status via Docker Healthchecks and verify WebSocket heartbeats (`ReadDeadline` logic) in backend logs.
 
 ### Technical Wins & Resilience
-- **Zombie Connection Purge**: Implemented `SetReadDeadline` logic to auto-terminate "half-open" TCP WebSocket connections, preventing memory leaks.
 - **ALB-less Architecture**: Successfully routed traffic through CloudFront directly to EC2, maintaining HTTPS security while eliminating the $20/month ALB fee.
 - **Sidecar Observability**: Deploying Prometheus/Grafana on-instance provides instant visibility into the "Health" of the Go binary without external managed service costs.
 
----
 ---
 
 ## 🚀 Quick Start
