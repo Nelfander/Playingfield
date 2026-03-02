@@ -1,0 +1,64 @@
+version: '3.8'
+
+services:
+  # --- YOUR GO APP ---
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: playingfield-app
+    # Map EC2 port 80 to your Go app's port 880
+    ports:
+      - "80:8080"
+    env_file:
+      - .env
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          # Go is very efficient; 300MB is plenty for 30 users
+          memory: 300M
+
+  # --- MONITORING ---
+  prometheus:
+    image: prom/prometheus:v2.53.1
+    container_name: playingfield-prometheus
+    volumes:
+      - ./prometheus-prod.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=10d' # Reduced to 10 days to save disk
+    ports:
+      - "9090:9090"
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 200M
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    container_name: playingfield-grafana
+    ports:
+      - "3001:3000"
+    env_file:
+      - .env
+    volumes:
+      - grafana_data:/var/lib/grafana
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 200M
+
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: playingfield-node-exporter
+    network_mode: "host"
+    restart: unless-stopped
+
+volumes:
+  prometheus_data:
+  grafana_data:

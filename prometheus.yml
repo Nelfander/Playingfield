@@ -14,7 +14,7 @@ rule_files:
 scrape_configs:
   - job_name: 'playingfield-local'
     static_configs:
-      - targets: ['host.docker.internal:880']   
+      - targets: ['host.docker.internal:8080']   
     metrics_path: /metrics                       
 
   # scrape Prometheus itself (good for debugging)
