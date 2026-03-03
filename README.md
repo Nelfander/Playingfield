@@ -7,6 +7,7 @@
 **[🚀 Live Demo: app.playingfield.com](https://d3tucazxq1wbf6.cloudfront.net)**
 Sign up (free, no credit card), create a project, add friends (or open two tabs), and see real-time magic happen.  
 Guided tour available on the landing page (question mark icon) – covers creating projects, inviting, chatting, dragging tasks, uploading files, etc.
+> **Note:** Please use a demo email to test the live version of the app. The "Add Member to Project" list shows a list of all the available emails in the application and since the app is now live it's better to setup an account with a fake email. Example: your_name@example.com
 
 **Playingfield is a real-time, collaborative project and task management platform with live WebSocket sync, project-scoped chat, granular RBAC, file attachments, and structured domain logic — built for reliability and a production mindset, not just a demo app.**
 
