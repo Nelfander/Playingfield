@@ -9,7 +9,7 @@ Sign up (free, no credit card), create a project, add friends (or open two tabs)
 Guided tour available on the landing page (question mark icon) – covers creating projects, inviting, chatting, dragging tasks, uploading files, etc.
 > **Note:** Please use a demo email to test the live version of the app. The "Add Member to Project" list shows a list of all the available emails in the application and since the app is now live it's better to setup an account with a fake email. Example: your_name@example.com
 
-**Playingfield is a real-time, collaborative project and task management platform with live WebSocket sync, project-scoped chat, granular RBAC, file attachments, and structured domain logic — built for reliability and a production mindset, not just a demo app.**
+**Playingfield is a production-style Go backend system for real-time collaborative project management, built with clean architecture principles, concurrency-safe WebSockets, granular RBAC, and a fully tested domain layer (unit, integration, race-detected). It emphasizes reliability, separation of concerns, and realistic backend design over demo simplicity.**
 
 Unlike typical boilerplate task boards, it combines:
 
