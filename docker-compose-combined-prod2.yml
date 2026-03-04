@@ -1,13 +1,13 @@
 version: '3.8'
 
 services:
-  # --- YOUR GO APP ---
+  # --- GO APP ---
   app:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: playingfield-app
-    # Map EC2 port 80 to your Go app's port 880
+    # Map EC2 port 80 to Go app's port 8080
     ports:
       - "80:8080"
     env_file:
@@ -16,7 +16,6 @@ services:
     deploy:
       resources:
         limits:
-          # Go is very efficient; 300MB is plenty for 30 users
           memory: 300M
 
   # --- MONITORING ---
@@ -56,7 +55,17 @@ services:
   node-exporter:
     image: prom/node-exporter:latest
     container_name: playingfield-node-exporter
-    network_mode: "host"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.rootfs=/rootfs'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    ports:
+      - "9100:9100"
     restart: unless-stopped
 
 volumes:

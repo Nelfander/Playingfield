@@ -158,13 +158,13 @@ The system implements a robust Role-Based Access Control (RBAC) system. Users as
   - **Real-time Feedback Loop:** Dashboard panels update instantly during development (e.g., WS gauge toggles on chat open/close, rate spikes during message bursts), enabling rapid iteration and confidence in real-time features.
 
 #### Local Ops & Production Readiness
-- **Containerized Observability Stack:** Built a self-contained Prometheus + Grafana environment via `docker-compose-observability.yml`.
-  - Prometheus scraping `/metrics` every 15s
-  - Grafana dashboard (localhost:3001) with real-time panels:
-    - Active connections (gauge)
-    - Active chat sessions (gauge)
-    - Messages per second (time series)
-    - Cumulative messages (stat)
+- **Containerized Observability Stack:** Built a modular Prometheus + Grafana environment via `docker-compose-combined-prod2.yml`.
+  - **Application Metrics:** Prometheus scraping `/metrics` every 15s for WebSocket and business-logic telemetry.
+  - **Infrastructure Monitoring:** Integrated **Node Exporter** to expose host-level hardware metrics (CPU load, RAM saturation, Disk I/O).
+  - **Production-Grade Dashboards:** Configured a "Command Center" in Grafana (localhost:3001) featuring:
+    - **Real-time App Panels:** Active connections, chat sessions, and message velocity.
+    - **Hardware Health:** Industry-standard **Node Exporter Full** dashboard for monitoring the underlying T3.micro instance health and resource headroom.
+- **Data Retention & Hygiene:** Implemented TSDB retention policies (`--storage.tsdb.retention.time=10d`) to prevent disk saturation on small-scale instances.
 - **Secrets & Configuration Hygiene:** Externalized credentials into `.env`, excluded via `.gitignore`, and standardized Docker variable substitution (`${VAR}`).
 - **Production-Ready Path:** Metrics naming, label strategy, and endpoint design align with Prometheus best practices and are ready for migration to managed environments (e.g., AMP + Managed Grafana on ECS Fargate) without refactoring.
 
