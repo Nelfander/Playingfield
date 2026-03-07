@@ -13,8 +13,8 @@ import (
 )
 
 const (
-	baseURL   = "http://localhost:880"
-	wsURL     = "ws://localhost:880/ws"
+	baseURL   = "http://localhost:8080"
+	wsURL     = "ws://localhost:8080/ws"
 	testEmail = "test1@example.com"
 	testPass  = "123456"
 )
