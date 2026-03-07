@@ -413,19 +413,6 @@ The following snapshots verify the goroutine lifecycle and resource reclamation:
 
 ---
 
-## Future Goals
-* Implement **Task creation from the UI**. ✅
-* Improve **error handling and logging** further. ✅
-* Implement **user role management** (admin vs regular users). ✅ 
-* Add **unit and integration tests** for the project domain.  ✅
-* Add **Project group chats and 1 on 1 individual project member chat feature**. ✅
-* Implement **File Upload Feature**. ✅
-* Implement **The Redis Route (Distributed State)**. Not sure yet (if scaled maybe!)
-* Dockerize **Containerize**.
-* Deploy **AWS Deployment**.
-
----
-
 ## Deployment Plan (AWS – Cost-Optimized & High-Performance)
 
 **Goal**: Deploy a full-stack real-time application (React/Go/Postgres) with maximum observability and minimum infrastructure overhead (<$5/month total).
