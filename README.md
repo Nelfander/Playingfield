@@ -248,7 +248,7 @@ docker-compose -f docker-compose-all-in-one.yml up --build
 | Service | URL |
 |---|---|
 | Frontend | http://localhost:3000 |
-| Backend API | http://localhost:8080 |
+| Backend API | http://localhost:880 |
 | Grafana | http://localhost:3001 (admin/admin) |
 | MinIO | http://localhost:9001 |
  
@@ -270,7 +270,7 @@ go run ./cmd/server
 cd frontend && npm install && npm run dev
 ```
  
-App at http://localhost:5173 · API at http://localhost:8080/health · Grafana at http://localhost:3001
+App at http://localhost:880 · API at http://localhost:880/health · Grafana at http://localhost:3001
  
 ---
  
