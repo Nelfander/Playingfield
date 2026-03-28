@@ -149,10 +149,12 @@ All 200 client goroutines were reclaimed within 10–20 seconds of abrupt discon
 ---
  
 ## 🧪 Testing
+
+<details>
+<summary>Click to expand testing section</summary>
  
 The project employs a tiered testing strategy using Go's native toolchain and the `testify/assert` library. By utilizing **Stateful Fake Repositories**, the suite ensures high execution speed and 100% data consistency without the overhead of a live database.
  
----
  
 ### 🏎️ Concurrency & Race Safety
  
@@ -230,12 +232,16 @@ go test -v ./internal/domain/tasks -run TestTaskService_WebSocketIntegration
 go test -v ./internal/domain/tasks -run TestTaskService_WebSocketBroadcast
 go run scripts/test_chat.go
 ```
- 
+</details>
+
 ---
  
 ## 🚀 Quick Start
  
 **Choose your setup method!**
+
+<details>
+<summary>Click to expand installation instructions</summary>
  
 ### Method 1: Docker (Recommended)
  
@@ -272,10 +278,15 @@ cd frontend && npm install && npm run dev
  
 App at http://localhost:880 · API at http://localhost:880/health · Grafana at http://localhost:3001
  
+</details>
+
 ---
  
 ## 🏛 Architectural Decisions
  
+<details>
+<summary>Click to expand architectural decisions section</summary>
+
 ### 1. Echo vs Gin
 Echo was selected for its built-in middleware capabilities (JWT, CORS) and `Context` handling, which felt more idiomatic for this project's WebSocket hub orchestration. Post-implementation, Echo's centralized error handling proved highly effective for managing real-time stream failures.
  
@@ -309,6 +320,8 @@ The ALB + Fargate idle tax was ~$40/month for a Go binary consuming <150MB RAM. 
 ### 11. Neon (Serverless Postgres) over RDS
 Built-in connection pooling via PgBouncer is a natural fit for Go's `database/sql`, which opens multiple connections under load. Neon prevents connection limit exhaustion during high-frequency WebSocket traffic without managing a separate PgBouncer instance.
  
+</details>
+
 ---
  
 
