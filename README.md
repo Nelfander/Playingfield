@@ -63,7 +63,7 @@ Sign up (free), create a project, open two tabs, and watch real-time sync in act
 > *(Future: searchable by name/email + optional invite tokens for larger setups)*
 
  
-**Kanban task boards** — To Do / In Progress / Done columns with file attachments (S3-backed), task history timeline, and granular RBAC on who can assign or upload.
+**Kanban task boards** — To Do / In Progress / Done columns with file attachments (S3-backed), task history timeline, and granular RBAC on who can assign or upload. With task update that works like a git commit so everybody can see the work done via the history.
  
 ![File upload appearing live in the gallery](assets/File-Upload-And-Download.gif)
  
