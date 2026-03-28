@@ -411,55 +411,11 @@ Built-in connection pooling via PgBouncer is a natural fit for Go's `database/sq
     * **Docker Compose Sidecar Pattern**: Re-architected the deployment into a single `docker-compose` stack on a T3.micro instance. This allowed the Backend, Prometheus, and Grafana to share the same network namespace and resources, reducing monthly overhead by ~75% while maintaining full observability.
 </details>
 
----
-
 > Built as a learning project for Go — started with the basics, evolved by adding real features (WebSockets, S3, observability) as each concept was understood. The architecture reflects that honest progression.
  
 ---
 
-## 📡 WebSocket Architecture & Concurrency
-
-This project implements a high-performance, thread-safe WebSocket system designed to handle thousands of concurrent users across multiple project "rooms."
-
-### 🔧 Key Technical Features
-
-* **Goroutine Lifecycle Management:** Each connection is managed by two dedicated goroutines: a `ReadPump` for incoming messages and a `WritePump` for outgoing data.
-* **Heartbeat (Ping/Pong):** Uses an aggressive heartbeat mechanism to detect "half-open" TCP connections and clean up zombie goroutines within 10-30 seconds.
-* **Atomic Cleanup:** Utilizes `sync.Once` to ensure that connection closure and hub unregistration happen exactly once, preventing race conditions or double-close panics.
-* **Non-Blocking Hub:** The Hub uses buffered channels and `select` statements to ensure that slow clients or a busy Hub never block the main HTTP handlers.
-
-
-
-### ⚙️ Connection Timing Constants
-
-To balance server resources with user experience, we utilize a "sliding window" timeout strategy:
-
-| Constant | Value | Description |
-| :--- | :--- | :--- |
-| `writeWait` | **10s** | Time allowed to write a message to the peer before timing out. |
-| `pongWait` | **30s** | Max time allowed to read the next pong from the peer. |
-| `pingPeriod` | **25s** | Interval between pings (must be less than `pongWait`). |
-
-### 🛠 The "Master Kill Switch" Pattern
-We use a centralized `cleanup()` function to guarantee resource release. This ensures that even if a client script crashes or the network fails silently, the server resources are reclaimed:
-
-```go
-cleanup := func() {
-    once.Do(func() {
-        // Force the ReadMessage to return an error immediately
-        conn.SetReadDeadline(time.Now()) 
-        conn.Close() 
-        
-        // Signal the Hub to unregister, but don't block if the Hub is busy
-        select {
-        case h.hub.Unregister <- client:
-        default:
-        }
-    })
-}
-```
-
-## 🛠 <b>Development History</b>
+## 🛠 <b>Detailed Development History</b>
 <details><summary>(Click to expand)</summary>
 
 <details>
