@@ -1,30 +1,82 @@
-# 🏟️ Playingfield 
 
+# 🏟️ Playingfield
+ 
 [![CI](https://github.com/Nelfander/Playingfield/actions/workflows/ci.yml/badge.svg)](https://github.com/Nelfander/Playingfield/actions/workflows/ci.yml)
 [![Go Version](https://img.shields.io/badge/Go-1.25+-00ADD8?style=flat-square&logo=go)](https://go.dev/)
 [![React](https://img.shields.io/badge/React-2023-%2361DAFB?style=flat-square&logo=react)](https://reactjs.org/)
-
-**[🚀 Live Demo: app.playingfield.com](https://d3tucazxq1wbf6.cloudfront.net)**
-Sign up (free, no credit card), create a project, add friends (or open two tabs), and see real-time magic happen.  
-Guided tour available on the landing page (question mark icon) – covers creating projects, inviting, chatting, dragging tasks, uploading files, etc.
+ 
+A **production-style real-time collaborative project and task manager** built with Go, PostgreSQL, and React. Designed to demonstrate backend engineering fundamentals — concurrent WebSockets, clean architecture, RBAC, observability, and cloud deployment — not just to ship a feature.
+ 
+🚀 **[Live Demo → app.playingfield.com](https://d3tucazxq1wbf6.cloudfront.net)**  
+Sign up (free), create a project, open two tabs, and watch real-time sync in action.
 > **Note:** Please use a demo email to test the live version of the app. The "Add Member to Project" list shows a list of all the available emails in the application and since the app is now live it's better to setup an account with a fake email. Example: your_name@example.com
-
-**Playingfield is a production-style Go backend system for real-time collaborative project management, built with clean architecture principles, concurrency-safe WebSockets, granular RBAC, and a fully tested domain layer (unit, integration, race-detected). It emphasizes reliability, separation of concerns, and realistic backend design over demo simplicity.**
-
-Unlike typical boilerplate task boards, it combines:
-
-- **Live, multi-user synchronization** via custom WebSocket hubs (no polling)
-- **Project-level real-time chat**, automatically provisioned per project
-- **Secure, token-based authentication** with strict ownership and permission checks
-- **Kanban-style task boards** with persistent history and status tracking
-- **Atomic file storage** backed by S3/MinIO with collision-proof asset naming
-- **Type-safe backend** using Go + Echo + SQLC, designed for maintainability
-- **Rate limiting & traffic resilience** built into the API layer
-- **React + TypeScript frontend** with real-time UI updates powered by WebSockets
-- **Structured logging** with Go slog, request-scoped fields, and centralized error handling
-- **Custom HTTP error handler** for consistent API responses
-
+ 
 ---
+ 
+## What This Project Demonstrates
+ 
+| Area | Implementation |
+|---|---|
+| **Concurrency** | Custom WebSocket hub with goroutine lifecycle management, ping/pong heartbeats, and `sync.Once` atomic teardown |
+| **Architecture** | Clean separation of handlers → services → repositories → domain with no layer leakage |
+| **Security** | JWT auth, RBAC middleware, identity-derived ownership (no client-supplied IDs trusted), custom HTTP error handler for consistent API responses |
+| **Type Safety** | SQLC-generated queries — schema changes cause compile errors, not runtime panics |
+| **Observability** | Prometheus metrics, Grafana dashboards, structured `slog` JSON logging, pprof profiling |
+| **Testing** | Unit, integration, and WebSocket tests with `-race` detection; fake repositories for fast isolation |
+| **Infrastructure** | Docker Compose, AWS EC2 + CloudFront + S3, Neon Postgres, MinIO object storage |
+ 
+---
+ 
+## Tech Stack
+ 
+**Backend:** Go · Echo · SQLC · Gorilla WebSocket · JWT · `golang.org/x/time/rate`  
+**Frontend:** React 18 · TypeScript · Vite  
+**Storage:** PostgreSQL (Neon) · MinIO / AWS S3  
+**Observability:** Prometheus · Grafana · pprof  
+**Infrastructure:** Docker · AWS EC2 · CloudFront · S3
+ 
+---
+ 
+## Architecture Overview
+ 
+![System Architecture](assets/architecture.svg)
+ 
+---
+ 
+## Core Features
+ 
+**Real-time collaboration** — WebSocket hub broadcasts task and project changes instantly across all connected clients, no polling.
+ 
+![Task movement & real-time update across tabs](assets/Task-Assigning-And-History.gif)
+ 
+**Project-scoped chat** — Each project gets a dedicated live chat room, automatically provisioned on creation with full history for new members.
+ 
+![Chat messages appearing instantly on clients](assets/Chat-Sync.gif)
+> **👥 Member Addition – Small Team Optimized**  
+> 
+> For simplicity in small teams (designed for 10–20 person companies), project owners can add any existing active user directly via a searchable dropdown.
+> 
+> - Supervisor/admin typically creates/registers team accounts initially.
+> - Strict ownership enforcement: only project creators can add/remove members.
+> - Real-time sync: new members see full project history instantly via WebSocket.
+> 
+> *(Future: searchable by name/email + optional invite tokens for larger setups)*
+
+ 
+**Kanban task boards** — To Do / In Progress / Done columns with file attachments (S3-backed), task history timeline, and granular RBAC on who can assign or upload.
+ 
+![File upload appearing live in the gallery](assets/File-Upload-And-Download.gif)
+ 
+**Admin panel** — Admins can activate/deactivate users (with instant force-logout via WebSocket signal) and scrub user identity (PII anonymization + cascade removal from projects/tasks).
+> **Note**: To maintain a clean UX, Admins follow standard visibility rules for Projects and Tasks. They only see projects they own or have been explicitly added to, keeping their workspace focused on active collaborations.
+
+ 
+**Tiered rate limiting** — Token-bucket middleware with anonymous (5 req/s) and authenticated (20 req/s) tiers, a background janitor goroutine for memory reclamation, and CORS pre-flight awareness.
+
+
+ 
+---
+
 
 ## Who Is This For?
 
@@ -57,633 +109,208 @@ Unlike typical boilerplate task boards, it combines:
 
 ---
 
-## 🌟 Key Features
-
-### 💬 Real-Time Project Chat
-* **Contextual Messaging:** Each project features a dedicated real-time chat room.
-* **Smart UI Alignment:** Messages are intelligently aligned—your messages appear on the right ("Me") in blue, while teammates' messages appear on the left in gray.
-* **Live Timestamps:** Every message is stamped with a human-readable time (e.g., 14:05) for better context.
-* **History Persistence:** New members can see previous project discussions instantly upon joining.
-
-**Live chat sync across multiple clients** 
-  ![Chat messages appearing instantly on clients](assets/Chat-Sync.gif)
-
-### 📋 Collaborative Task Management
-* **Kanban-Style Organization:** High-visibility board layout grouping tasks into `To Do`, `In Progress`, and `Done` columns for clear project tracking.
-* **Granular Task Ownership:** Ability to create tasks with specific descriptions and assign them to any verified project member.
-* **Integrated Document & Asset Management:** Engineered a robust integration with **MinIO**, utilizing a streaming `io.Reader` pattern to handle file uploads without memory-bloating the server.
-* **UUID-Namespaced Assets:** Implemented automated collision-prevention by prefixing file names with unique UUIDs, allowing multiple users to upload identical filenames to the same task safely.
-* **Strict "Collaborator-Only" Access:** Deployed a refined RBAC (Role-Based Access Control) layer where only the **Project Owner** or the **Task Assignee** can upload or delete attachments, while other project members maintain "Read-Only" gallery access.
-* **Atomic Deletion Sync:** A precision-engineered cleanup flow that ensures physical files are purged from the storage bucket immediately before their metadata is removed from Postgres, preventing "storage leaks" and orphan data.
-* **Signal-Driven Refresh:** Leverages a lightweight "Pulse" synchronization logic where task changes trigger instant UI re-validation across all collaborator screens via WebSockets.
-* **Persistent History:** Every task is backed by a robust database schema, ensuring assignments and statuses are preserved across sessions. Every action—from status updates to file uploads—is recorded in a "Git-like" timeline so members can see what was changed, when, and by whom.
-
-**Real-time collaboration on Kanban boards with WebSocket sync**  
-  ![Task movement & real-time update across tabs](assets/Task-Assigning-And-History.gif)
-
-**File attachments on tasks with atomic upload + gallery refresh**
-  ![File upload appearing live in the gallery](assets/File-Upload-And-Download.gif)
-
-> **👥 Member Addition – Small Team Optimized**  
-> 
-> For simplicity in small teams (designed for 10–20 person companies), project owners can add any existing active user directly via a searchable dropdown.
-> 
-> - Supervisor/admin typically creates/registers team accounts initially.
-> - Strict ownership enforcement: only project creators can add/remove members.
-> - Real-time sync: new members see full project history instantly via WebSocket.
-> 
-> *(Future: searchable by name/email + optional invite tokens for larger setups)*
-
-
-### ⚡ Real-Time Synchronization (WebSockets)
-* **Global Hub:** A custom WebSocket Hub manages concurrent client connections and room-based broadcasting.
-* **Live Dashboard Updates:** * **Project/Task Membership:** Projects/Tasks appear/vanish from your dashboard instantly when you are added or removed by an owner.
- * **Global Deletion/Creation:** If an owner creates/deletes/updates a project/task, it is edited from every member's screen in real-time.
-* **Automatic Member Sync:** Live updates to member lists without requiring page refreshes.
-
-### 🔐 Authentication & Security
-* **JWT-Based Auth:** Secure registration and login with token-based identity.
-* **Identity Integrity:** Handlers derive `user_id` exclusively from verified JWT claims, preventing "ID Spoofing."
-* **Ownership Enforcement:** Destructive actions (deleting projects/tasks, removing members) are restricted to the project owner via backend middleware.
-Updating or creating actions are the same.
-
-### 🛡️ Administrative Actions & Permissions
-
-The system implements a robust Role-Based Access Control (RBAC) system. Users assigned the `admin` role (defined in `internal/auth/roles.go`) have access to specialized management tools via the **Admin Panel**.
-
-## User Management
-* **Toggle Account Status**: Admins can activate or deactivate any user. 
-    * *Real-time Enforcement*: Deactivating a user sends a WebSocket signal that triggers an immediate `forceLogout` on the client side.
-* **User Scrubbing**: A hardened cleanup process that anonymizes a user's identity and removes them from all projects.
-    * *Service-Layer Defense*: This action requires a valid Admin JWT and performs a secondary role-check within the service logic to prevent unauthorized API calls.
-
-## System Architecture
-* **Live Dashboard**: The Admin view utilizes a `adminRefreshTick` synchronized via WebSockets, ensuring the user list is always up-to-date as new users register.
-* **Security Middleware**: All administrative routes are protected by the `RequireRole` middleware, which validates claims directly from the Echo context for high-performance authorization.
-
-> **Note**: To maintain a clean UX, Admins follow standard visibility rules for Projects and Tasks. They only see projects they own or have been explicitly added to, keeping their workspace focused on active collaborations.
-
-### 🛡️ Resilience & Traffic Control
-* **Tiered Rate Limiting (Token Bucket):** Implemented a high-performance middleware using `golang.org/x/time/rate`. It dynamically adjusts throughput based on identity:
-    * **Anonymous Tier:** Strict IP-based limits (5 req/sec) to mitigate brute-force attacks and bot scraping.
-    * **Authenticated Tier:** Upgraded "VIP" limits (20 req/sec) for registered users, ensuring a smooth experience for legitimate app usage.
-* **Concurrency-First Registry:** Manages visitor state using a `sync.RWMutex` with a "Double-Checked Locking" pattern. This ensures the rate limiter never becomes a bottleneck during traffic spikes.
-* **Automated Memory Reclamation:** A background "Janitor" goroutine monitors the visitor registry, automatically pruning inactive entries every 10 minutes to maintain a flat memory footprint.
-* **Lazy JWT Verification:** Optimized middleware chain that "peeks" at the Authorization header to identify users, caching verified claims in the request context to avoid redundant cryptographic operations in downstream handlers.
-* **CORS-Aware Throttling:** Optimized the middleware to recognize OPTIONS pre-flight signatures, preventing "False-Positive" rate-limiting of browser security handshakes.
-
-### 🛠️ Reliability & Observability
-
-#### Reliability by Design
-- **Storage Abstraction Layer:** Introduced a `StorageProvider` interface decoupling domain logic from infrastructure, enabling seamless switching between MinIO (local) and AWS S3 without domain-layer changes.
-- **Centralized Error Translation:** Implemented a global error handler that maps domain errors to safe, consistent HTTP responses while preserving full internal context for logging and debugging.
-- **Recursive Error Wrapping:** Standardized Go `%w` error wrapping across layers to retain root causes (e.g., DB timeouts) while enriching errors with domain context.
-- **Defensive Data Mapping:** Enforced strict mapping boundaries between Postgres/sqlc models and domain structs to prevent persistence-layer changes from leaking into business logic.
-
-#### Observability & Telemetry
-- **Structured Logging (slog):** Production-grade JSON logging with leveled output; low-level traces suppressed by default while actionable failures surface clearly.
-- **Prometheus Instrumentation:** Exposed a production-safe `/metrics` endpoint with low-cardinality, namespaced metrics.
-  - `playingfield_websocket_active_connections_total`
-  - `playingfield_websocket_active_chat_connections_total`
-  - `playingfield_websocket_messages_total{direction, room_type}`
-- **Operationally Meaningful Metrics Design:** Explicit separation between:
-  - General WebSocket sessions (connected users)
-  - Active chat sessions (ProjectID ≠ 0)  
-  Enables derived insight such as idle vs active session tracking.
-- **Service-Layer Message Counting:** Message counters increment only after successful persistence and before broadcast, ensuring accuracy and semantic correctness.
-- **Derived PromQL Insights (Zero Extra Instrumentation):**
-  - Idle sessions = total connections − active chat connections
-  - Message rate/sec via `rate(messages_total[1m])`
-  - Per-direction and per-room-type breakdown for chat intensity analysis
-  - **Real-time Feedback Loop:** Dashboard panels update instantly during development (e.g., WS gauge toggles on chat open/close, rate spikes during message bursts), enabling rapid iteration and confidence in real-time features.
-
-#### Local Ops & Production Readiness
-- **Containerized Observability Stack:** Built a modular Prometheus + Grafana environment via `docker-compose-combined-prod2.yml`.
-  - **Application Metrics:** Prometheus scraping `/metrics` every 15s for WebSocket and business-logic telemetry.
-  - **Infrastructure Monitoring:** Integrated **Node Exporter** to expose host-level hardware metrics (CPU load, RAM saturation, Disk I/O).
-  - **Production-Grade Dashboards:** Configured a "Command Center" in Grafana (localhost:3001) featuring:
-    - **Real-time App Panels:** Active connections, chat sessions, and message velocity.
-    - **Hardware Health:** Industry-standard **Node Exporter Full** dashboard for monitoring the underlying T3.micro instance health and resource headroom.
-- **Data Retention & Hygiene:** Implemented TSDB retention policies (`--storage.tsdb.retention.time=10d`) to prevent disk saturation on small-scale instances.
-- **Secrets & Configuration Hygiene:** Externalized credentials into `.env`, excluded via `.gitignore`, and standardized Docker variable substitution (`${VAR}`).
-- **Production-Ready Path:** Metrics naming, label strategy, and endpoint design align with Prometheus best practices and are ready for migration to managed environments (e.g., AMP + Managed Grafana on ECS Fargate) without refactoring.
-
+ 
+## Architecture Highlights
+ 
+### Why SQLC over an ORM?
+ORMs advertise database portability, but in practice schemas change far more often than databases do. SQLC generates type-safe Go from raw SQL — if a column is renamed and the query isn't updated, the project won't compile. This catches bugs at build time instead of runtime.
+ 
+### WebSocket Hub Design
+A single centralized Hub multiplexes all project rooms. Each user maintains one persistent connection; the Hub routes messages by `project_id` in the JSON payload. This keeps server file descriptors low and simplifies lifecycle management compared to per-room socket instances.
+ 
+Each connection runs two goroutines (`ReadPump` / `WritePump`) with a `sync.Once` cleanup closure — guaranteeing socket teardown and Hub unregistration happen exactly once regardless of which pump fails first, eliminating double-close panics.
+ 
+### File Storage (MinIO / S3)
+Files are streamed directly from the HTTP request to MinIO via `io.Reader` — no memory buffering. UUID-prefixed object names prevent collisions. The backend acts as a gatekeeper: all downloads are proxied through the authenticated API, keeping the bucket private. Atomic deletion ensures physical files are purged before database records, preventing storage leaks.
+ 
+### Rate Limiter Concurrency
+The visitor registry uses `sync.RWMutex` with double-checked locking so read-heavy traffic (the common case) never blocks. Counters use `sync/atomic` CAS instead of a mutex — non-blocking at the CPU level, invisible to the hot path.
+ 
+### Cost-Optimized Deployment
+Migrated from ECS Fargate + ALB (~$40/month idle) to Docker Compose on a single EC2 T3.micro with CloudFront as a Custom Origin for SSL termination. Infrastructure cost dropped ~75% with no feature regression.
+ 
 ---
-
-## 🛠 Tech Stack
-### Backend
-- **Go (Echo framework)**
-- **SQLC** (Type-safe SQL generation)
-- **AWS SDK v2** (S3-compatible asset management)
-- **Gorilla WebSocket** (Real-time project hubs)
-- **JWT-based authentication**
-- **Auth-aware rate limiting** (Tiered throttling)
-- **Context-driven request lifecycle**
-- **Structured logging & custom HTTP error handling**
-
-### Storage & Database
-- **PostgreSQL (Neon.tech)**: Transaction-safe schema & migrations.
-- **MinIO**: S3-compatible object storage for task attachments.
-- **Atomic File Logic**: Metadata in Postgres synced with physical blobs in S3.
-
-### Frontend
-- **React 18** (Functional components & Hooks)
-- **TypeScript** (Strict type definitions)
-- **Vite** (Next-gen frontend tooling)
-- **CSS3** (Glassmorphism UI)
-
-### Communication
-- **REST API** for state management
-- **WebSockets** for real-time updates
-
-### Testing & Reliability
-- **Domain-Driven Design (DDD)**: Clear separation between infrastructure and business logic.
-- **Repository Pattern**: Using Fake Repositories for fast, isolated unit testing.
-- **Race Detection (`-race`)**: Ensuring thread-safety in WebSocket hubs and rate limiters.
-- **Structured Telemetry (slog)**: Machine-readable JSON logging for production observability.
-
-### Infrastructure
-- **Dockerized services** (Development parity)
-- **AWS Deployment** (Planned)
+ 
+## Stress Test Results (WebSocket Concurrency)
+ 
+Verified goroutine cleanup under a 100-client burst using pprof:
+ 
+| Metric | Baseline | Peak (100 clients) | Post-cleanup |
+|---|---|---|---|
+| Goroutines | 11 | 211 | 11 |
+| Active sockets | 1 | 101 | 1 |
+| Hub congestion | 0% | <1% | 0% |
+ 
+All 200 client goroutines were reclaimed within 10–20 seconds of abrupt disconnection via the `writeWait` timeout and `pingPeriod` heartbeat cycle. No goroutine leaks detected.
+ 
+![pprof at peak load — 211 goroutines during 100-user burst](assets/ws-stress-test-peak.png)
+![pprof post-cleanup — back to 11 goroutines, zero leaks](assets/ws-stress-test-recovery.png)
+ 
 ---
-
-## 🏛 Architectural Decisions 
-
-Choosing the right stack was a balance between Go's high-performance concurrency and developer productivity.
-
-#### 1. Backend: Echo Framework vs. Gin
-* **Decision**: [Echo](https://echo.labstack.com/)
-* **Reasoning**: Echo was selected for its superior performance benchmarks and built-in middleware capabilities (specifically for JWT and CORS). While Gin is a standard, Echo’s `Context` handling felt more idiomatic for this project's WebSocket hub orchestration. With that being said if I would do this project again I would totally do it with Gin Framework just to see the differences. At the time I started this project I was under the impresion that Echo is the Go-to!
-* **Evaluation**: Post-implementation, Echo's centralized error handling proved highly effective for managing real-time stream failures.
-
-#### 2. Schema Strategy: Why SQLC over raw `database/sql`?
-* **Decision**: [sqlc](https://sqlc.dev/) for Type-Safe Queries
-* **The "Why"**: A lot of people use heavy ORMs like GORM because they think it makes switching databases easy, but I think that in the real world you rarely switch your DB. What you *do* do is change your schema. I wanted a tool that would catch my mistakes early.
-* **The Logic**: With sqlc, I write raw SQL for Postgres and it generates the Go code for me. If I change a column name in the DB but forget to update my queries, the code won't compile. It gives me the performance of raw SQL with the safety of a compiled language, so I don't have to worry about runtime "null pointer" crashes when fetching project data.
-
-#### 3. State Management: React Hooks + WebSockets
-* **Decision**: Encapsulated Hook Pattern (`useDirectChat`)
-* **Reasoning**: Instead of a global store (Redux), I opted for localized state management via custom hooks. This ensures that WebSocket subscriptions are lifecycle-aware; when a user leaves a chat component, the connection is cleaned up immediately, preventing goroutine leaks on the Go backend.
-
-#### 4. File Storage: Why MinIO (S3) instead of just the DB?
-* **Decision**: [MinIO](https://min.io/)
-* **The "Why"**: I didn't want to bloat my Postgres database with binary file data (BLOBs), which makes backups a nightmare and slows down queries. I went with MinIO because it’s S3-compatible. This way, when I move the app to AWS, I can just point the config to an S3 bucket and the code won't change.
-* **The Logic**: The backend acts as a gatekeeper. Instead of making files public, the Go API checks if you're authorized and then streams the file from MinIO to you. It keeps the data secure without exposing my storage server to the internet.
-
-#### 5. High-Frequency Counting: Atomics over Mutex
-* **Decision**: `sync/atomic` for the Rate Limiter
-* **The "Why"**: Initially, I thought about using a Mutex to lock the rate-limiter count, but Mutexes are heavy because they make other threads wait in line. Since the rate-limiter runs on every single request, I wanted it to be as "invisible" as possible.
-* **The Logic**: I used Atomic Compare-And-Swap (CAS). It handles the math at the CPU hardware level. It's non-blocking, meaning the WebSocket hub can keep pushing messages without getting stuck behind a database lock or a slow middleware check.
-
-#### 6. Real-Time: WebSockets vs. HTTP Polling
-* **Decision**: Bidirectional WebSockets
-* **The "Why"**: For a chat and task board, I wanted updates to be instant. Refreshing every 5 seconds (polling) felt "laggy" and wastes a lot of bandwidth on headers. 
-* **The Logic**: I built a Hub/Client pattern in Go. The biggest challenge here wasn't sending messages, but managing the "state" of the connection—making sure that when a user closes their browser, the server cleans up the goroutine so I don't leak memory. It makes the UI feel snappy, like a real desktop app.
-
-#### 7. Project Isolation: Why a Centralized Hub?
-* **Decision**: Single-Hub Multiplexing
-* **The "Why"**: I had to decide between creating a new "room" for every project or having one central Hub that handles everything. I went with a centralized Hub because it simplifies the WebSocket lifecycle. 
-* **The Logic**: The Hub maintains a map of project IDs to sets of clients. Instead of a user having 10 different socket connections for 10 projects, they have one persistent connection, and the backend "routes" the messages based on the `project_id` in the JSON payload. It’s much lighter on the server's file descriptors.
-
-#### 8. Ephemeral State: Typing Indicators & Redis
-* **Decision**: In-Memory Status (vs. Database updates)
-* **The "Why"**: "Typing..." status changes every second. If I saved that to Postgres, the database would be crushed by useless writes. 
-* **The Logic**: I treat typing indicators as "fire-and-forget" events. The server broadcasts them immediately to other members of the project but never touches the disk. For the portfolio, I implemented this in-memory, but I designed the Hub so I could easily swap in **Redis Pub/Sub** if I ever need to scale this across multiple server instances.
-
-#### 9. Pattern: Monolithic Evolution
-* **Decision**: Single Project Monolith
-* **The "Why"**: This project began as a focused exercise to learn Go's fundamentals. As I grew more comfortable with the language, I began adding new features that I learned that exist and sounded cool to me  (like WebSockets and S3 storage). 
-* **The Logic**: While I considered breaking these into microservices, I decided to keep the architecture monolithic. This allowed me to focus on learning Go's concurrency and internal package structures without the "network tax" and operational overhead of managing multiple independent services.
-* **Future-Proofing**: Because the code is organized into clean internal packages (Auth, Chat, Projects), the boundaries are already defined. If I needed to scale the Chat Hub independently on AWS in the future, it is already "seamed" for a clean break into a microservice.
-
-#### 10. Deployment: Containerized Environment 
-* **Decision**: Docker-Compose Orchestration
-* **The "Why"**: I want a "one-command" setup. I dont want anyone to struggle with installing Postgres versions or configuring MinIO buckets manually. 
-* **The Logic**: By splitting the project into modular containers, I create an "Infrastructure Agnostic" environment—allowing the app to run seamlessly on a local machine, a Raspberry Pi, or scale to AWS without changing application code.
-
-#### 11. Database Infrastructure: Neon (Serverless Postgres)
-* **Decision**: [Neon](https://neon.tech/)
-* **The "Why"**: I chose Neon over a standard self-hosted Postgres instance to leverage its serverless architecture, allowing for instant database branching for safe production testing.
-* **The Logic**: Neon’s built-in connection pooling (via PgBouncer) is a perfect match for a Go backend. Since Go's `database/sql` opens multiple connections under high load, Neon ensures the database doesn't hit its connection limit, maintaining stability even during high-frequency WebSocket traffic.
-
-#### 12. Infrastructure Evolution: ECS/ALB to Cost-Optimized EC2
-* **The Transition**: Migrated from a managed AWS ECS (Fargate) + Application Load Balancer (ALB) stack to a self-managed Docker Compose environment on a single EC2 T3.micro.
-* **The "Why" (Financial Engineering)**: The ALB + Fargate "idle tax" was approximately $40/month. For a high-performance Go binary that consumes <150MB of RAM, the managed overhead was unnecessary. By moving to EC2 and using CloudFront as a direct Custom Origin, I reduced the infrastructure "burn rate" by ~75%.
-* **The "Why" (Network Efficiency)**: By co-locating the Backend, Prometheus, and Grafana on the same EC2 instance via a Docker bridge network, I eliminated cross-service latency and simplified the observability "sidecar" pattern.
-* **The Logic**: I leveraged CloudFront for SSL/TLS termination at the edge, allowing the EC2 to remain behind a lean Security Group while still providing a global, secure entry point for users. 
-
----
-## 📡 WebSocket Architecture & Concurrency
-
-This project implements a high-performance, thread-safe WebSocket system designed to handle thousands of concurrent users across multiple project "rooms."
-
-### 🔧 Key Technical Features
-
-* **Goroutine Lifecycle Management:** Each connection is managed by two dedicated goroutines: a `ReadPump` for incoming messages and a `WritePump` for outgoing data.
-* **Heartbeat (Ping/Pong):** Uses an aggressive heartbeat mechanism to detect "half-open" TCP connections and clean up zombie goroutines within 10-30 seconds.
-* **Atomic Cleanup:** Utilizes `sync.Once` to ensure that connection closure and hub unregistration happen exactly once, preventing race conditions or double-close panics.
-* **Non-Blocking Hub:** The Hub uses buffered channels and `select` statements to ensure that slow clients or a busy Hub never block the main HTTP handlers.
-
-
-
-### ⚙️ Connection Timing Constants
-
-To balance server resources with user experience, we utilize a "sliding window" timeout strategy:
-
-| Constant | Value | Description |
-| :--- | :--- | :--- |
-| `writeWait` | **10s** | Time allowed to write a message to the peer before timing out. |
-| `pongWait` | **30s** | Max time allowed to read the next pong from the peer. |
-| `pingPeriod` | **25s** | Interval between pings (must be less than `pongWait`). |
-
-### 🛠 The "Master Kill Switch" Pattern
-We use a centralized `cleanup()` function to guarantee resource release. This ensures that even if a client script crashes or the network fails silently, the server resources are reclaimed:
-
-```go
-cleanup := func() {
-    once.Do(func() {
-        // Force the ReadMessage to return an error immediately
-        conn.SetReadDeadline(time.Now()) 
-        conn.Close() 
-        
-        // Signal the Hub to unregister, but don't block if the Hub is busy
-        select {
-        case h.hub.Unregister <- client:
-        default:
-        }
-    })
-}
-```
-
-### 📊 Performance & Stress Testing (Verified via pprof)
-
-To ensure the system remains stable under high load, the WebSocket implementation was subjected to stress testing using a custom PowerShell script to simulate rapid connection bursts.
-
-#### Test Scenario:
-1. **Baseline:** Server idling at **11** goroutines.
-2. **The Burst:** **100 concurrent clients** established connections within 1 second.
-3. **The Peak:** Total goroutine count reached **211** (1 Hub loop + 10 baseline + 200 per-client pumps).
-4. **The "Hard" Disconnect:** The client script was terminated abruptly to simulate a network crash or client-side failure.
-
-> [!IMPORTANT]
-> **Rate Limiter Configuration for Testing:** > If you are running the stress test script, ensure you temporarily increase the `RateLimiter` threshold in the middleware. By default, the system protects against rapid bursts; to simulate 100+ concurrent connections from a single IP, the limit must be adjusted or bypassed for the test machine.
-
-#### 🛠 Reproducing the Test
-To verify the goroutine cleanup logic, you can use the following PowerShell script. This simulates 100 concurrent clients connecting, holding the connection, and then abruptly terminating.
-
-<details>
-<summary><b>Click to view PowerShell Stress Test Script</b></summary>
-
-```powershell
-# websocket_stress_test.ps1
-$url = "ws://localhost:8080/ws?token=YOUR_TEST_TOKEN&projectId=1"
-$connectionCount = 100
-$jobs = @()
-
-Write-Host "🚀 Spawning $connectionCount concurrent WebSocket clients..." -ForegroundColor Cyan
-
-for ($i = 1; $i -le $connectionCount; $i++) {
-    $jobs += Start-Job -ScriptBlock {
-        param($url)
-        try {
-            $ws = New-Object ClientWebSocket
-            $ct = New-Object System.Threading.CancellationTokenSource
-            $task = $ws.ConnectAsync($url, $ct.Token)
-            $task.Wait()
-            
-            # Keep connection open for 15 seconds
-            Start-Sleep -Seconds 15
-            $ws.Dispose()
-        } catch {
-            # Silent fail for stress test
-        }
-    } -ArgumentList $url
-}
-
-Write-Host "✅ All clients connected. Waiting 15s..." -ForegroundColor Green
-Start-Sleep -Seconds 15
-
-Write-Host "🛑 Terminating all clients abruptly..." -ForegroundColor Yellow
-$jobs | Stop-Job
-$jobs | Remove-Job
-
-Write-Host "🏁 Test complete. Check pprof for goroutine drop." -ForegroundColor Cyan
-```
-</details>
-
-#### Results:
-* **Detection:** The server successfully detected the "half-open" connections via the `writeWait` timeout and `pingPeriod` cycle.
-* **Cleanup:** All **200** client-related goroutines were destroyed, and the client was unregistered from the Hub within **10–20 seconds**.
-* **Recovery:** The system returned to its original baseline (**9–11** goroutines) without any memory leaks or orphaned routines.
-
-
-
-| Metric | Start | Peak | Post-Cleanup |
-| :--- | :--- | :--- | :--- |
-| **Goroutines** | 11 | 211 | 11 |
-| **Active Sockets** | 1 | 101 | 1 |
-| **Hub Congestion** | 0% | < 1% | 0% |
-
-> **Note:** The drop to 9 goroutines (below the 11 baseline) indicates that the "Master Kill Switch" logic successfully cleaned up pre-existing "zombie" connections that were lingering from previous sessions.
-
-#### 📈 pprof Visualization
-
-The following snapshots verify the goroutine lifecycle and resource reclamation:
-
-![Pprof Peak Load](./assets/ws-stress-test-peak.png)
-*Figure 1: pprof at peak load (211 goroutines) during active 100-user burst.*
-
-![Pprof Recovery](./assets/ws-stress-test-recovery.png)
-*Figure 2: pprof post-cleanup (11 goroutines) demonstrating zero leaked routines.*
-
-
-## 📡 WebSocket Flow
-<details>
-<summary><b>System Orchestration Detail</b> (Click to expand)</summary>
-
-1. **Handshake & Upgrade**: The handler validates the JWT, upgrades the HTTP connection, and configures the underlying `net.TCPConn` with **TCP Keep-Alives** (30s) to detect hardware-level silent failures.
-2. **Registration & Initialization**: A `Client` object is instantiated and dispatched to the `Hub` via the `Register` channel. A **Unified Cleanup** closure is initialized using `sync.Once` to prevent teardown race conditions.
-3. **Dual-Pump Concurrency**: 
-    * **WritePump (Goroutine)**: Handles the outgoing message queue and the **25s Heartbeat (Ping)**. It enforces a 10s `writeWait` to ensure the server doesn't hang on stalled client buffers.
-    * **ReadPump (Main Loop)**: Processes incoming frames and pongs, continuously resetting the **30s ReadDeadline** to verify client liveness.
-4. **Hub Orchestration**: The Hub routes payloads to specific Project Rooms or Users. All outbound signals to the `Client.Send` channel are wrapped in `select` blocks to prevent a single slow peer from creating backpressure on the entire Hub.
-5. **Atomic Teardown**: Upon any failure or timeout, the **Master Kill Switch** is triggered. It forces an immediate socket closure and an asynchronous `Unregister` signal, ensuring the goroutine stack returns to baseline (9-11) within seconds.
-
-</details>
-
----
-
-## Deployment Plan (AWS – Cost-Optimized & High-Performance)
-
-**Goal**: Deploy a full-stack real-time application (React/Go/Postgres) with maximum observability and minimum infrastructure overhead (<$5/month total).
-
-### Components
-- **Frontend**: React Production Build → **AWS S3** (Static Hosting) + **CloudFront CDN** (TLS Termination, Edge Caching).
-- **Backend**: Multi-stage Go Docker Image → **Docker Hub** → **AWS EC2 (T3.micro)**. 
-  - *Why EC2 over ECS Fargate?* While ECS is scalable, a dedicated EC2 instance using **Docker Compose** allows for tighter resource control, zero ALB idle costs (~$20 savings), and co-location of observability tools (Prometheus/Grafana) on the same network bridge.
-- **Database**: **Neon Postgres** (Serverless) — Chosen for its instant branching and generous free tier compared to AWS RDS.
-- **Storage**: **AWS S3** (Production Bucket) — Replaced local MinIO with regional S3 storage, utilizing IAM programmatic access for secure file uploads.
-- **Observability Stack**: Self-hosted **Prometheus & Grafana** sidecars — Integrated via Docker Compose for real-time monitoring of WebSocket active connections, CPU/RAM saturation, and Go runtime metrics.
-- **Networking**: CloudFront-to-EC2 Custom Origin — Bypasses the need for an Application Load Balancer (ALB) by leveraging CloudFront's global edge for SSL, significantly reducing monthly AWS expenditure.
-
-### High-Level Steps 
-1. **Frontend Orchestration**: Build React assets → Sync to S3 → Provision CloudFront distribution with S3 Origin.
-2. **Container Registry**: Push optimized multi-stage Go backend image to Docker Hub.
-3. **Provisioning (Compute)**: 
-   - Launch Amazon Linux 2023 EC2 (T3.micro).
-   - Configure Security Groups (Port 80 for CloudFront, Ports 22/3001/9090 restricted to Admin IP).
-4. **Stack Deployment (Docker Compose)**:
-   - Define `playingfield-app`, `prometheus`, `grafana`, and `node-exporter` in a unified YAML.
-   - Map EC2 Port 80 to Container Port 8080 (Go Echo).
-   - Inject Production `.env` (Neon DB URL, S3 Keys, JWT Secrets).
-5. **CDN Routing**: Update CloudFront Origin from legacy ALB/S3 to the **EC2 Public DNS**, enabling the API to serve traffic through the CDN.
-6. **Validation**: Confirm "Healthy" status via Docker Healthchecks and verify WebSocket heartbeats (`ReadDeadline` logic) in backend logs.
-
-### Technical Wins & Resilience
-- **ALB-less Architecture**: Successfully routed traffic through CloudFront directly to EC2, maintaining HTTPS security while eliminating the $20/month ALB fee.
-- **Sidecar Observability**: Deploying Prometheus/Grafana on-instance provides instant visibility into the "Health" of the Go binary without external managed service costs.
-
----
-
-## 🚀 Quick Start
-<details>
-<summary><b>Choose your setup method!</b> (Click to expand)</summary>
-
-### 0. Initial Configuration (Required)
-Before running either method, you must set up your environment variables:
-1. Configuration is loaded from .env (example provided)
-2. Open `.env` and ensure the credentials match your local setup (default values are provided for Docker).
-
----
-
-### Method 1: The "Fast" Way (Docker-Only Demo)
-*Best for: Quick previews, recruiters, or full-stack testing without local dependencies.*
-
-1. **Clone & Launch**:
-   ```bash
-   git clone [https://github.com/Nelfander/Playingfield.git](https://github.com/Nelfander/Playingfield.git)
-   cd Playingfield
-   # This builds and starts Frontend, Backend, MinIO, Prometheus, and Grafana
-   docker-compose -f docker-compose-all-in-one.yml up --build
-   ```
-
-2. **Access the Ecosystem**:
-
-* **Frontend UI**: http://localhost:3000
-
-* **Backend API**: http://localhost:8080
-
-* **Grafana Metrics**: http://localhost:3001 (Default: admin/admin)
-
-* **MinIO Storage**: http://localhost:9001
-
-
-### Method 2: The "Contributor" Way (Local Code + Docker Services)
-
-### 0. Initial Configuration
-1. Configuration is loaded from .env (example provided)
-2. Ensure you have **Go 1.25+**, **Node.js/npm**, and **Docker** installed.
-
-Assuming you have Docker, Go 1.25+ (tested on 1.25.5), Node.js/npm installed:
-
-### Step 1: Launch Infrastructure
-Start the local storage and observability stack in the background:
-```bash
-# Start Storage (MinIO)
-docker-compose up -d
-
-# Start Monitoring (Prometheus & Grafana)
-docker-compose -f docker-compose-observability-prod.yml up -d
-```
-
-### Step 2. Backend Setup
-
-Configure your .env file, generate code, and launch the Go server:
-
-   Update .env 
-
-   sqlc generate
-
-   go run ./cmd/server
-
-### 3. Frontend Setup
-In a new terminal, install dependencies and start the application:
-
-   cd frontend
-
-   npm install
-
-   npm run dev
-
-### 4. Verification
-
-* **App UI**: http://localhost:5173
-
-* **API**: http://localhost:8080/health
-
-* **Metrics**: http://localhost:3001 (Grafana)
-
-* **Storage**: http://localhost:9001 (MinIO Console)
-
-### 5. Testing the API (via PowerShell, curl, or Postman)
-
-The frontend is mainly for visual demo — you can also use these examples to test some of the core endpoints:
-
-  ```powershell
-  # 1. Login and get JWT token
-  $login = Invoke-RestMethod -Method POST -Uri http://localhost:8080/login -ContentType "application/json" -Body '{"email":"me@example.com","password":"supersecret"}'
-  $token = $login.token
-
-  # 2. Create a project
-  Invoke-RestMethod -Method POST -Uri http://localhost:8080/projects -Headers @{ Authorization = "Bearer $token" } -ContentType "application/json" -Body '{"name":"Ball","description":"First Ball project"}'
-
-  # 3. List your projects
-  Invoke-RestMethod -Method GET -Uri http://localhost:8080/projects -Headers @{ Authorization = "Bearer $token" }
-
-  # 4. Upload a file attachment to a task (example with curl)
-  $filePath = "C:\path\to\your\test-file.png"
-  curl -X POST "http://localhost:8080/tasks/1/attachments" \
-  -H "Authorization: Bearer $token" \
-  -F "file=@/path/to/your/test-file"
-  ```
-
-  </details>
-
-  ---
-
-
-## 🧪 Testing 
-
+ 
+## 🧪 Testing
+ 
 The project employs a tiered testing strategy using Go's native toolchain and the `testify/assert` library. By utilizing **Stateful Fake Repositories**, the suite ensures high execution speed and 100% data consistency without the overhead of a live database.
-
+ 
 ---
-
+ 
 ### 🏎️ Concurrency & Race Safety
+ 
 The entire suite is verified using the **Go Race Detector** to ensure thread-safety in high-concurrency environments (like WebSockets).
-
+ 
 * **CGO Enabled:** Configured with MinGW-w64 to support runtime memory analysis.
 * **Thread-Safe Fakes:** Repositories utilize `sync.RWMutex` to prevent data races during parallel test execution.
 * **Verification:** Run the full race-detection suite with:
-  ```bash
-  $env:CGO_ENABLED = "1"; go test -race ./...
-
+ 
+```
+$env:CGO_ENABLED = "1"; go test -race ./...
+```
+ 
 ---
-
-
+ 
 ### 🧩 Domain & Unit Testing (Logic Layer)
+ 
 These tests focus on core business rules in isolation. They sit within the domain packages to verify that the "brain" of the application works correctly.
-
-<details>
-<summary><b>👤 User Identity & Lifecycle</b></summary>
-
-Validated within `internal/domain/user/`.
-
+ 
+**👤 User Identity & Lifecycle** — `go test -v ./internal/domain/user`
+ 
 * **Registration & Auth Flow**: Verifies successful user onboarding with default roles (`user`) and status (`active`), while ensuring **Duplicate Email** prevention via sentinel errors.
-* **Security & Persistence**:
-    * **State-Aware Login**: Validates that authentication respects account states (e.g., preventing **Inactive** or **Scrubbed** accounts from accessing the system).
-    * **Credential Integrity**: Ensures password hashing/comparison logic (via Bcrypt) is correctly integrated with the service layer.
-* **Administrative Identity Scrubbing (Soft-Purge)**:
-    * **PII Anonymization**: Confirms that scrubbing masks emails (e.g., `deleted_1@...`) and purges password hashes to "SCRUBBED" while maintaining the database record for historical integrity.
-    * **Self-Preservation Logic**: A critical safety test ensuring that Administrators cannot accidentally scrub their own accounts.
-    * **Visibility Filtering**: Verifies that once a user is scrubbed, they are automatically excluded from global active user lists, effectively "evicting" them from the platform UI.
-* **Execution**: `go test -v ./internal/domain/user`
-</details>
-
-<details>
-<summary><b>💬 Messaging & Authorization Logic</b></summary>
-
-Validated within `internal/domain/messages/`.
-
+* **State-Aware Login**: Validates that authentication respects account states (preventing **Inactive** or **Scrubbed** accounts from accessing the system).
+* **Credential Integrity**: Ensures password hashing/comparison logic (via Bcrypt) is correctly integrated with the service layer.
+* **Administrative Identity Scrubbing**: Confirms PII anonymization (`deleted_1@...`), scrubbed password hashes, self-preservation logic (admins can't scrub themselves), and visibility filtering of scrubbed users.
+ 
+**💬 Messaging & Authorization Logic** — `go test -v ./internal/domain/messages`
+ 
 * **Logic Gates:** Verifies that project messages are only accepted from verified members.
-* **Social Constraints:** Ensures Direct Messages (DMs) are restricted to users who share at least one project.
+* **Social Constraints:** Ensures Direct Messages are restricted to users who share at least one project.
 * **Stateful Persistence:** Uses a `FakeRepository` to simulate message storage and chronological retrieval.
 * **Nil-Resilience:** Validates that service methods handle infrastructure (WebSocket Hub) availability gracefully.
-* **Execution:** `go test -v ./internal/domain/messages`
-</details>
-
-<details>
-<summary><b>🏗️ Project Lifecycle & Ownership</b></summary>
-
-Validated within `internal/domain/projects/`.
-
+ 
+**🏗️ Project Lifecycle & Ownership** — `go test -v ./internal/domain/projects`
+ 
 * **Ownership Guardrails:** Ensures only the project creator can delete resources or manage members.
 * **Auto-Provisioning:** Validates that the system correctly assigns roles upon project creation.
-* **Service-Based Seeding:** Uses the Service layer in tests to ensure realistic system states (e.g., owners are automatically members).
-* **Member Management:** Tests the "Join Table" logic in-memory to ensure member lists are accurate.
-* **Execution:** `go test -v ./internal/domain/projects`
-</details>
-
-<details>
-<summary><b>📋 Task Management & Cross-Domain Security</b></summary>
-
-Validated within `internal/domain/tasks/`.
-
-* **Multi-Role Authorization:** Verifies the "VIP lanes" for updates—ensuring only Project Owners OR the specific Task Assignee can modify status.
+* **Member Management:** Tests the join table logic in-memory to ensure member lists are accurate.
+ 
+**📋 Task Management & Cross-Domain Security** — `go test -v ./internal/domain/tasks`
+ 
+* **Multi-Role Authorization:** Verifies the "VIP lanes" for updates — only Project Owners OR the specific Task Assignee can modify status.
 * **Audit Trails:** Validates that every task action (Create/Update) automatically triggers a `TaskActivity` log entry.
 * **Cross-Domain Integrity:** Tests the service's ability to verify project-level permissions before performing task-level actions.
 * **Context Respect:** Ensures all repository methods correctly honor context deadlines and cancellations.
-* **Execution:** `go test -v ./internal/domain/tasks`
-</details>
-
+ 
 ---
-
+ 
 ### 🌐 HTTP & Integration Testing (API Layer)
-
-These tests verify the "Social" integration between the HTTP layer, Middleware, and the Service layer.
-
-<details>
-<summary><b>🔐 Middleware & Security</b></summary>
-
-Validated within `internal/interfaces/http/middleware/`.
-
+ 
+**🔐 Middleware & Security** — `go test -v ./internal/interfaces/http/middleware/...`
+ 
 * **JWT Integrity:** Ensures `JWTMiddleware` correctly extracts and validates tokens from headers.
 * **Context Injection:** Verifies that user identity (ID, Role) is correctly passed to the internal logic.
-* **RBAC Enforcement:** Specifically validates the `RequireRole("admin")` guard, ensuring that high-privilege operations like "Identity Scrubbing" are strictly restricted to system administrators.
-* **Execution:** `go test -v ./internal/interfaces/http/middleware/...`
-</details>
-
-<details>
-<summary><b>🚀 API Handler Endpoints & Error Translation</b></summary>
-
-Validated within `internal/interfaces/http/tests/`.
-
+* **RBAC Enforcement:** Validates the `RequireRole("admin")` guard, ensuring high-privilege operations are strictly restricted to system administrators.
+ 
+**🚀 API Handler Endpoints & Error Translation** — `go test -v ./internal/interfaces/http/tests/...`
+ 
 * **Centralized Error Mapping:** Verifies that Domain Sentinel errors (like `ErrUnauthorized`) are correctly translated into standard HTTP codes (403, 404, 409).
-* **End-to-End Persistence:** Tests the full flow from an HTTP request through the Service layer into the Fake Repository.
 * **Security Resilience:** Tests that unauthorized API attempts return clean, safe error messages without leaking system internals.
-* **Cross-Domain Cleanup:** Validates the "Ripple Effect" of a User Scrub. This test ensures that when the User Service triggers a scrub, the system successfully:
-    1.  **Evicts** the user from all project memberships.
-    2.  **Unlinks** the user from all active task assignments.
-* **JSON Binding:** Validates strict structural binding for complex entities like Tasks and Projects.
-* **Execution:** `go test -v ./internal/interfaces/http/tests/...`
-</details>
-
+* **Cross-Domain Cleanup:** Validates the "Ripple Effect" of a User Scrub — evicting the user from all project memberships and unlinking from all active task assignments.
+ 
 ---
-
+ 
 ### ⚡ Real-Time Integration (WebSocket)
-Testing for the communication engine, verifying that messages are not only saved but correctly routed.
-
-<details>
-<summary><b>📡 Full-Circuit Broadcast Integration</b></summary>
-
-Validated through service-to-hub integration tests.
-
-* **Live Signal Chain:** Proves the "Whole Circuit"—from a Service action (creating a task) through the Hub's concurrency loop to a Client's receiver channel.
-* **Concurrency Safety:** Validates the Hub’s `sync.RWMutex` logic under simulated client registrations and broadcasts.
+ 
+**📡 Full-Circuit Broadcast Integration**
+ 
+* **Live Signal Chain:** Proves the whole circuit — from a Service action (creating a task) through the Hub's concurrency loop to a Client's receiver channel.
+* **Concurrency Safety:** Validates the Hub's `sync.RWMutex` logic under simulated client registrations and broadcasts.
 * **Room-Based Isolation:** Ensures the Hub correctly manages `ProjectRooms` for targeted data delivery.
-* **Execution:** `go test -v ./internal/domain/tasks -run TestTaskService_WebSocketIntegration` , `go test -v ./internal/domain/tasks -run TestTaskService_WebSocketBroadcast`
-</details>
-
-<details>
-<summary><b>📡 WebSocket Hub & Chat Tester</b></summary>
-
-* **Connection Mapping:** Verifies the `Hub` correctly maps User IDs to active WebSocket connections.
-* **Targeted Broadcasting:** Validates that messages sent to a project are routed strictly to that project's members.
-* **Direct Messaging (P2P):** Ensures private messages are routed strictly to the sender and receiver.
-* **E2E Script:** A dedicated utility (`scripts/test_chat.go`) to verify the full "Plumbing" from Auth -> Upgrade -> Broadcast.
-* **Execution:** `go run scripts/test_chat.go`
-</details>
-
+ 
+```
+go test -v ./internal/domain/tasks -run TestTaskService_WebSocketIntegration
+go test -v ./internal/domain/tasks -run TestTaskService_WebSocketBroadcast
+go run scripts/test_chat.go
+```
+ 
 ---
+ 
+## 🚀 Quick Start
+ 
+**Choose your setup method!**
+ 
+### Method 1: Docker (Recommended)
+ 
+```bash
+git clone https://github.com/Nelfander/Playingfield.git
+cd Playingfield
+docker-compose -f docker-compose-all-in-one.yml up --build
+```
+ 
+| Service | URL |
+|---|---|
+| Frontend | http://localhost:3000 |
+| Backend API | http://localhost:8080 |
+| Grafana | http://localhost:3001 (admin/admin) |
+| MinIO | http://localhost:9001 |
+ 
+### Method 2: Local Development
+ 
+Requirements: Go 1.25+, Node.js/npm, Docker
+ 
+```bash
+# Infrastructure
+docker-compose up -d
+docker-compose -f docker-compose-observability-prod.yml up -d
+ 
+# Backend
+cp .env.example .env   # configure your values
+sqlc generate
+go run ./cmd/server
+ 
+# Frontend (new terminal)
+cd frontend && npm install && npm run dev
+```
+ 
+App at http://localhost:5173 · API at http://localhost:8080/health · Grafana at http://localhost:3001
+ 
+---
+ 
+## 🏛 Architectural Decisions
+ 
+### 1. Echo vs Gin
+Echo was selected for its built-in middleware capabilities (JWT, CORS) and `Context` handling, which felt more idiomatic for this project's WebSocket hub orchestration. Post-implementation, Echo's centralized error handling proved highly effective for managing real-time stream failures.
+ 
+### 2. SQLC over raw `database/sql` or ORMs
+ORMs claim to make switching databases easy, but schemas change far more often than databases do. SQLC generates Go code from raw SQL — if a column is renamed but the query isn't updated, the project won't compile. Type-safety at build time instead of null pointer panics at runtime.
+ 
+### 3. React Hooks + WebSockets (no Redux)
+Localized state via custom hooks (`useDirectChat`) means WebSocket subscriptions are lifecycle-aware. When a user leaves a chat component, the connection is cleaned up immediately — preventing goroutine leaks on the Go backend.
+ 
+### 4. MinIO / S3 over database BLOBs
+Storing binary files in Postgres bloats backups and slows queries. MinIO is S3-compatible, so switching to production AWS S3 was a config change, not a code change. The backend proxies all downloads through the authenticated API, keeping the bucket private.
+ 
+### 5. `sync/atomic` over Mutex for rate limiting
+The rate limiter runs on every single request. Mutex-based counters make other threads wait in line. Atomic CAS operates at the CPU hardware level — non-blocking, invisible to the hot path.
+ 
+### 6. WebSockets over HTTP polling
+Built a Hub/Client pattern in Go. The hardest part wasn't sending messages — it was managing connection state. When a user closes their browser, the server needs to clean up the goroutine immediately. `sync.Once` + sliding-window deadlines handle this within 10–30 seconds of any disconnect.
+ 
+### 7. Centralized Hub over per-room sockets
+Instead of a new socket per project, one persistent connection is maintained per user. The Hub routes messages by `project_id` in the JSON payload. Lighter on server file descriptors, simpler lifecycle management.
+ 
+### 8. In-memory typing indicators (not Redis, not DB)
+"Typing..." state changes every second. Writing to Postgres would crush the database with useless writes. Implemented in-memory with a fire-and-forget design — the Hub is already seamed for Redis Pub/Sub if horizontal scaling is ever needed.
+ 
+### 9. Monolith over microservices
+Started as a focused Go learning exercise. Clean internal package boundaries (Auth, Chat, Projects) are already seamed for extraction — the Chat Hub could become an independent microservice without architectural surgery. Kept monolithic to focus on Go concurrency and clean architecture without distributed systems overhead.
+ 
+### 10. Docker Compose over ECS Fargate
+The ALB + Fargate idle tax was ~$40/month for a Go binary consuming <150MB RAM. Migrated to EC2 T3.micro with CloudFront as a Custom Origin — ~75% cost reduction, full feature parity, and co-located observability (Prometheus + Grafana) on the same bridge network.
+ 
+### 11. Neon (Serverless Postgres) over RDS
+Built-in connection pooling via PgBouncer is a natural fit for Go's `database/sql`, which opens multiple connections under load. Neon prevents connection limit exhaustion during high-frequency WebSocket traffic without managing a separate PgBouncer instance.
+ 
+---
+ 
 
 ## Known Issues & How I Solved Them
 <details>
@@ -785,6 +412,52 @@ Validated through service-to-hub integration tests.
 </details>
 
 ---
+
+> Built as a learning project for Go — started with the basics, evolved by adding real features (WebSockets, S3, observability) as each concept was understood. The architecture reflects that honest progression.
+ 
+---
+
+## 📡 WebSocket Architecture & Concurrency
+
+This project implements a high-performance, thread-safe WebSocket system designed to handle thousands of concurrent users across multiple project "rooms."
+
+### 🔧 Key Technical Features
+
+* **Goroutine Lifecycle Management:** Each connection is managed by two dedicated goroutines: a `ReadPump` for incoming messages and a `WritePump` for outgoing data.
+* **Heartbeat (Ping/Pong):** Uses an aggressive heartbeat mechanism to detect "half-open" TCP connections and clean up zombie goroutines within 10-30 seconds.
+* **Atomic Cleanup:** Utilizes `sync.Once` to ensure that connection closure and hub unregistration happen exactly once, preventing race conditions or double-close panics.
+* **Non-Blocking Hub:** The Hub uses buffered channels and `select` statements to ensure that slow clients or a busy Hub never block the main HTTP handlers.
+
+
+
+### ⚙️ Connection Timing Constants
+
+To balance server resources with user experience, we utilize a "sliding window" timeout strategy:
+
+| Constant | Value | Description |
+| :--- | :--- | :--- |
+| `writeWait` | **10s** | Time allowed to write a message to the peer before timing out. |
+| `pongWait` | **30s** | Max time allowed to read the next pong from the peer. |
+| `pingPeriod` | **25s** | Interval between pings (must be less than `pongWait`). |
+
+### 🛠 The "Master Kill Switch" Pattern
+We use a centralized `cleanup()` function to guarantee resource release. This ensures that even if a client script crashes or the network fails silently, the server resources are reclaimed:
+
+```go
+cleanup := func() {
+    once.Do(func() {
+        // Force the ReadMessage to return an error immediately
+        conn.SetReadDeadline(time.Now()) 
+        conn.Close() 
+        
+        // Signal the Hub to unregister, but don't block if the Hub is busy
+        select {
+        case h.hub.Unregister <- client:
+        default:
+        }
+    })
+}
+```
 
 ## 🛠 <b>Development History</b>
 <details><summary>(Click to expand)</summary>
@@ -1593,151 +1266,5 @@ JWT Claims: Security checks enforced using role-based claims within the JWT.
 
 </details>
 </details>
-
----
-
-## Code Structure
-<details><summary>(Click to expand)</summary>
-
-This project adopts a **clean, domain-centric architecture** strongly inspired by **Domain-Driven Design (DDD)**, **hexagonal architecture** (ports & adapters), and modern Go best practices. The core principle is to keep business/domain logic completely isolated from infrastructure (DB, external services), delivery mechanisms (HTTP, WebSocket), and frameworks — resulting in code that is:
-
-- Highly testable (easy mocking of ports/interfaces)
-- Maintainable and evolvable
-- Framework-agnostic in the domain layer
-- Safe for concurrency (especially real-time features)
-
-All production code is private under `internal/` to enforce module boundaries and prevent accidental external imports.
-
-### Directory Breakdown
-
-- **`internal/domain/`** — The heart of the application: pure business domain logic with no external dependencies.
-  - **`user/`**  
-    User entities, value objects, lifecycle rules (registration, authentication, data scrubbing), repository **interface**, and application **service** (orchestrates use cases like login, profile updates).
-  - **`projects/`**  
-    Project entities, ownership/membership rules, repository **interface**, and **service** layer enforcing collaboration invariants (e.g., who can invite, archive, or delete).
-  - **`tasks/`**  
-    Task model (Kanban status, assignments, due dates, history), repository **interface**, and rich **service** that coordinates task lifecycle + real-time WebSocket broadcasts on changes.
-  - **`messages/`**  
-    Chat/message entities, typing indicators, direct/group messaging rules, repository **interface**, and service handling real-time delivery.
-
-- **`internal/infrastructure/postgres/`**  
-  Concrete **repository implementations** for all domain interfaces.  
-  Powered by **sqlc** for type-safe, zero-boilerplate SQL queries.  
-  Includes DB connection pooling/adapter.  
-  Swappable (e.g., in-memory fakes for fast unit tests or alternative DBs later).
-
-- **`internal/interfaces/http/`**  
-  Delivery layer: all HTTP/WebSocket concerns live here (kept separate from domain).
-  - **`middleware/`** — Reusable Echo middleware stack:  
-    JWT authentication & claims extraction  
-    Tiered rate limiting (anonymous vs authenticated) with atomic counters + cleanup goroutine  
-    RBAC/ownership checks (project/task/message level permissions)  
-    Structured logging, recovery, request context propagation
-  - Handlers — Domain-specific Echo handlers (e.g., UserHandler, ProjectHandler, TaskHandler, MessageHandler):  
-    Bind/validate JSON, call domain services, return proper HTTP responses/codes, handle errors gracefully.
-  - WebSocket handler — Upgrades connections, integrates with the central WS hub, manages room subscriptions.
-
-- **`internal/` (other real-time infrastructure)**  
-  Custom **WebSocket hub** (Gorilla-based or similar):  
-  Manages client connections per room/project, broadcasts updates (task changes, chat messages), handles heartbeats, graceful cleanup on disconnects.  
-  Thread-safe with channels + goroutines for fan-out efficiency.
-
-- **`cmd/server/`**  
-  Thin application entrypoint & composition root:  
-  Loads config (env vars + defaults), initializes dependencies (DB, repositories, services, WS hub), wires Echo instance, applies global middleware, registers all routes/handlers/WebSocket endpoint, sets up graceful shutdown.
-
-### Testing Strategy
-
-Tests are first-class citizens and follow Go conventions:
-- **Unit tests** — colocated in domain packages (e.g., `internal/domain/tasks/service_test.go`) — focus on business rules, invariants, edge cases with table-driven tests.
-- **Repository tests** — integration-style against real PostgreSQL (via testcontainers or local DB) to verify sqlc queries.
-- **Handler/integration tests** — in `internal/interfaces/http/tests/` — test full HTTP request/response cycles, middleware stack, error translation, auth flows.
-- **WebSocket E2E tests** — custom simulation in `scripts/test_chat.go` — verifies real-time sync, broadcasts, disconnect handling under load/concurrency.
-- Race detector enabled (`-race`) across the suite to catch concurrency bugs early.
-
-### Why this structure?
-
-- **Separation of concerns** — Domain remains pure; infrastructure & interfaces are swappable adapters.
-- **Testability at every layer** — Interfaces + dependency injection enable fast unit tests + realistic integration/E2E.
-- **Concurrency safety** — Critical for real-time (WebSocket hub, rate limiter, atomic operations) — structured to avoid races.
-- **Extensibility** — New domains (e.g., notifications, analytics), adapters (Redis pub/sub, gRPC), or entrypoints (CLI worker) can be added without refactoring core logic.
-- **Production alignment** — Mirrors patterns in mature Go codebases (see [Standard Go Project Layout](https://github.com/golang-standards/project-layout), Uber Go Style Guide, clean/hexagonal examples from successful open-source projects).
-
-</details>
-
----
-
-## Architecture & Flow Diagram
-<details>
-<summary>(Click to expand)</summary>
-
-
-```text
-                  +──────────────────────────────┐
-                  │        Clients               │
-                  │  (React Frontend + Browser)  │
-                  └───────────────┬──────────────┘
-                                  │
-                ┌─────────────────┼─────────────────┐
-                │                 │                 │
-        HTTP/REST API     WebSocket (real-time)   Admin/Stress Scripts
-                │                 │                 │
-                ▼                 ▼                 ▼
-       +────────────────+  +────────────────+  +────────────────+
-       │   Echo Server  │  │  WS Upgrade    │  │  (scripts/)    │
-       │ (cmd/server)   │  │   Endpoint     │  └────────────────┘
-       +────────────────+  +────────────────+
-                │                 │
-       ┌────────┼────────┐        │
-       │                 │        │
-       ▼                 ▼        ▼
-+----------------+  +───────────────────────┐
-│ Middleware     │  │   WebSocket Hub       │
-│ Stack:         │  │ (Gorilla-based)       │
-│ - JWT Auth     │  │ - Room management     │
-│ - Rate Limit   │  │ - Broadcasts          │
-│ -RBAC/Ownership│  │ - Heartbeats/Cleanup  │
-│ - Logging      │  └───────────────────────┘
-+----------------+
-       │
-       ▼
-+----------------───────────────┐
-│   Handlers (interfaces/http/) │
-│   - UserHandler               │
-│   - ProjectHandler            │
-│   - TaskHandler               │
-│   - MessageHandler            │
-│   - File Upload/Delete        │
-└───────────────┬───────────────┘
-                │
-                ▼
-     +────────────────────────────┐
-     │   Domain Services          │   ← internal/domain/* (services + logic)
-     │   (user, projects, tasks,  │
-     │    messages)               │
-     │   - Business rules         │
-     │   - Use-case orchestration │
-     └───────────────┬────────────┘
-                     │
-                     ▼
-          +───────────────────────┐
-          │  Repository Interfaces│   ← internal/domain/*/repository.go
-          └───────────────┬───────┘
-                          │
-                          ▼
-               +──────────────────────┐
-               │ Infrastructure       │   ← internal/infrastructure/postgres
-               │(sqlc implementations)│
-               └───────────────┬──────┘
-                               │
-                               ▼
-                        PostgreSQL (Neon)
-                               │
-                               ▼
-                         MinIO (S3-compatible)
-                               ▲
-                               │ Atomic uploads/deletes
-
-
 
 
