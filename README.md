@@ -424,8 +424,6 @@ Built-in connection pooling via PgBouncer is a natural fit for Go's `database/sq
     * **Docker Compose Sidecar Pattern**: Re-architected the deployment into a single `docker-compose` stack on a T3.micro instance. This allowed the Backend, Prometheus, and Grafana to share the same network namespace and resources, reducing monthly overhead by ~75% while maintaining full observability.
 </details>
 
-> Built as a learning project for Go — started with the basics, evolved by adding real features (WebSockets, S3, observability) as each concept was understood. The architecture reflects that honest progression.
- 
 ---
 
 ## 🛠 <b>Detailed Development History</b>
@@ -1236,4 +1234,5 @@ JWT Claims: Security checks enforced using role-based claims within the JWT.
 </details>
 </details>
 
-
+> Built as a learning project for Go — started with the basics, evolved by adding real features (WebSockets, S3, observability) as each concept was understood. The architecture reflects that honest progression.
+ 
